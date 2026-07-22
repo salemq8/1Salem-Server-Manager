@@ -1,0 +1,54 @@
+<Window x:Class="ServerManager.Client.LanPairingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Secure LAN Pairing"
+        Width="640"
+        Height="570"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+            <TextBlock Text="Secure LAN Pairing"
+                       FontSize="24"
+                       FontWeight="Bold" />
+            <TextBlock Margin="0,7,0,20"
+                       Text="LAN access is off unless the Agent starts with --lan. Pairing uses HTTPS, a five-minute code, a pinned certificate, and a protected client credential."
+                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+
+            <Border Background="{StaticResource PanelBrush}" CornerRadius="8" Padding="18">
+                <StackPanel>
+                    <TextBlock Text="On the Agent PC" FontWeight="SemiBold" />
+                    <Button Content="Generate 6-digit Pairing Code"
+                            Click="GenerateCode_Click"
+                            HorizontalAlignment="Left"
+                            Margin="0,12,0,0" />
+                    <TextBlock x:Name="GeneratedCodeText"
+                               Margin="0,12,0,0"
+                               FontSize="26"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}" />
+                    <TextBlock x:Name="ExpiryText"
+                               Foreground="{StaticResource MutedTextBrush}" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Agent IPv4 or host name" Margin="0,18,0,6" />
+            <TextBox x:Name="HostBox" Padding="8" />
+            <TextBlock Text="HTTPS port" Margin="0,12,0,6" />
+            <TextBox x:Name="PortBox" Text="5252" Padding="8" />
+            <TextBlock Text="Pairing code" Margin="0,12,0,6" />
+            <TextBox x:Name="CodeBox" MaxLength="6" Padding="8" />
+            <TextBlock Text="This client name" Margin="0,12,0,6" />
+            <TextBox x:Name="ClientNameBox" Padding="8" />
+            <Button Content="Pair and Pin Certificate"
+                    Click="Pair_Click"
+                    HorizontalAlignment="Left"
+                    Margin="0,18,0,0" />
+            <TextBlock x:Name="StatusText"
+                       Margin="0,14,0,0"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

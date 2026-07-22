@@ -1,0 +1,228 @@
+<UserControl x:Class="ServerManager.Client.Controls.PalworldWorldSettingsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore">
+    <Grid Margin="0,18,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Style="{StaticResource ServerCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="World Settings / إعدادات العالم"
+                               FontSize="22"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Edit supported PalWorldSettings.ini values with validation, history, rollback, and restart verification."
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                    <TextBlock x:Name="ConfigurationPathText"
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <WrapPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBox x:Name="SearchBox"
+                             Width="210"
+                             Padding="9"
+                             Margin="0,0,8,8"
+                             automation:AutomationProperties.Name="Search world settings"
+                             ToolTip="Search settings"
+                             TextChanged="SearchBox_TextChanged" />
+                    <ComboBox x:Name="PresetBox"
+                              Width="190"
+                              Padding="8"
+                              Margin="0,0,8,8"
+                              automation:AutomationProperties.Name="World settings preset"
+                              SelectionChanged="PresetBox_SelectionChanged" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" MinHeight="360">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="175" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="310" />
+            </Grid.ColumnDefinitions>
+
+            <Border Background="{DynamicResource PanelBrush}"
+                    BorderBrush="#284056"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="8"
+                    Margin="0,0,12,12">
+                <ListBox x:Name="CategoryList"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         SelectionChanged="CategoryList_SelectionChanged"
+                         automation:AutomationProperties.Name="World settings categories" />
+            </Border>
+
+            <DataGrid x:Name="SettingsGrid"
+                      Grid.Column="1"
+                      Margin="0,0,12,12"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      SelectionMode="Single"
+                      SelectionChanged="SettingsGrid_SelectionChanged"
+                      CellEditEnding="SettingsGrid_CellEditEnding"
+                      Background="{DynamicResource PanelBrush}"
+                      Foreground="{DynamicResource TextBrush}"
+                      RowBackground="{DynamicResource PanelBrush}"
+                      AlternatingRowBackground="{DynamicResource PanelAltBrush}"
+                      automation:AutomationProperties.Name="Palworld world settings">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Setting"
+                                        Binding="{Binding DisplayName}"
+                                        Width="1.5*" />
+                    <DataGridTextColumn Header="Current"
+                                        Binding="{Binding CurrentValue}"
+                                        IsReadOnly="True"
+                                        Width="*" />
+                    <DataGridTextColumn Header="Pending"
+                                        Binding="{Binding PendingValue, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="*" />
+                    <DataGridTextColumn Header="Default"
+                                        Binding="{Binding DefaultValue}"
+                                        IsReadOnly="True"
+                                        Width="*" />
+                    <DataGridCheckBoxColumn Header="Restart"
+                                            Binding="{Binding RestartRequired}"
+                                            IsReadOnly="True"
+                                            Width="75" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Column="2"
+                    Style="{StaticResource ServerCardStyle}"
+                    Margin="0,0,0,12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock x:Name="EditorTitleText"
+                                   Text="Select a setting"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="EditorArabicTitleText"
+                                   Margin="0,3,0,0"
+                                   FlowDirection="RightToLeft"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="EditorDescriptionText"
+                                   Margin="0,10,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="EditorRangeText"
+                                   Margin="0,8,0,0"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="EditorWarningText"
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource WarningBrush}"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel x:Name="NumericEditorPanel"
+                                    Visibility="Collapsed"
+                                    Margin="0,16,0,0">
+                            <Slider x:Name="NumericSlider"
+                                    TickFrequency="0.1"
+                                    IsSnapToTickEnabled="False"
+                                    ValueChanged="NumericSlider_ValueChanged"
+                                    automation:AutomationProperties.Name="Numeric setting slider" />
+                            <TextBox x:Name="NumericEditorBox"
+                                     Margin="0,8,0,0"
+                                     Padding="8"
+                                     TextChanged="NumericEditorBox_TextChanged"
+                                     automation:AutomationProperties.Name="Numeric setting value" />
+                        </StackPanel>
+
+                        <TextBox x:Name="TextEditorBox"
+                                 Visibility="Collapsed"
+                                 Margin="0,16,0,0"
+                                 Padding="8"
+                                 TextWrapping="Wrap"
+                                 TextChanged="TextEditorBox_TextChanged"
+                                 automation:AutomationProperties.Name="Text setting value" />
+
+                        <CheckBox x:Name="BooleanEditor"
+                                  Visibility="Collapsed"
+                                  Margin="0,16,0,0"
+                                  Content="Enabled"
+                                  Checked="BooleanEditor_Changed"
+                                  Unchecked="BooleanEditor_Changed"
+                                  automation:AutomationProperties.Name="Boolean setting value" />
+
+                        <ComboBox x:Name="EnumEditor"
+                                  Visibility="Collapsed"
+                                  Margin="0,16,0,0"
+                                  Padding="8"
+                                  IsEditable="True"
+                                  SelectionChanged="EnumEditor_SelectionChanged"
+                                  automation:AutomationProperties.Name="Setting choice" />
+
+                        <WrapPanel Margin="0,16,0,0">
+                            <Button Content="Reset Setting"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="ResetSetting_Click" />
+                            <Button Content="Undo"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="UndoSetting_Click" />
+                        </WrapPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="{DynamicResource PanelBrush}"
+                BorderBrush="#284056"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="UnsavedText"
+                               Text="No unsaved changes."
+                               FontWeight="SemiBold" />
+                    <TextBlock x:Name="StatusText"
+                               Margin="0,3,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <WrapPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <Button Content="Reset Category"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="ResetCategory_Click" />
+                    <Button Content="Reset All"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="ResetAll_Click" />
+                    <Button Content="Compare"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Compare_Click" />
+                    <Button Content="Export"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Export_Click" />
+                    <Button Content="Import"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Import_Click" />
+                    <Button Content="Save for Next Restart"
+                            Click="SaveNextRestart_Click" />
+                    <Button Content="Apply and Restart"
+                            Style="{StaticResource SuccessButtonStyle}"
+                            Click="ApplyRestart_Click" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

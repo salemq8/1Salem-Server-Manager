@@ -1,0 +1,89 @@
+<Window x:Class="ServerManager.Client.ResourceGovernorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Resource Governor"
+        Width="760"
+        Height="620"
+        MinWidth="680"
+        MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+            <TextBlock Text="Resource Governor"
+                       FontSize="24"
+                       FontWeight="Bold" />
+            <TextBlock Text="Safe CPU priority and memory-budget profiles. Realtime priority is always blocked."
+                       Margin="0,6,0,20"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+
+            <Border Background="{StaticResource PanelBrush}" CornerRadius="9" Padding="18">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="CPU" Foreground="{StaticResource MutedTextBrush}" />
+                        <TextBlock x:Name="CpuText" FontSize="18" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Available memory" Foreground="{StaticResource MutedTextBrush}" />
+                        <TextBlock x:Name="MemoryText" FontSize="18" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="System drive free" Foreground="{StaticResource MutedTextBrush}" />
+                        <TextBlock x:Name="DiskText" FontSize="18" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock Text="Profile" Margin="0,20,0,6" />
+            <ComboBox x:Name="ModeBox" Padding="8" />
+
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Windows reserve (GiB)" Margin="0,0,0,6" />
+                    <TextBox x:Name="ReserveBox" Text="2" Padding="8" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Maximum server budget (GiB)" Margin="0,0,0,6" />
+                    <TextBox x:Name="BudgetBox" Text="4" Padding="8" />
+                </StackPanel>
+            </Grid>
+
+            <CheckBox x:Name="StopLowerBox"
+                      Margin="0,14,0,0"
+                      Content="Stop the lower-priority game safely (off by default)" />
+
+            <WrapPanel Margin="0,18,0,0">
+                <Button Content="Apply Profile" Click="Apply_Click" Margin="0,0,8,8" />
+                <Button Content="Prioritize Minecraft" Click="PrioritizeMinecraft_Click" Margin="0,0,8,8" />
+                <Button Content="Prioritize Palworld" Click="PrioritizePalworld_Click" Margin="0,0,8,8" />
+                <Button Content="Refresh" Click="Refresh_Click" Margin="0,0,8,8" />
+            </WrapPanel>
+
+            <Border Margin="0,10,0,0"
+                    Padding="16"
+                    CornerRadius="8"
+                    Background="#2B2117"
+                    BorderBrush="#6B4E24"
+                    BorderThickness="1">
+                <TextBlock x:Name="WarningText"
+                           Text="No resource warnings."
+                           TextWrapping="Wrap" />
+            </Border>
+            <TextBlock x:Name="StatusText"
+                       Margin="0,14,0,0"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

@@ -1,0 +1,64 @@
+<Window x:Class="ServerManager.Client.AdminToolsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Administrator Tools"
+        Width="760"
+        Height="650"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+            <TextBlock Text="Administrator Tools"
+                       FontSize="24"
+                       FontWeight="Bold" />
+            <TextBlock Margin="0,7,0,20"
+                       Text="Service, firewall, startup, and shortcut actions are explicit and audited by Windows. Game and data folders are never removed here."
+                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+
+            <TextBlock Text="Agent executable" />
+            <TextBox x:Name="AgentPathBox" Margin="0,6,0,12" Padding="8" />
+            <TextBlock Text="Persistent data root" />
+            <TextBox x:Name="DataRootBox" Margin="0,6,0,14" Padding="8" />
+
+            <TextBlock Text="Agent Windows Service" FontWeight="SemiBold" />
+            <WrapPanel Margin="0,10,0,0">
+                <Button Content="Install / Repair" Click="InstallService_Click" Margin="0,0,8,8" />
+                <Button Content="Start" Click="StartService_Click" Margin="0,0,8,8" />
+                <Button Content="Stop" Click="StopService_Click" Margin="0,0,8,8" />
+                <Button Content="Remove Service" Click="RemoveService_Click" Margin="0,0,8,8" />
+                <Button Content="Query Status" Click="QueryService_Click" Margin="0,0,8,8" />
+            </WrapPanel>
+
+            <TextBlock Text="Private-network Firewall" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <WrapPanel Margin="0,10,0,0">
+                <Button Content="Allow Agent HTTPS (TCP 5252)" Click="AddFirewall_Click" Margin="0,0,8,8" />
+                <Button Content="Remove Agent Rule" Click="RemoveFirewall_Click" Margin="0,0,8,8" />
+            </WrapPanel>
+
+            <TextBlock Text="Dashboard integration" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <WrapPanel Margin="0,10,0,0">
+                <Button Content="Enable Start with Windows" Click="EnableStartup_Click" Margin="0,0,8,8" />
+                <Button Content="Disable Start with Windows" Click="DisableStartup_Click" Margin="0,0,8,8" />
+                <Button Content="Create / Repair Shortcuts" Click="CreateShortcuts_Click" Margin="0,0,8,8" />
+            </WrapPanel>
+
+            <Border Background="{StaticResource PanelBrush}"
+                    CornerRadius="8"
+                    Padding="16"
+                    Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Taskbar pin" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TaskbarText"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedTextBrush}" />
+                </StackPanel>
+            </Border>
+            <TextBlock x:Name="StatusText"
+                       Margin="0,14,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource MutedTextBrush}" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

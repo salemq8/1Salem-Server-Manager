@@ -1,0 +1,17 @@
+.vs/
+.idea/
+.tools/
+.local-data/
+.vscode/
+artifacts/
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.nupkg
+*.snupkg
+*.db
+*.db-shm
+*.db-wal
+*.log

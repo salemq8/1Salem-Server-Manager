@@ -1,0 +1,101 @@
+<Window x:Class="ServerManager.Client.FileManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Managed File Manager"
+        Width="1040"
+        Height="720"
+        MinWidth="850"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBrush}">
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="180" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="ServerBox"
+                      Padding="8"
+                      DisplayMemberPath="Name"
+                      SelectionChanged="ServerBox_SelectionChanged" />
+            <TextBox x:Name="PathBox"
+                     Grid.Column="1"
+                     Margin="10,0"
+                     Padding="8"
+                     IsReadOnly="True" />
+            <TextBox x:Name="SearchBox"
+                     Grid.Column="2"
+                     Padding="8"
+                     TextChanged="SearchBox_TextChanged"
+                     AutomationProperties.Name="Search current managed folder" />
+        </Grid>
+
+        <WrapPanel Grid.Row="1" Margin="0,12,0,10">
+            <Button Content="Up" Click="Up_Click" Margin="0,0,8,0" />
+            <Button Content="Refresh" Click="Refresh_Click" Margin="0,0,8,0" />
+            <Button Content="Open Text" Click="OpenText_Click" Margin="0,0,8,0" />
+            <Button Content="Save Text" Click="SaveText_Click" Margin="0,0,8,0" />
+            <Button Content="Export Text" Click="Export_Click" Margin="0,0,8,0" />
+        </WrapPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="330" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ListBox x:Name="FileList"
+                     DisplayMemberPath="Display"
+                     Background="{DynamicResource PanelBrush}"
+                     Foreground="{DynamicResource TextBrush}"
+                     MouseDoubleClick="FileList_MouseDoubleClick"
+                     SelectionChanged="FileList_SelectionChanged" />
+            <TextBox x:Name="EditorBox"
+                     Grid.Column="2"
+                     AcceptsReturn="True"
+                     AcceptsTab="True"
+                     HorizontalScrollBarVisibility="Auto"
+                     VerticalScrollBarVisibility="Auto"
+                     TextWrapping="NoWrap"
+                     FontFamily="Consolas"
+                     Padding="10"
+                     AutomationProperties.Name="Managed text file editor" />
+        </Grid>
+
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="RenameBox"
+                     Padding="8"
+                     AutomationProperties.Name="New file name" />
+            <Button Grid.Column="1"
+                    Content="Rename"
+                    Click="Rename_Click"
+                    Margin="8,0,16,0" />
+            <TextBox x:Name="DeleteConfirmationBox"
+                     Grid.Column="2"
+                     Padding="8"
+                     AutomationProperties.Name="Typed file delete confirmation" />
+            <Button Grid.Column="3"
+                    Content="Delete File"
+                    Click="Delete_Click"
+                    Margin="8,0,0,0" />
+        </Grid>
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="3"
+                   Margin="0,48,0,0"
+                   Foreground="{DynamicResource MutedTextBrush}"
+                   TextWrapping="Wrap" />
+    </Grid>
+</Window>

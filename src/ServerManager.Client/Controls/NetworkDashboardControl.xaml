@@ -1,0 +1,78 @@
+<UserControl x:Class="ServerManager.Client.Controls.NetworkDashboardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="30,24,30,30">
+            <TextBlock Text="Network" FontSize="30" FontWeight="Bold" />
+            <TextBlock Text="Active adapters, preferred LAN address, server ports, and firewall access."
+                       Margin="0,5,0,18"
+                       Foreground="{DynamicResource MutedTextBrush}" />
+            <Border Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Preferred active adapter"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <ComboBox x:Name="AdapterBox"
+                                      Width="520"
+                                      HorizontalAlignment="Left"
+                                      Margin="0,6,0,0"
+                                      Padding="8"
+                                      DisplayMemberPath="Display" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Right">
+                            <TextBlock Text="Detected local IPv4"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="Ipv4Text"
+                                       HorizontalAlignment="Right"
+                                       FontSize="22"
+                                       FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel Margin="0,14,0,0">
+                        <Button Content="Save Preferred Adapter"
+                                Click="SaveAdapter_Click" />
+                        <Button Content="Refresh Network" Click="Refresh_Click" />
+                        <Button Content="Open Windows Firewall Settings"
+                                Click="OpenFirewall_Click" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Server addresses"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <ListBox x:Name="AddressList"
+                             Height="130"
+                             Margin="0,10,0,12"
+                             DisplayMemberPath="Display"
+                             Background="{DynamicResource PanelAltBrush}" />
+                    <WrapPanel>
+                        <Button Content="Copy Address" Click="CopyAddress_Click" />
+                        <Button Content="Copy IP Only" Click="CopyIp_Click" />
+                        <Button Content="Copy Port" Click="CopyPort_Click" />
+                        <Button Content="Test Port" Click="TestPort_Click" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            <Border Padding="18"
+                    Background="{DynamicResource PanelBrush}"
+                    CornerRadius="8">
+                <StackPanel>
+                    <TextBlock Text="Use the local address on the same home/LAN for the shortest path. Use the Internet address outside your network. A Playit tunnel may add latency, and an online agent does not by itself prove the game server is reachable."
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="استخدم العنوان المحلي داخل نفس الشبكة لتقليل زمن الاستجابة، واستخدم عنوان الإنترنت من خارج الشبكة. اتصال Playit لا يثبت وحده أن خادم اللعبة متاح."
+                               Margin="0,8,0,0"
+                               FlowDirection="RightToLeft"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <TextBlock x:Name="StatusText"
+                       Margin="0,14,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource MutedTextBrush}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,306 @@
+<Window x:Class="ServerManager.Client.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:ServerManager.Client.Controls"
+        Title="1Salem Server Manager"
+        Width="1240"
+        Height="680"
+        MinWidth="1000"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBrush}"
+        FlowDirection="{Binding FlowDirection}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="68" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="34" />
+        </Grid.RowDefinitions>
+
+        <Border Background="{DynamicResource PanelBrush}"
+                BorderBrush="#2A3342"
+                BorderThickness="0,0,0,1">
+            <Grid Margin="24,0">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{DynamicResource AppTitle}"
+                               FontSize="24"
+                               FontWeight="Bold" />
+                    <TextBlock Text="{Binding ConnectionLabel}"
+                               FontSize="12"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                </StackPanel>
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                    <Button Content="Admin Tools"
+                            Click="OpenAdminTools_Click"
+                            Margin="0,0,10,0"
+                            Visibility="{Binding IsAdministrator, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Border Padding="12,6"
+                            CornerRadius="14"
+                            Background="{DynamicResource PanelAltBrush}">
+                        <TextBlock Text="{Binding LaunchModeLabel}"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Background="{DynamicResource PanelBrush}"
+                    BorderBrush="#2A3342"
+                    BorderThickness="0,0,1,0">
+                <ListBox ItemsSource="{Binding Sections}"
+                         SelectedItem="{Binding SelectedSection}"
+                         DisplayMemberPath="Title"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Foreground="{DynamicResource TextBrush}"
+                         Margin="12,18"
+                         FontSize="14">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="14,10" />
+                            <Setter Property="Margin" Value="0,2" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Cursor" Value="Hand" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="ItemBorder"
+                                                Background="Transparent"
+                                                CornerRadius="6"
+                                                Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="ItemBorder"
+                                                        Property="Background"
+                                                        Value="{DynamicResource PanelAltBrush}" />
+                                                <Setter Property="Foreground"
+                                                        Value="{DynamicResource AccentBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ItemBorder"
+                                                        Property="Background"
+                                                        Value="#1D2531" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <controls:HomeDashboardControl
+                    x:Name="HomeDashboard"
+                    Visibility="{Binding IsHomeSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <controls:GameServerPageControl
+                    x:Name="MinecraftPage"
+                    Visibility="{Binding IsMinecraftSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <controls:GameServerPageControl
+                    x:Name="PalworldPage"
+                    Visibility="{Binding IsPalworldSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <controls:RemoteAccessControl
+                    x:Name="RemoteAccessPage"
+                    Visibility="{Binding IsRemoteAccessSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <controls:ApplicationUpdateControl
+                    x:Name="ApplicationUpdatePage"
+                    Visibility="{Binding IsUpdatesSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <controls:NetworkDashboardControl
+                    x:Name="NetworkDashboard"
+                    Visibility="{Binding IsNetworkSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsHubSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid Margin="30,24,30,30">
+                        <StackPanel Visibility="{Binding IsBackupsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="Backups" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Verified backups, schedules, retention, and safe restore."
+                                       Margin="0,5,0,18"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <Border Style="{StaticResource ServerCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="Backup Center"
+                                               FontSize="21"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="Create, verify, and restore registered Minecraft and Palworld backups. Restore always creates a safety backup first."
+                                               Margin="0,6,0,15"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MutedTextBrush}" />
+                                    <Button Content="Open Backup Center"
+                                            HorizontalAlignment="Left"
+                                            Click="OpenBackupCenter_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsUpdatesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="Updates" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Check installed versions and run backup-first managed updates."
+                                       Margin="0,5,0,18"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <UniformGrid Columns="2">
+                                <Border Style="{StaticResource ServerCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Minecraft Updates" FontSize="21" FontWeight="SemiBold" />
+                                        <TextBlock Text="Open the Minecraft Updates tab for installed/latest status and backup-first update."
+                                                   Margin="0,6,0,15"
+                                                   TextWrapping="Wrap" />
+                                        <Button Content="Open Minecraft Updates"
+                                                HorizontalAlignment="Left"
+                                                Click="OpenMinecraftUpdates_Click" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource ServerCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Palworld Updates" FontSize="21" FontWeight="SemiBold" />
+                                        <TextBlock Text="Open the Palworld Updates tab for Steam build detection and managed update."
+                                                   Margin="0,6,0,15"
+                                                   TextWrapping="Wrap" />
+                                        <Button Content="Open Palworld Updates"
+                                                HorizontalAlignment="Left"
+                                                Click="OpenPalworldUpdates_Click" />
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsResourcesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="System" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Performance policy, network diagnostics, safe files, logs, and Agent tools."
+                                       Margin="0,5,0,18"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <Border Style="{StaticResource ServerCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="Resource Governor"
+                                               FontSize="21"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="Realtime priority is blocked. Per-server CPU, memory, PID, uptime, priority, and affinity are shown on each game Resources tab."
+                                               Margin="0,6,0,15"
+                                               TextWrapping="Wrap" />
+                                    <WrapPanel>
+                                        <Button Content="Performance Policy"
+                                                Click="OpenResourceGovernor_Click" />
+                                        <Button Content="Network Status"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="OpenNetworkStatus_Click" />
+                                        <Button Content="Safe Files"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="OpenFileManager_Click" />
+                                        <Button Content="Diagnostics"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="OpenDiagnostics_Click" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsFilesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="Files" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Root-confined managed file access."
+                                       Margin="0,5,0,18"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <Border Style="{StaticResource ServerCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="Safe File Manager"
+                                               FontSize="21"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="Browse registered roots, edit supported text files with safety copies, and block path traversal and reparse points."
+                                               Margin="0,6,0,15"
+                                               TextWrapping="Wrap" />
+                                    <Button Content="Open Safe File Manager"
+                                            HorizontalAlignment="Left"
+                                            Click="OpenFileManager_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsLogsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="Logs" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Live bounded console output with search, pause, copy, clear-view, export, and command history."
+                                       Margin="0,5,0,18"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <WrapPanel>
+                                <Button Content="Open Minecraft Console"
+                                        Click="OpenMinecraftConsole_Click" />
+                                <Button Content="Open Palworld Logs"
+                                        Margin="8,0,0,0"
+                                        Click="OpenPalworldConsole_Click" />
+                                <Button Content="Export Diagnostics"
+                                        Margin="8,0,0,0"
+                                        Click="OpenDiagnostics_Click" />
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsSettingsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="Settings" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Dashboard appearance is separate from each server's Auto Start and Auto Restart settings."
+                                       Margin="0,5,0,18"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <WrapPanel>
+                                <Button Content="Language and Theme"
+                                        Click="OpenAppearance_Click" />
+                                <Button Content="Administrator Tools"
+                                        Margin="8,0,0,0"
+                                        Click="OpenAdminTools_Click" />
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsAboutSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="About" FontSize="30" FontWeight="Bold" />
+                            <Border Style="{StaticResource ServerCardStyle}" Margin="0,18,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Source="/Assets/1SalemServerManager-Icon.png"
+                                           Width="112"
+                                           Height="112"
+                                           Stretch="Uniform"
+                                           Margin="0,0,20,0" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="1Salem Server Manager"
+                                                   FontSize="24"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="Version 1.3.1"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="{DynamicResource AccentBrush}" />
+                                        <TextBlock Text="Official falcon and server identity"
+                                                   Margin="0,5,0,14"
+                                                   Foreground="{DynamicResource MutedTextBrush}" />
+                                        <Button Content="Diagnostics"
+                                                HorizontalAlignment="Left"
+                                                Click="OpenDiagnostics_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="{DynamicResource PanelBrush}"
+                BorderBrush="#2A3342"
+                BorderThickness="0,1,0,0">
+            <Grid Margin="20,0">
+                <TextBlock Text="{Binding ConnectionLabel}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource MutedTextBrush}" />
+                <TextBlock HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Text="Named-pipe control · Loopback API · bounded two-second monitoring"
+                           Foreground="{DynamicResource MutedTextBrush}" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

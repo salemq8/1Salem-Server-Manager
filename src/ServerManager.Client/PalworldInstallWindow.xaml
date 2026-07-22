@@ -1,0 +1,91 @@
+<Window x:Class="ServerManager.Client.PalworldInstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Install Palworld Server"
+        Width="620"
+        Height="700"
+        MinWidth="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="28">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="160" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.ColumnSpan="3"
+                       Text="Vanilla Palworld Dedicated Server"
+                       FontSize="24"
+                       FontWeight="Bold"
+                       Margin="0,0,0,22" />
+
+            <TextBlock Grid.Row="1" Text="Server name" VerticalAlignment="Center" />
+            <TextBox x:Name="ServerNameBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                     Text="1Salem Palworld" Margin="8,5" Padding="8" />
+
+            <TextBlock Grid.Row="2" Text="Description" VerticalAlignment="Center" />
+            <TextBox x:Name="DescriptionBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                     Text="A 1Salem Palworld Server" Margin="8,5" Padding="8" />
+
+            <TextBlock Grid.Row="3" Text="Folder" VerticalAlignment="Center" />
+            <TextBox x:Name="FolderBox" Grid.Row="3" Grid.Column="1"
+                     Text="C:\ProgramData\1SalemServerManager\Palworld"
+                     Margin="8,5" Padding="8" />
+            <Button Grid.Row="3" Grid.Column="2" Content="Browse" Click="Browse_Click" Margin="4" />
+
+            <TextBlock Grid.Row="4" Text="Port (UDP)" VerticalAlignment="Center" />
+            <TextBox x:Name="PortBox" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                     Text="8211" Margin="8,5" Padding="8" />
+
+            <TextBlock Grid.Row="5" Text="Max players" VerticalAlignment="Center" />
+            <TextBox x:Name="MaxPlayersBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2"
+                     Text="32" Margin="8,5" Padding="8" />
+
+            <TextBlock Grid.Row="6" Text="Server password" VerticalAlignment="Center" />
+            <PasswordBox x:Name="ServerPasswordBox" Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2"
+                         Margin="8,5" Padding="8" />
+
+            <TextBlock Grid.Row="7" Text="Admin password" VerticalAlignment="Center" />
+            <PasswordBox x:Name="AdminPasswordBox" Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2"
+                         Margin="8,5" Padding="8" />
+
+            <CheckBox x:Name="CommunityBox" Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2"
+                      Content="List as a community server"
+                      Margin="8,10"
+                      Foreground="{StaticResource TextBrush}" />
+
+            <TextBlock Grid.Row="9" Grid.ColumnSpan="3"
+                       Text="Passwords are stored with Windows protection. Managed Palworld settings and existing INI values are preserved across starts and stops."
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       Margin="0,14" />
+
+            <StackPanel Grid.Row="10" Grid.ColumnSpan="3" Margin="0,18,0,0">
+                <TextBlock x:Name="StatusText"
+                           Text="SteamCMD will be installed in the Agent data folder if required."
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,12" />
+                <Button x:Name="InstallButton"
+                        Content="Install Official Server"
+                        Click="Install_Click"
+                        HorizontalAlignment="Right" />
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Window>

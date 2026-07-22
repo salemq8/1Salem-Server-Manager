@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>1Salem.ServerManager.Setup</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ServerManager.Contracts\ServerManager.Contracts.csproj" />
+    <Resource Include="..\..\assets\branding\1SalemServerManager.ico">
+      <Link>Assets\1SalemServerManager.ico</Link>
+    </Resource>
+    <Resource Include="..\..\assets\branding\1SalemServerManager-Icon.png">
+      <Link>Assets\1SalemServerManager-Icon.png</Link>
+    </Resource>
+  </ItemGroup>
+  <ItemGroup Condition="'$(PayloadArchive)' != ''">
+    <EmbeddedResource Include="$(PayloadArchive)"
+                      LogicalName="1Salem.Payload.zip" />
+  </ItemGroup>
+</Project>

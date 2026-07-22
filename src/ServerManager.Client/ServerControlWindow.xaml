@@ -1,0 +1,93 @@
+<Window x:Class="ServerManager.Client.ServerControlWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Server Control"
+        Width="980"
+        Height="720"
+        MinWidth="800"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBrush}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="HeadingText" FontSize="24" FontWeight="Bold" />
+                <TextBlock x:Name="StatusText"
+                           Margin="0,5,0,0"
+                           Foreground="{DynamicResource MutedTextBrush}" />
+            </StackPanel>
+            <ComboBox x:Name="ServerBox"
+                      Grid.Column="1"
+                      Width="250"
+                      Padding="8"
+                      DisplayMemberPath="Name"
+                      SelectionChanged="ServerBox_SelectionChanged" />
+        </Grid>
+
+        <WrapPanel Grid.Row="1" Margin="0,18,0,0">
+            <Button Content="Start" Click="Start_Click" Margin="0,0,8,8" />
+            <Button Content="Stop" Click="Stop_Click" Margin="0,0,8,8" />
+            <Button Content="Restart" Click="Restart_Click" Margin="0,0,8,8" />
+            <Button Content="Force Stop" Click="ForceStop_Click" Margin="0,0,8,8" />
+            <Button Content="Backup Now" Click="Backup_Click" Margin="0,0,8,8" />
+            <Button Content="Check Update" Click="CheckUpdate_Click" Margin="0,0,8,8" />
+            <Button Content="Update Now" Click="Update_Click" Margin="0,0,8,8" />
+            <Button Content="Prioritize This Server" Click="Prioritize_Click" Margin="0,0,8,8" />
+            <Button Content="Open Folder" Click="OpenFolder_Click" Margin="0,0,8,8" />
+            <Button Content="Refresh" Click="Refresh_Click" Margin="0,0,8,8" />
+        </WrapPanel>
+
+        <Grid Grid.Row="2" Margin="0,8,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="PidText" />
+            <TextBlock x:Name="CpuText" Grid.Column="1" />
+            <TextBlock x:Name="MemoryText" Grid.Column="2" />
+            <TextBlock x:Name="VersionText" Grid.Column="3" />
+        </Grid>
+
+        <ListBox x:Name="LogList"
+                 Grid.Row="3"
+                 DisplayMemberPath="Display"
+                 Background="{DynamicResource PanelBrush}"
+                 Foreground="{DynamicResource TextBrush}"
+                 BorderBrush="#364354"
+                 AutomationProperties.Name="Bounded server log output" />
+
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="CommandBox"
+                     Padding="9"
+                     MaxLength="512"
+                     AutomationProperties.Name="Server console command" />
+            <Button Grid.Column="1"
+                    Content="Send Command"
+                    Click="SendCommand_Click"
+                    Margin="8,0,0,0" />
+        </Grid>
+        <TextBlock x:Name="OperationText"
+                   Grid.Row="5"
+                   Margin="0,12,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource MutedTextBrush}" />
+    </Grid>
+</Window>

@@ -1,0 +1,733 @@
+<UserControl x:Class="ServerManager.Client.Controls.GameServerPageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <Grid Margin="30,24,30,30">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <StackPanel>
+                <TextBlock x:Name="TitleText" FontSize="30" FontWeight="Bold" />
+                <TextBlock x:Name="SubtitleText"
+                           Margin="0,5,0,18"
+                           Foreground="{DynamicResource MutedTextBrush}" />
+            </StackPanel>
+            <Button x:Name="RefreshButton"
+                    Content="Refresh"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Click="Refresh_Click" />
+        </Grid>
+
+        <Border x:Name="NoServerPanel"
+                Grid.Row="1"
+                Style="{StaticResource ServerCardStyle}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock x:Name="NoServerText"
+                           FontSize="22"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="The dashboard will show controls after a server is registered."
+                           Margin="0,7,0,18"
+                           Foreground="{DynamicResource MutedTextBrush}" />
+                <Button x:Name="CreateButton"
+                        Content="Create Server"
+                        HorizontalAlignment="Center"
+                        Click="Create_Click" />
+            </StackPanel>
+        </Border>
+
+        <TabControl x:Name="ServerTabs"
+                    Grid.Row="1"
+                    Background="{DynamicResource WindowBrush}"
+                    BorderThickness="0">
+            <TabItem x:Name="OverviewTab" Header="Overview">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,18,0,0">
+                        <Border Style="{StaticResource ServerCardStyle}">
+                            <StackPanel>
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock x:Name="ServerNameText" FontSize="22" FontWeight="Bold" />
+                                        <TextBlock x:Name="StateText"
+                                                   Margin="0,4,0,0"
+                                                   Foreground="{DynamicResource AccentBrush}" />
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Right"
+                                                MaxWidth="430">
+                                        <TextBlock Text="Local address (same home or LAN)"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock x:Name="AddressText"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock Text="Internet address (outside your network)"
+                                                   Margin="0,8,0,0"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock x:Name="InternetAddressText"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock x:Name="TunnelStatusText"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                   HorizontalAlignment="Right"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock x:Name="TunnelTargetText"
+                                                   Margin="0,3,0,0"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                </Grid>
+                                <WrapPanel Margin="0,16,0,0">
+                                    <Button x:Name="StartButton" Content="Start" Click="Start_Click" />
+                                    <Button x:Name="StopButton" Content="Graceful Stop" Click="Stop_Click" />
+                                    <Button x:Name="RestartButton"
+                                            Content="Restart"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Click="Restart_Click" />
+                                    <Button x:Name="MoreActionsButton"
+                                            Content="⋯ More"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Click="MoreActions_Click">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem x:Name="ForceStopButton"
+                                                          Header="Force Stop"
+                                                          Click="ForceStop_Click" />
+                                                <Separator />
+                                                <MenuItem x:Name="BackupButton"
+                                                          Header="Backup Now"
+                                                          Click="Backup_Click" />
+                                                <MenuItem Header="Open Folder"
+                                                          Click="OpenFolder_Click" />
+                                                <MenuItem Header="Copy Local Address"
+                                                          Click="CopyAddress_Click" />
+                                                <MenuItem Header="Copy Internet Address"
+                                                          Click="CopyInternetAddress_Click" />
+                                                <MenuItem Header="Open Remote Access"
+                                                          Click="OpenRemoteAccess_Click" />
+                                                <MenuItem x:Name="RestartPlayitButton"
+                                                          Header="Restart Playit"
+                                                          Click="RestartPlayit_Click" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </WrapPanel>
+                                <TextBlock x:Name="HealthIndicatorsText"
+                                           Margin="0,8,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <UniformGrid Columns="4">
+                            <Border Style="{StaticResource DashboardCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="Version / runtime" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock x:Name="VersionText" Style="{StaticResource CardValueStyle}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource DashboardCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="Players / uptime" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock x:Name="PlayersText" Style="{StaticResource CardValueStyle}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource DashboardCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="CPU / RAM" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock x:Name="ResourcesText"
+                                               Style="{StaticResource CardValueStyle}"
+                                               FontSize="16"
+                                               TextWrapping="Wrap"
+                                               TextTrimming="None" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource DashboardCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="Backup / update" Foreground="{DynamicResource MutedTextBrush}" />
+                                    <TextBlock x:Name="BackupText"
+                                               Margin="0,6,0,3"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock x:Name="UpdateStatusText"
+                                               Margin="0,3,0,0"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <Border x:Name="PalworldManagementPanel"
+                                Visibility="Collapsed"
+                                Style="{StaticResource ServerCardStyle}"
+                                Margin="0,16,0,0">
+                            <StackPanel>
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="Palworld live management"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock x:Name="PalworldManagementStatusText"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <WrapPanel HorizontalAlignment="Right"
+                                               VerticalAlignment="Top"
+                                               MaxWidth="610">
+                                        <Button x:Name="EnablePalworldManagementButton"
+                                                Content="Enable Local Management"
+                                                Click="EnablePalworldManagement_Click" />
+                                        <Button x:Name="RetryPalworldManagementButton"
+                                                Content="Retry Connection"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="RetryPalworldManagement_Click" />
+                                        <Button x:Name="RepairPalworldManagementButton"
+                                                Content="Repair Configuration"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="RepairPalworldManagement_Click" />
+                                        <Button x:Name="TestPalworldManagementButton"
+                                                Content="Test REST Connection"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="TestPalworldManagement_Click" />
+                                        <Button x:Name="DisablePalworldManagementButton"
+                                                Content="Disable Local Management"
+                                                Style="{StaticResource DangerButtonStyle}"
+                                                Click="DisablePalworldManagement_Click" />
+                                    </WrapPanel>
+                                </Grid>
+                                <UniformGrid Columns="4" Margin="0,16,0,0">
+                                    <StackPanel Margin="0,0,16,8">
+                                        <TextBlock Text="Players" Foreground="{DynamicResource MutedTextBrush}" />
+                                        <TextBlock x:Name="PalworldLivePlayersText" FontSize="18" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,16,8">
+                                        <TextBlock Text="Server FPS" Foreground="{DynamicResource MutedTextBrush}" />
+                                        <TextBlock x:Name="PalworldFpsText" FontSize="18" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,16,8">
+                                        <TextBlock Text="Server uptime" Foreground="{DynamicResource MutedTextBrush}" />
+                                        <TextBlock x:Name="PalworldUptimeText" FontSize="18" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,16,8">
+                                        <TextBlock Text="Process tree" Foreground="{DynamicResource MutedTextBrush}" />
+                                        <TextBlock x:Name="PalworldProcessTreeText"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </UniformGrid>
+                                <TextBlock x:Name="PalworldIdentityText"
+                                           Margin="0,8,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="FailurePanel"
+                                Visibility="Collapsed"
+                                Margin="0,16,0,0"
+                                Padding="18"
+                                Background="#2B1B1B"
+                                BorderBrush="#8B3E3E"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <StackPanel>
+                                <TextBlock Text="Startup diagnostics"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FF9C9C" />
+                                <TextBlock x:Name="FailureText"
+                                           Margin="0,7,0,12"
+                                           TextWrapping="Wrap" />
+                                <WrapPanel>
+                                    <Button Content="Copy Diagnostics" Click="CopyDiagnostics_Click" />
+                                    <Button Content="Open Logs" Click="OpenLogs_Click" />
+                                    <Button Content="Retry" Click="Start_Click" />
+                                    <Button Content="Edit Settings"
+                                            Click="OpenSettingsTab_Click" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="ConsoleTab" Header="Console">
+                <Grid Margin="0,18,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <WrapPanel>
+                        <TextBox x:Name="LogSearchBox"
+                                 Width="230"
+                                 Padding="8"
+                                 Margin="0,0,8,8"
+                                 ToolTip="Search console"
+                                 TextChanged="LogSearch_TextChanged" />
+                        <CheckBox x:Name="PauseLogsBox"
+                                  Content="Pause"
+                                  Margin="4,9,12,8" />
+                        <CheckBox x:Name="AutoScrollBox"
+                                  Content="Auto-scroll"
+                                  IsChecked="True"
+                                  Margin="4,9,12,8" />
+                        <Button Content="Copy" Click="CopyLogs_Click" />
+                        <Button Content="Clear View" Click="ClearLogs_Click" />
+                        <Button Content="Export Log" Click="ExportLogs_Click" />
+                    </WrapPanel>
+                    <ListBox x:Name="ConsoleList"
+                             Grid.Row="1"
+                             Background="{DynamicResource PanelBrush}"
+                             BorderBrush="#364354"
+                             Foreground="{DynamicResource TextBrush}"
+                             FontFamily="Consolas"
+                             FontSize="12" />
+                    <Grid Grid.Row="2" Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="CommandBox"
+                                 Padding="9"
+                                 MaxLength="512"
+                                 KeyDown="CommandBox_KeyDown" />
+                        <Button x:Name="SendCommandButton"
+                                Grid.Column="1"
+                                Content="Send Command"
+                                Margin="8,0,0,0"
+                                Click="SendCommand_Click" />
+                    </Grid>
+                    <TextBlock x:Name="ConsoleStatusText"
+                               Grid.Row="3"
+                               Margin="0,8,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                </Grid>
+            </TabItem>
+
+            <TabItem x:Name="ServerSettingsTab" Header="Server Settings">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,18,0,20">
+                        <Border x:Name="MinecraftSettingsPanel"
+                                Style="{StaticResource ServerCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Minecraft Settings"
+                                           FontSize="20"
+                                           FontWeight="SemiBold" />
+                                <UniformGrid Columns="2" Margin="0,14,0,0">
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Server name" />
+                                        <TextBox x:Name="NameBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Port" />
+                                        <TextBox x:Name="PortBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Maximum players" />
+                                        <TextBox x:Name="MaxPlayersBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Java executable" />
+                                        <TextBox x:Name="JavaPathBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Game mode" />
+                                        <ComboBox x:Name="GameModeBox" Padding="8">
+                                            <ComboBoxItem Content="survival" />
+                                            <ComboBoxItem Content="creative" />
+                                            <ComboBoxItem Content="adventure" />
+                                            <ComboBoxItem Content="spectator" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Difficulty" />
+                                        <ComboBox x:Name="DifficultyBox" Padding="8">
+                                            <ComboBoxItem Content="peaceful" />
+                                            <ComboBoxItem Content="easy" />
+                                            <ComboBoxItem Content="normal" />
+                                            <ComboBoxItem Content="hard" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="View distance" />
+                                        <TextBox x:Name="ViewDistanceBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Simulation distance" />
+                                        <TextBox x:Name="SimulationDistanceBox" Padding="8" />
+                                    </StackPanel>
+                                </UniformGrid>
+                                <TextBlock Text="MOTD" />
+                                <TextBox x:Name="MotdBox"
+                                         Padding="8"
+                                         Margin="0,4,0,10" />
+                                <WrapPanel>
+                                    <CheckBox x:Name="OnlineModeBox" Content="Online mode" Margin="0,5,18,5" />
+                                    <CheckBox x:Name="WhitelistBox" Content="Whitelist" Margin="0,5,18,5" />
+                                    <CheckBox x:Name="HardcoreBox" Content="Hardcore" Margin="0,5,18,5" />
+                                    <CheckBox x:Name="PvpBox" Content="PvP" Margin="0,5,18,5" />
+                                </WrapPanel>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Save" Tag="save" Click="SaveMinecraftSettings_Click" />
+                                    <Button Content="Apply and Restart"
+                                            Tag="restart"
+                                            Click="SaveMinecraftSettings_Click" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="MemoryPanel"
+                                Style="{StaticResource ServerCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Minecraft Memory"
+                                           FontSize="20"
+                                           FontWeight="SemiBold" />
+                                <TextBlock x:Name="MemorySummaryText"
+                                           Margin="0,5,0,12"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                                <UniformGrid Columns="3">
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Text="Preset" />
+                                        <ComboBox x:Name="MemoryPresetBox"
+                                                  Padding="8"
+                                                  SelectionChanged="MemoryPreset_SelectionChanged">
+                                            <ComboBoxItem Content="Light" />
+                                            <ComboBoxItem Content="Balanced" />
+                                            <ComboBoxItem Content="Performance" />
+                                            <ComboBoxItem Content="Custom" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Text="Xms (MB)" />
+                                        <TextBox x:Name="XmsBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,8">
+                                        <TextBlock Text="Xmx (MB)" />
+                                        <TextBox x:Name="XmxBox" Padding="8" />
+                                    </StackPanel>
+                                </UniformGrid>
+                                <TextBlock x:Name="ActiveMemoryText"
+                                           Margin="0,6,0,10"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                                <WrapPanel>
+                                    <Button Content="Save for Next Restart"
+                                            Tag="save"
+                                            Click="SaveMemory_Click" />
+                                    <Button Content="Apply and Restart"
+                                            Tag="restart"
+                                            Click="SaveMemory_Click" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="PalworldSettingsPanel"
+                                Style="{StaticResource ServerCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Palworld Settings"
+                                           FontSize="20"
+                                           FontWeight="SemiBold" />
+                                <TextBlock x:Name="PalworldSettingsText"
+                                           Margin="0,8,0,12"
+                                           TextWrapping="Wrap" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Server name" />
+                                        <TextBox x:Name="PalworldNameBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Port" />
+                                        <TextBox x:Name="PalworldPortBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="Maximum players" />
+                                        <TextBox x:Name="PalworldMaxPlayersBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="RCON port" />
+                                        <TextBox x:Name="PalworldRconPortBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="New server password (leave blank to keep)" />
+                                        <PasswordBox x:Name="PalworldPasswordBox" Padding="8" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,10">
+                                        <TextBlock Text="New admin password (leave blank to keep)" />
+                                        <PasswordBox x:Name="PalworldAdminPasswordBox" Padding="8" />
+                                    </StackPanel>
+                                </UniformGrid>
+                                <TextBlock Text="Description" />
+                                <TextBox x:Name="PalworldDescriptionBox"
+                                         Margin="0,4,0,10"
+                                         Padding="8" />
+                                <WrapPanel>
+                                    <CheckBox x:Name="PalworldCommunityBox"
+                                              Content="Community server"
+                                              Margin="0,5,18,5" />
+                                    <CheckBox x:Name="PalworldRconBox"
+                                              Content="Enable RCON"
+                                              Margin="0,5,18,5" />
+                                </WrapPanel>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Save"
+                                            Tag="save"
+                                            Click="SavePalworldSettings_Click" />
+                                    <Button Content="Apply and Restart"
+                                            Tag="restart"
+                                            Click="SavePalworldSettings_Click" />
+                                </WrapPanel>
+                                <TextBlock Text="Passwords are stored with Windows protection and are never displayed."
+                                           Margin="0,10,0,0"
+                                           Foreground="{DynamicResource MutedTextBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource ServerCardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Server Automation"
+                                           FontSize="20"
+                                           FontWeight="SemiBold" />
+                                <CheckBox x:Name="AutoStartBox"
+                                          Content="Auto Start Server with the Agent service"
+                                          Margin="0,12,0,5" />
+                                <CheckBox x:Name="AutoRestartBox"
+                                          Content="Automatically restart after a crash"
+                                          Margin="0,5,0,12" />
+                                <Button Content="Save Automation"
+                                        HorizontalAlignment="Left"
+                                        Click="SaveAutomation_Click" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock x:Name="SettingsStatusText"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="PlayersTab" Header="Players">
+                <Grid Margin="0,18,0,0">
+                    <Grid x:Name="MinecraftPlayersPanel">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <GroupBox Header="Online">
+                            <ListBox x:Name="OnlinePlayersList" />
+                        </GroupBox>
+                        <GroupBox Grid.Column="1" Header="Whitelist">
+                            <ListBox x:Name="WhitelistPlayersList" />
+                        </GroupBox>
+                        <GroupBox Grid.Column="2" Header="Operators">
+                            <ListBox x:Name="OperatorsList" />
+                        </GroupBox>
+                        <GroupBox Grid.Column="3" Header="Banned players">
+                            <ListBox x:Name="BannedPlayersList" />
+                        </GroupBox>
+                        <GroupBox Grid.Column="4" Header="Banned IPs">
+                            <ListBox x:Name="BannedIpsList" />
+                        </GroupBox>
+                    </Grid>
+                    <Grid x:Name="PalworldPlayersPanel"
+                          Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="PalworldPlayersStatusText"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="Player data comes from Palworld's localhost-only official management API."
+                                       Margin="0,5,0,12"
+                                       Foreground="{DynamicResource MutedTextBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <DataGrid x:Name="PalworldPlayersGrid"
+                                  Grid.Row="1"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  Background="{DynamicResource PanelBrush}"
+                                  Foreground="{DynamicResource TextBrush}"
+                                  RowBackground="{DynamicResource PanelBrush}"
+                                  AlternatingRowBackground="{DynamicResource PanelAltBrush}"
+                                  HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                <DataGridTextColumn Header="Account" Binding="{Binding AccountName}" Width="*" />
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMilliseconds, StringFormat=F0}" Width="110" />
+                                <DataGridTextColumn Header="Level" Binding="{Binding Level}" Width="90" />
+                                <DataGridTextColumn Header="Player ID" Binding="{Binding PlayerId}" Width="2*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem x:Name="PalworldWorldSettingsTab"
+                     Header="World Settings"
+                     Visibility="Collapsed">
+                <controls:PalworldWorldSettingsControl
+                    x:Name="PalworldWorldSettingsControl" />
+            </TabItem>
+
+            <TabItem x:Name="FilesTab" Header="Files">
+                <StackPanel Margin="0,18,0,0">
+                    <TextBlock Text="Safe files"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="The file manager is restricted to the registered server root and blocks traversal and reparse points."
+                               Margin="0,6,0,16"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                    <WrapPanel>
+                        <Button Content="Open Safe File Manager" Click="OpenFileManager_Click" />
+                        <Button Content="Open Server Folder" Click="OpenFolder_Click" />
+                        <Button Content="View Console Logs" Click="OpenConsoleTab_Click" />
+                    </WrapPanel>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem x:Name="SaveBackupsTab" Header="Save &amp; Backups">
+                <Grid>
+                    <controls:PalworldSaveBackupControl
+                        x:Name="PalworldSaveBackupControl"
+                        Visibility="Collapsed" />
+                <Grid x:Name="LegacyBackupsPanel"
+                      Margin="0,18,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <WrapPanel>
+                        <Button Content="Backup Now" Click="Backup_Click" />
+                        <Button Content="Restore Selected" Click="RestoreBackup_Click" />
+                        <Button Content="Verify Selected" Click="VerifyBackup_Click" />
+                        <Button Content="Open Backup Folder" Click="OpenBackupFolder_Click" />
+                    </WrapPanel>
+                    <ListBox x:Name="BackupsList"
+                             Grid.Row="1"
+                             Margin="0,12,0,12"
+                             DisplayMemberPath="ArchivePath"
+                             Background="{DynamicResource PanelBrush}" />
+                    <StackPanel Grid.Row="2">
+                        <TextBlock Text="Scheduled backup expression (5-field cron)" />
+                        <WrapPanel Margin="0,5,0,0">
+                            <TextBox x:Name="BackupScheduleBox"
+                                     Text="0 3 * * *"
+                                     Width="220"
+                                     Padding="8" />
+                            <Button Content="Save Schedule" Click="SaveBackupSchedule_Click" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem x:Name="UpdatesTab" Header="Updates">
+                <StackPanel Margin="0,18,0,0">
+                    <TextBlock x:Name="UpdateText"
+                               FontSize="18"
+                               TextWrapping="Wrap" />
+                    <WrapPanel Margin="0,14,0,0">
+                        <Button Content="Check Updates" Click="CheckUpdates_Click" />
+                        <Button Content="Update Now" Click="UpdateNow_Click" />
+                    </WrapPanel>
+                    <TextBlock Text="Updates create a safety backup before changing managed server files."
+                               Margin="0,12,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                </StackPanel>
+            </TabItem>
+
+            <TabItem x:Name="PerformanceTab" Header="Performance">
+                <Grid>
+                    <controls:PalworldMemoryPerformanceControl
+                        x:Name="PalworldMemoryPerformanceControl"
+                        Visibility="Collapsed" />
+                <StackPanel x:Name="LegacyResourcesPanel"
+                            Margin="0,18,0,0">
+                    <TextBlock x:Name="DetailedResourcesText"
+                               FontSize="18"
+                               TextWrapping="Wrap" />
+                    <controls:ResourceHistoryGraph x:Name="ServerResourceGraph"
+                                                   Height="150"
+                                                   Margin="0,14,0,14" />
+                    <WrapPanel>
+                        <Button Content="Balanced Priority"
+                                Tag="Balanced"
+                                Click="ResourceMode_Click" />
+                        <Button Content="Prioritize Minecraft"
+                                Tag="Minecraft"
+                                Click="ResourceMode_Click" />
+                        <Button Content="Prioritize Palworld"
+                                Tag="Palworld"
+                                Click="ResourceMode_Click" />
+                        <Button Content="Custom"
+                                Click="OpenResourceGovernor_Click" />
+                    </WrapPanel>
+                </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem x:Name="NetworkTab" Header="Network">
+                <StackPanel Margin="0,18,0,0">
+                    <TextBlock Text="Local server address"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                    <TextBlock x:Name="NetworkAddressText"
+                               FontSize="24"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Internet address"
+                               Margin="0,14,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                    <TextBlock x:Name="InternetNetworkAddressText"
+                               FontSize="24"
+                               FontWeight="SemiBold" />
+                    <TextBlock x:Name="PlayitNetworkStatusText"
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Content="Copy Local Address" Click="CopyAddress_Click" />
+                        <Button Content="Copy Internet Address" Click="CopyInternetAddress_Click" />
+                        <Button Content="Copy IP Only" Click="CopyIp_Click" />
+                        <Button Content="Copy Port" Click="CopyPort_Click" />
+                        <Button Content="Test Port" Click="TestPort_Click" />
+                        <Button Content="Open Windows Firewall Settings"
+                                Click="OpenFirewallSettings_Click" />
+                    </WrapPanel>
+                    <TextBlock x:Name="NetworkStatusText"
+                               Margin="0,14,0,0"
+                               TextWrapping="Wrap" />
+                    <TextBlock x:Name="AddressRecommendationText"
+                               Margin="0,10,0,0"
+                               TextWrapping="Wrap" />
+                    <Border Margin="0,18,0,0"
+                            Padding="16"
+                            Background="{DynamicResource PanelBrush}"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock Text="Use the local address while you are on the same home/LAN for the shortest route. Use the Internet address from outside. A tunnel can add network latency; tunnel status does not prove that the game server itself is reachable."
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="استخدم العنوان المحلي داخل نفس الشبكة لتقليل زمن الاستجابة، واستخدم عنوان الإنترنت من خارج الشبكة. اتصال Playit لا يثبت وحده أن خادم اللعبة متاح."
+                                       Margin="0,8,0,0"
+                                       FlowDirection="RightToLeft"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

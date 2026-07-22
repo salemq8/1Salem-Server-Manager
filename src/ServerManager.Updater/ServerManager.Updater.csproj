@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>1Salem.ServerManager.Updater</AssemblyName>
+    <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ServerManager.Contracts\ServerManager.Contracts.csproj" />
+    <ProjectReference Include="..\ServerManager.Core\ServerManager.Core.csproj" />
+    <ProjectReference Include="..\ServerManager.Infrastructure\ServerManager.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

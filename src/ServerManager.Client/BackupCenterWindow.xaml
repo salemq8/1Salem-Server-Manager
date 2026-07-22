@@ -1,0 +1,45 @@
+<Window x:Class="ServerManager.Client.BackupCenterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Backup Center"
+        Width="820"
+        Height="580"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <Grid Margin="26">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Verified Backups"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   Margin="0,0,0,18" />
+        <ComboBox x:Name="ServerBox"
+                  Grid.Row="1"
+                  DisplayMemberPath="Name"
+                  SelectionChanged="ServerBox_SelectionChanged"
+                  Padding="8"
+                  Margin="0,0,0,12" />
+        <ListBox x:Name="BackupList"
+                 Grid.Row="2"
+                 DisplayMemberPath="ArchivePath"
+                 Background="{StaticResource PanelBrush}"
+                 Foreground="{StaticResource TextBrush}"
+                 BorderBrush="#2A3342" />
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,14,0,0">
+            <Button Content="Backup Now" Click="BackupNow_Click" Margin="0,0,8,0" />
+            <Button Content="Verify" Click="Verify_Click" Margin="0,0,8,0" />
+            <Button Content="Restore" Click="Restore_Click" />
+        </StackPanel>
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="4"
+                   Margin="0,14,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource MutedTextBrush}" />
+    </Grid>
+</Window>
+

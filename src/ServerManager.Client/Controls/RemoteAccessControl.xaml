@@ -1,0 +1,142 @@
+<UserControl x:Class="ServerManager.Client.Controls.RemoteAccessControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="30,24,30,30">
+            <TextBlock Text="Remote Access" FontSize="30" FontWeight="Bold" />
+            <TextBlock Text="الوصول من خارج المنزل"
+                       FontSize="20"
+                       FlowDirection="RightToLeft"
+                       HorizontalAlignment="Left"
+                       Foreground="{DynamicResource AccentBrush}" />
+            <TextBlock Text="Official Playit agent management for your game servers. The dashboard and Agent API are never exposed."
+                       Margin="0,5,0,18"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource MutedTextBrush}" />
+
+            <Border Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Installation" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="InstalledText" FontSize="20" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Agent state" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="StateText" FontSize="20" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Account / Verification" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="VerifiedText" FontSize="20" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="AgentDetailText"
+                               Margin="0,12,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                    <WrapPanel Margin="0,14,0,0">
+                        <Button Content="Detect Existing Playit" Click="Detect_Click" />
+                        <Button Content="Install Playit" Click="Install_Click" />
+                        <Button Content="Start" Click="Start_Click" />
+                        <Button Content="Stop" Click="Stop_Click" />
+                        <Button Content="Restart" Click="Restart_Click" />
+                        <Button x:Name="LinkButton"
+                                Content="Link Account"
+                                IsEnabled="False"
+                                Click="Link_Click" />
+                        <Button Content="Open Official Playit Setup" Click="OpenSetup_Click" />
+                        <Button Content="Disable External Access" Click="Disable_Click" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Style="{StaticResource ServerCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Minecraft Java tunnel"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                        <TextBlock x:Name="MinecraftTargetText"
+                                   Margin="0,6,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock Text="Public address" Margin="0,10,0,3" />
+                        <TextBox x:Name="MinecraftAddressBox" Padding="8" />
+                        <TextBlock x:Name="MinecraftStatusText"
+                                   Margin="0,8,0,0"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Content="Create Minecraft Tunnel Guide"
+                                    Click="MinecraftGuide_Click" />
+                            <Button Content="Copy Public Address"
+                                    Tag="Minecraft"
+                                    Click="CopyAddress_Click" />
+                            <Button Content="Test Local Port"
+                                    Tag="Minecraft"
+                                    Click="TestPort_Click" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Style="{StaticResource ServerCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Palworld tunnel"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                        <TextBlock x:Name="PalworldTargetText"
+                                   Margin="0,6,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock Text="Public address" Margin="0,10,0,3" />
+                        <TextBox x:Name="PalworldAddressBox" Padding="8" />
+                        <TextBlock x:Name="PalworldStatusText"
+                                   Margin="0,8,0,0"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Content="Create Palworld Tunnel Guide"
+                                    Click="PalworldGuide_Click" />
+                            <Button Content="Copy Public Address"
+                                    Tag="Palworld"
+                                    Click="CopyAddress_Click" />
+                            <Button Content="Test Local Port"
+                                    Tag="Palworld"
+                                    Click="TestPort_Click" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" />
+                    <CheckBox x:Name="EnabledBox"
+                              Content="Start Playit automatically with the Server Manager Agent"
+                              Margin="0,10,0,0" />
+                    <TextBlock Text="Agent name" Margin="0,10,0,3" />
+                    <TextBox x:Name="AgentNameBox" Width="360" HorizontalAlignment="Left" Padding="8" />
+                    <Button Content="Save Remote Access Settings"
+                            HorizontalAlignment="Left"
+                            Margin="0,12,0,0"
+                            Click="Save_Click" />
+                </StackPanel>
+            </Border>
+
+            <Expander Header="Recent Playit output (secrets and claim links are redacted)"
+                      Margin="0,8,0,0">
+                <ListBox x:Name="LogList"
+                         Height="150"
+                         Background="{DynamicResource PanelAltBrush}" />
+            </Expander>
+            <TextBlock x:Name="StatusText"
+                       Margin="0,14,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource MutedTextBrush}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,243 @@
+<UserControl x:Class="ServerManager.Client.Controls.HomeDashboardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="30,24,30,30">
+            <TextBlock Text="Home" FontSize="30" FontWeight="Bold" />
+            <TextBlock Text="Live system health and game-server control."
+                       Margin="0,5,0,20"
+                       Foreground="{DynamicResource MutedTextBrush}" />
+
+            <UniformGrid Columns="5">
+                <Border Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Agent" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock x:Name="AgentText" Text="Connecting…" Style="{StaticResource CardValueStyle}" />
+                        <TextBlock x:Name="PcText" Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Local IPv4" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock x:Name="Ipv4Text" Text="—" Style="{StaticResource CardValueStyle}" />
+                        <TextBlock Text="LAN address" Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="System CPU" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock x:Name="CpuText" Text="0%" Style="{StaticResource CardValueStyle}" />
+                        <TextBlock x:Name="AgentMemoryText" Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Memory" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock x:Name="MemoryText" Text="—" Style="{StaticResource CardValueStyle}" />
+                        <TextBlock x:Name="AvailableMemoryText" Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="System drive free" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock x:Name="DiskText" Text="—" Style="{StaticResource CardValueStyle}" />
+                        <TextBlock x:Name="CountsText" Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Border Margin="0,12,0,18"
+                    Padding="16"
+                    Background="{DynamicResource PanelBrush}"
+                    CornerRadius="8">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Five-minute resource history"
+                                   FontWeight="SemiBold" />
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                            <TextBlock Text="● CPU" Foreground="#45BF93" Margin="0,0,14,0" />
+                            <TextBlock Text="● RAM" Foreground="#4DA6FF" />
+                        </StackPanel>
+                    </Grid>
+                    <controls:ResourceHistoryGraph x:Name="HistoryGraph" Height="110" />
+                    <TextBlock x:Name="ResourceProfileText"
+                               Margin="0,10,0,0"
+                               Foreground="{DynamicResource AccentBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Name="WarningText"
+                       Margin="0,0,0,14"
+                       Foreground="#F5B75C"
+                       TextWrapping="Wrap" />
+
+            <Border x:Name="MinecraftCard"
+                    Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Minecraft Java" FontSize="22" FontWeight="Bold" />
+                            <TextBlock x:Name="MinecraftNameText"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right"
+                                Padding="12,6"
+                                Background="{DynamicResource PanelAltBrush}"
+                                CornerRadius="14">
+                            <TextBlock x:Name="MinecraftStateText" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                    <Button x:Name="CreateMinecraftButton"
+                            Content="Create Minecraft Server"
+                            HorizontalAlignment="Left"
+                            Margin="0,18,0,0"
+                            Click="CreateMinecraft_Click" />
+                    <Grid x:Name="MinecraftDetails" Margin="0,18,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Local address" Foreground="{DynamicResource MutedTextBrush}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="MinecraftAddressText" FontSize="18" FontWeight="SemiBold" />
+                                <Button Content="Copy"
+                                        Tag="Minecraft"
+                                        Padding="8,3"
+                                        Margin="8,0,0,0"
+                                        Click="CopyAddress_Click" />
+                            </StackPanel>
+                            <TextBlock Text="Internet address"
+                                       Margin="0,8,0,0"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="MinecraftInternetAddressText"
+                                           FontSize="16"
+                                           FontWeight="SemiBold" />
+                                <Button Content="Copy"
+                                        Tag="Minecraft:internet"
+                                        Padding="8,3"
+                                        Margin="8,0,0,0"
+                                        Click="CopyAddress_Click" />
+                            </StackPanel>
+                            <TextBlock x:Name="MinecraftTunnelText"
+                                       Foreground="{DynamicResource MutedTextBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Version / Java" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="MinecraftVersionText" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Players / uptime" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="MinecraftPlayersText" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="Process resources" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="MinecraftResourcesText" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="0,18,0,0">
+                            <Button x:Name="MinecraftStartButton" Content="Start" Tag="Minecraft:start" Click="ServerAction_Click" />
+                            <Button x:Name="MinecraftStopButton" Content="Stop" Tag="Minecraft:stop" Click="ServerAction_Click" />
+                            <Button x:Name="MinecraftRestartButton" Content="Restart" Tag="Minecraft:restart" Click="ServerAction_Click" />
+                            <Button Content="Open Console" Tag="Minecraft:1" Click="Manage_Click" />
+                            <Button Content="Settings" Tag="Minecraft:2" Click="Manage_Click" />
+                            <Button x:Name="MinecraftBackupButton" Content="Backup" Tag="Minecraft:backup" Click="ServerAction_Click" />
+                        </WrapPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="PalworldCard"
+                    Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Palworld Dedicated Server" FontSize="22" FontWeight="Bold" />
+                            <TextBlock x:Name="PalworldNameText"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right"
+                                Padding="12,6"
+                                Background="{DynamicResource PanelAltBrush}"
+                                CornerRadius="14">
+                            <TextBlock x:Name="PalworldStateText" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                    <Button x:Name="CreatePalworldButton"
+                            Content="Create Palworld Server"
+                            HorizontalAlignment="Left"
+                            Margin="0,18,0,0"
+                            Click="CreatePalworld_Click" />
+                    <Grid x:Name="PalworldDetails" Margin="0,18,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Local address" Foreground="{DynamicResource MutedTextBrush}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="PalworldAddressText" FontSize="18" FontWeight="SemiBold" />
+                                <Button Content="Copy"
+                                        Tag="Palworld"
+                                        Padding="8,3"
+                                        Margin="8,0,0,0"
+                                        Click="CopyAddress_Click" />
+                            </StackPanel>
+                            <TextBlock Text="Internet address"
+                                       Margin="0,8,0,0"
+                                       Foreground="{DynamicResource MutedTextBrush}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="PalworldInternetAddressText"
+                                           FontSize="16"
+                                           FontWeight="SemiBold" />
+                                <Button Content="Copy"
+                                        Tag="Palworld:internet"
+                                        Padding="8,3"
+                                        Margin="8,0,0,0"
+                                        Click="CopyAddress_Click" />
+                            </StackPanel>
+                            <TextBlock x:Name="PalworldTunnelText"
+                                       Foreground="{DynamicResource MutedTextBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Version" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="PalworldVersionText" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Players / uptime" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="PalworldPlayersText" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="Process resources" Foreground="{DynamicResource MutedTextBrush}" />
+                            <TextBlock x:Name="PalworldResourcesText" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="0,18,0,0">
+                            <Button x:Name="PalworldStartButton" Content="Start" Tag="Palworld:start" Click="ServerAction_Click" />
+                            <Button x:Name="PalworldStopButton" Content="Stop" Tag="Palworld:stop" Click="ServerAction_Click" />
+                            <Button x:Name="PalworldRestartButton" Content="Restart" Tag="Palworld:restart" Click="ServerAction_Click" />
+                            <Button Content="Open Console" Tag="Palworld:1" Click="Manage_Click" />
+                            <Button Content="Settings" Tag="Palworld:2" Click="Manage_Click" />
+                            <Button x:Name="PalworldBackupButton" Content="Backup" Tag="Palworld:backup" Click="ServerAction_Click" />
+                        </WrapPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

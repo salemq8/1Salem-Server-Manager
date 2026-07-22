@@ -1,0 +1,33 @@
+<Application x:Class="ServerManager.Setup.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="WindowBrush" Color="#10151D" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#171E28" />
+        <SolidColorBrush x:Key="TextBrush" Color="#F3F5F7" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#A9B4C5" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#49BC8D" />
+        <Style TargetType="Window">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#202A37" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="#364354" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#202A37" />
+            <Setter Property="Foreground" Value="#10151D" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+    </Application.Resources>
+</Application>

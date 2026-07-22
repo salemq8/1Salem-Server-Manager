@@ -1,0 +1,219 @@
+<UserControl x:Class="ServerManager.Client.Controls.PalworldSaveBackupControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,18,0,0">
+            <TextBlock Text="Save &amp; Backup Center"
+                       FontSize="24"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="World saves and verified ZIP backups are separate operations. Backup Now saves the live world first."
+                       Margin="0,5,0,18"
+                       Foreground="{DynamicResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+
+            <UniformGrid Columns="2">
+                <Border Style="{StaticResource ServerCardStyle}" Margin="0,0,9,18">
+                    <StackPanel>
+                        <TextBlock Text="Save World Now"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="Calls official localhost REST POST /save. It does not create a ZIP."
+                                   Margin="0,5,0,12"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                        <Button x:Name="SaveWorldButton"
+                                Content="Save World Now"
+                                HorizontalAlignment="Left"
+                                Click="SaveWorld_Click" />
+                        <TextBlock x:Name="LastWorldSaveText"
+                                   Margin="0,7,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource ServerCardStyle}" Margin="9,0,0,18">
+                    <StackPanel>
+                        <TextBlock Text="Palworld built-in backups"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                        <CheckBox x:Name="BuiltInBackupBox"
+                                  Margin="0,10,0,5"
+                                  Content="Enable bIsUseBackupSaveData"
+                                  automation:AutomationProperties.Name="Enable Palworld built-in backup snapshots" />
+                        <TextBlock Text="Separate from application ZIP backups. Palworld retains 30-second, 10-minute, hourly, and daily snapshots; enabling it increases disk activity."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   TextWrapping="Wrap" />
+                        <Button Content="Save for Next Restart"
+                                Margin="0,12,0,0"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="SaveBuiltInBackup_Click" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Border Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Backup destination"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock x:Name="DestinationPathText"
+                               Margin="0,6,0,8"
+                               FontSize="16"
+                               TextWrapping="Wrap" />
+                    <WrapPanel>
+                        <Button Content="Choose Folder"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="ChooseDestination_Click" />
+                        <Button Content="Validate Destination"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="ValidateDestination_Click" />
+                        <Button Content="Open Backup Folder"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="OpenBackupFolder_Click" />
+                        <Button x:Name="BackupNowButton"
+                                Content="Backup Now"
+                                Click="BackupNow_Click" />
+                    </WrapPanel>
+                    <TextBlock x:Name="DestinationStatusText"
+                               Margin="0,6,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource ServerCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Automatic backup schedule"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <WrapPanel Margin="0,12,0,0">
+                        <CheckBox x:Name="ScheduleEnabledBox"
+                                  Content="Enabled"
+                                  Margin="0,9,18,8" />
+                        <ComboBox x:Name="SchedulePresetBox"
+                                  Width="170"
+                                  Padding="8"
+                                  Margin="0,0,8,8"
+                                  SelectionChanged="SchedulePreset_SelectionChanged">
+                            <ComboBoxItem Content="Every 5 minutes" Tag="every:00:05:00" />
+                            <ComboBoxItem Content="Every 15 minutes" Tag="every:00:15:00" />
+                            <ComboBoxItem Content="Every 30 minutes" Tag="every:00:30:00" />
+                            <ComboBoxItem Content="Every 1 hour" Tag="@hourly" />
+                            <ComboBoxItem Content="Every 3 hours" Tag="every:03:00:00" />
+                            <ComboBoxItem Content="Every 6 hours" Tag="every:06:00:00" />
+                            <ComboBoxItem Content="Daily" Tag="@daily" />
+                            <ComboBoxItem Content="Custom" Tag="custom" />
+                        </ComboBox>
+                        <TextBox x:Name="ScheduleExpressionBox"
+                                 Width="170"
+                                 Padding="8"
+                                 Margin="0,0,8,8"
+                                 ToolTip="Use @hourly, @daily, or every:HH:mm:ss" />
+                        <Button Content="Save Schedule"
+                                Click="SaveSchedule_Click" />
+                    </WrapPanel>
+                    <UniformGrid Columns="3" Margin="0,10,0,0">
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Maximum backup count" />
+                            <TextBox x:Name="MaximumCountBox" Padding="8" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Maximum age (days)" />
+                            <TextBox x:Name="MaximumAgeBox" Padding="8" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Maximum total storage (GiB)" />
+                            <TextBox x:Name="MaximumStorageBox" Padding="8" />
+                        </StackPanel>
+                    </UniformGrid>
+                    <WrapPanel>
+                        <CheckBox x:Name="KeepDailyBox"
+                                  Content="Keep daily backups"
+                                  Margin="0,5,20,5" />
+                        <CheckBox x:Name="KeepWeeklyBox"
+                                  Content="Keep weekly backups"
+                                  Margin="0,5,20,5" />
+                        <TextBlock x:Name="ScheduleStatusText"
+                                   Margin="0,5,0,5"
+                                   TextWrapping="Wrap" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource ServerCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="260" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock Text="Verified backup history"
+                                   FontSize="20"
+                                   FontWeight="SemiBold" />
+                        <Button Content="Refresh"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="Refresh_Click" />
+                    </Grid>
+                    <DataGrid x:Name="BackupsGrid"
+                              Grid.Row="1"
+                              Margin="0,12,0,12"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              SelectionChanged="BackupsGrid_SelectionChanged"
+                              Background="{DynamicResource PanelBrush}"
+                              Foreground="{DynamicResource TextBrush}"
+                              RowBackground="{DynamicResource PanelBrush}"
+                              AlternatingRowBackground="{DynamicResource PanelAltBrush}">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="Protected" Binding="{Binding IsProtected}" Width="85" />
+                            <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="*" />
+                            <DataGridTextColumn Header="Created" Binding="{Binding CreatedAtUtc, StringFormat=g}" Width="145" />
+                            <DataGridTextColumn Header="Size" Binding="{Binding SizeBytes}" Width="110" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="95" />
+                            <DataGridTextColumn Header="SHA-256" Binding="{Binding Sha256}" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <StackPanel Grid.Row="2">
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="0,0,12,8">
+                                <TextBlock Text="Display name" />
+                                <TextBox x:Name="BackupNameBox" Padding="8" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock Text="Notes" />
+                                <TextBox x:Name="BackupNotesBox" Padding="8" />
+                            </StackPanel>
+                        </UniformGrid>
+                        <WrapPanel>
+                            <CheckBox x:Name="ProtectBackupBox"
+                                      Content="Protect Backup"
+                                      Margin="0,9,16,8" />
+                            <Button Content="Save Details"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="SaveBackupDetails_Click" />
+                            <Button Content="Verify Backup"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="VerifyBackup_Click" />
+                            <Button Content="Restore"
+                                    Click="RestoreBackup_Click" />
+                            <Button Content="Export"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Click="ExportBackup_Click" />
+                            <Button Content="Delete"
+                                    Style="{StaticResource DangerButtonStyle}"
+                                    Click="DeleteBackup_Click" />
+                        </WrapPanel>
+                        <TextBlock x:Name="BackupStatusText"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
