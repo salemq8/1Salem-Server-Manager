@@ -6,29 +6,31 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Threading;
 using ServerManager.Infrastructure.Transport;
+using ServerManager.Contracts;
 
 namespace ServerManager.Client.Shell;
 
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
+    private readonly InstalledVersionReport _installedVersions =
+        InstalledVersionDetector.Detect();
     private readonly NamedPipeAgentClient _agentClient = new();
     private readonly DispatcherTimer _timer;
     private readonly CancellationTokenSource _lifetime = new();
     private NavigationItem _selectedSection;
+    private System.Windows.FlowDirection _flowDirection;
     private string _connectionLabel = "Agent unavailable";
     private string _agentMachineName = "—";
     private string _agentVersion = "—";
     private string _databaseLabel = "Unknown";
     private string _lastError = string.Empty;
+    private bool _agentConnected;
     private int _refreshing;
 
     public MainViewModel(ClientLaunchMode launchMode)
     {
-        LaunchModeLabel = launchMode == ClientLaunchMode.Administrator
-            ? "Administrator mode"
-            : "Normal mode";
         IsAdministrator = launchMode == ClientLaunchMode.Administrator;
-        FlowDirection = LayoutDirectionService.ForCulture(CultureInfo.CurrentUICulture);
+        _flowDirection = LayoutDirectionService.ForCulture(CultureInfo.CurrentUICulture);
         Sections =
         [
             CreateNavigationItem("Home"),
@@ -37,8 +39,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             CreateNavigationItem("RemoteAccess"),
             CreateNavigationItem("Backups"),
             CreateNavigationItem("Updates"),
-            CreateNavigationItem("System"),
-            CreateNavigationItem("Settings")
+            CreateNavigationItem("Resources"),
+            CreateNavigationItem("Network"),
+            CreateNavigationItem("Files"),
+            CreateNavigationItem("Logs"),
+            CreateNavigationItem("Settings"),
+            CreateNavigationItem("About")
         ];
         _selectedSection = Sections[0];
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
@@ -55,11 +61,35 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public AsyncRelayCommand RefreshCommand { get; }
 
-    public string LaunchModeLabel { get; }
+    public string LaunchModeLabel => LocalizationService.Get(
+        IsAdministrator ? "Shell.AdministratorMode" : "Shell.NormalMode");
 
     public bool IsAdministrator { get; }
 
-    public System.Windows.FlowDirection FlowDirection { get; }
+    public System.Windows.FlowDirection FlowDirection
+    {
+        get => _flowDirection;
+        private set => SetField(ref _flowDirection, value);
+    }
+
+    public string ProductVersion => ProductInfo.VersionLabel;
+
+    public string InstalledClientVersion =>
+        _installedVersions.Client.Version ?? ProductInfo.Version;
+
+    public string InstalledAgentVersion =>
+        _installedVersions.Agent.Version ?? "Unavailable";
+
+    public string InstalledUpdaterVersion =>
+        _installedVersions.Updater.Version ?? "Unavailable";
+
+    public string InstalledUpdateState =>
+        $"{_installedVersions.ReleaseChannel} · {_installedVersions.OverallState}";
+
+    public string InstalledVersionHistory =>
+        $"Previous: {_installedVersions.PreviousVersion ?? "None"} · " +
+        $"Rollback: {_installedVersions.RollbackVersion ?? "None"} · " +
+        $"Last update: {_installedVersions.LastSuccessfulUpdateUtc?.ToLocalTime().ToString("g") ?? "Not recorded"}";
 
     public NavigationItem SelectedSection
     {
@@ -108,7 +138,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         SelectedSection.Key.Equals("Updates", StringComparison.Ordinal);
 
     public bool IsResourcesSelected =>
-        SelectedSection.Key.Equals("System", StringComparison.Ordinal);
+        SelectedSection.Key.Equals("Resources", StringComparison.Ordinal);
 
     public bool IsNetworkSelected =>
         SelectedSection.Key.Equals("Network", StringComparison.Ordinal);
@@ -169,6 +199,43 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _timer.Start();
     }
 
+    public void ApplyUiPreferences(UiPreferences preferences)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+        var selectedKey = SelectedSection.Key;
+        FlowDirection = LayoutDirectionService.ForCulture(
+            CultureInfo.GetCultureInfo(preferences.Language));
+        var refreshed = new[]
+        {
+            "Home",
+            "Minecraft",
+            "Palworld",
+            "RemoteAccess",
+            "Backups",
+            "Updates",
+            "Resources",
+            "Network",
+            "Files",
+            "Logs",
+            "Settings",
+            "About"
+        }.Select(CreateNavigationItem).ToArray();
+        Sections.Clear();
+        foreach (var item in refreshed)
+        {
+            Sections.Add(item);
+        }
+
+        SelectedSection = Sections.FirstOrDefault(item =>
+                item.Key.Equals(selectedKey, StringComparison.Ordinal))
+            ?? Sections[0];
+        ConnectionLabel = LocalizationService.Get(
+            _agentConnected ? "Shell.Connected" : "Shell.AgentUnavailable");
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(nameof(LaunchModeLabel)));
+    }
+
     public void Dispose()
     {
         _timer.Stop();
@@ -190,7 +257,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var status = await _agentClient.GetStatusAsync(_lifetime.Token);
-            ConnectionLabel = "Connected locally";
+            _agentConnected = true;
+            ConnectionLabel = LocalizationService.Get("Shell.Connected");
             AgentMachineName = status.MachineName;
             AgentVersion = status.Version;
             DatabaseLabel = status.DatabaseReady ? "Ready" : "Starting";
@@ -202,7 +270,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         catch (Exception exception) when (
             exception is IOException or TimeoutException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ConnectionLabel = "Agent unavailable";
+            _agentConnected = false;
+            ConnectionLabel = LocalizationService.Get("Shell.AgentUnavailable");
             DatabaseLabel = "Unavailable";
             LastError = "The local Agent is not reachable. Start the Agent service, then retry.";
         }

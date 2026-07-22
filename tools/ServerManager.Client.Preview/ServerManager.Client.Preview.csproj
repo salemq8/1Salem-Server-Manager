@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>$(ProductVersion)-preview.1</Version>
+    <InformationalVersion>$(ProductVersion)-preview.1</InformationalVersion>
+    <ReleaseChannel>Preview</ReleaseChannel>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ServerManager.Client\ServerManager.Client.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.ComponentModel;
 using ServerManager.Client.Shell;
+using ServerManager.Contracts;
 
 namespace ServerManager.Client;
 
@@ -11,7 +12,6 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-
         var preferences = new UiPreferencesStore().Load();
         LocalizationService.Apply(preferences.Language);
         ThemeService.Apply(preferences.Theme);

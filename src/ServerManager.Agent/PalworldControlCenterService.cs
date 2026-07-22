@@ -17,7 +17,8 @@ public sealed class PalworldControlCenterService(
     IAuditLogStore auditLogStore,
     GameServerOrchestrator orchestrator,
     PalworldRestClient restClient,
-    PalworldManagementCache managementCache)
+    PalworldManagementCache managementCache,
+    ConfigurationRestorePointService restorePoints)
 {
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -31,6 +32,7 @@ public sealed class PalworldControlCenterService(
         GameServerDefinition? server = null;
         PalworldServerMetadata? originalMetadata = null;
         string? safetyBackup = null;
+        ConfigurationRestorePointItem? restorePoint = null;
         var configurationWritten = false;
         var metadataWritten = false;
         var wasRunning = false;
@@ -55,6 +57,19 @@ public sealed class PalworldControlCenterService(
                 server.RootPath,
                 cancellationToken);
             wasRunning = await IsRunningAsync(server.Id, cancellationToken);
+            restorePoint = await restorePoints.CreateAsync(
+                server,
+                "palworld-management-enable",
+                [
+                    PalworldConfigurationFile.RelativePath,
+                    Path.Combine(".1salem", "metadata.json")
+                ],
+                new Dictionary<string, string>
+                {
+                    ["REST API"] = "enabled",
+                    ["REST API bind"] = "127.0.0.1"
+                },
+                cancellationToken);
 
             stage = PalworldManagementActivationStage.CreatingSafetyBackup;
             safetyBackup = await PalworldConfigurationFile.CreateSafetyBackupAsync(
@@ -155,6 +170,11 @@ public sealed class PalworldControlCenterService(
                     true,
                     $"RESTAPIPort={restPort}; Restarted=False",
                     cancellationToken);
+                await restorePoints.CompleteAsync(
+                    server.Id,
+                    restorePoint.Id,
+                    markKnownWorking: false,
+                    cancellationToken);
                 return new PalworldRestEnableResponse(
                     true,
                     waiting.StatusMessage,
@@ -177,6 +197,11 @@ public sealed class PalworldControlCenterService(
                 "PalworldManagementEnabled",
                 true,
                 $"RESTAPIPort={restPort}; Restarted=True; Verified=True",
+                cancellationToken);
+            await restorePoints.CompleteAsync(
+                server.Id,
+                restorePoint.Id,
+                markKnownWorking: true,
                 cancellationToken);
             return new PalworldRestEnableResponse(
                 true,
@@ -289,6 +314,18 @@ public sealed class PalworldControlCenterService(
             server.RootPath,
             "management-disable",
             cancellationToken);
+        var restorePoint = await restorePoints.CreateAsync(
+            server,
+            "palworld-management-disable",
+            [
+                PalworldConfigurationFile.RelativePath,
+                Path.Combine(".1salem", "metadata.json")
+            ],
+            new Dictionary<string, string>
+            {
+                ["REST API"] = "disabled"
+            },
+            cancellationToken);
         var wasRunning = await IsRunningAsync(server.Id, cancellationToken);
         try
         {
@@ -324,6 +361,11 @@ public sealed class PalworldControlCenterService(
                 "PalworldManagementDisabled",
                 true,
                 $"Restarted={wasRunning}",
+                cancellationToken);
+            await restorePoints.CompleteAsync(
+                server.Id,
+                restorePoint.Id,
+                markKnownWorking: wasRunning,
                 cancellationToken);
             return new PalworldRestEnableResponse(
                 true,
@@ -446,6 +488,26 @@ public sealed class PalworldControlCenterService(
         return result;
     }
 
+    public async Task<PalworldRestOperationResult> AnnounceAsync(
+        Guid serverId,
+        PalworldAnnouncementRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var server = await GetServerAsync(serverId, cancellationToken);
+        var result = await restClient.AnnounceAsync(
+            server,
+            request.Message,
+            cancellationToken);
+        await WriteAuditAsync(
+            server,
+            "PalworldAnnouncement",
+            result.Success,
+            $"Code={result.Code}; Length={request.Message.Length}",
+            cancellationToken);
+        return result;
+    }
+
     public async Task<PalworldWorldSettingsResponse> GetWorldSettingsAsync(
         Guid serverId,
         CancellationToken cancellationToken = default)
@@ -463,7 +525,15 @@ public sealed class PalworldControlCenterService(
             document.Path,
             PalworldWorldSettingsCatalog.Describe(current, defaults),
             PalworldWorldSettingsCatalog.Categories,
-            PalworldWorldSettingsCatalog.Presets);
+            PalworldWorldSettingsCatalog.Presets,
+            UnknownSettings: current
+                .Where(item =>
+                    !PalworldWorldSettingsCatalog.ManagedNames.Contains(
+                        item.Key))
+                .ToDictionary(
+                    item => item.Key,
+                    item => MaskSecret(item.Key, item.Value),
+                    StringComparer.OrdinalIgnoreCase));
     }
 
     public async Task<PalworldWorldSettingsPresetResponse> GetWorldSettingsPresetAsync(
@@ -522,6 +592,15 @@ public sealed class PalworldControlCenterService(
         var backup = await PalworldConfigurationFile.CreateSafetyBackupAsync(
             server.RootPath,
             "world-settings",
+            cancellationToken);
+        var restorePoint = await restorePoints.CreateAsync(
+            server,
+            "palworld-world-settings",
+            [
+                PalworldConfigurationFile.RelativePath,
+                Path.Combine(".1salem", "metadata.json")
+            ],
+            request.Changes,
             cancellationToken);
         var wasRunning = await IsRunningAsync(server.Id, cancellationToken);
         var restarted = false;
@@ -629,6 +708,11 @@ public sealed class PalworldControlCenterService(
                     cancellationToken);
             }
 
+            await restorePoints.CompleteAsync(
+                server.Id,
+                restorePoint.Id,
+                restarted && restVerified,
+                cancellationToken);
             return new PalworldWorldSettingsUpdateResponse(
                 true,
                 restarted

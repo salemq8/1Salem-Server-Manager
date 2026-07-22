@@ -31,7 +31,17 @@ public sealed record ServerSettingsUpdateRequest(
     bool Hardcore,
     bool Pvp,
     string? JavaExecutablePath = null,
-    bool ApplyAndRestart = false);
+    bool ApplyAndRestart = false,
+    int SpawnProtection = 16,
+    bool EnableCommandBlocks = false,
+    bool AllowFlight = false,
+    bool SpawnAnimals = true,
+    bool SpawnMonsters = true,
+    bool SpawnNpcs = true,
+    string LevelName = "world",
+    string LevelSeed = "",
+    string LevelType = "minecraft:normal",
+    bool GenerateStructures = true);
 
 public sealed record NetworkPreferenceRequest(string? AdapterId);
 
@@ -63,7 +73,19 @@ public sealed record MinecraftConfigurationResponse(
     bool Pvp,
     bool AutoStart,
     bool AutoRestart,
-    string? PreferredAdapterId);
+    string? PreferredAdapterId,
+    int SpawnProtection = 16,
+    bool EnableCommandBlocks = false,
+    bool AllowFlight = false,
+    bool SpawnAnimals = true,
+    bool SpawnMonsters = true,
+    bool SpawnNpcs = true,
+    string LevelName = "world",
+    string LevelSeed = "",
+    string LevelType = "minecraft:normal",
+    bool GenerateStructures = true,
+    bool CanChangeSeed = false,
+    IReadOnlyList<string>? UnknownPropertyKeys = null);
 
 public sealed record MinecraftPlayersSnapshot(
     IReadOnlyList<string> OnlinePlayers,

@@ -159,6 +159,8 @@ public sealed record PalworldRestOperationResult(
     string Message,
     DateTimeOffset CompletedAtUtc);
 
+public sealed record PalworldAnnouncementRequest(string Message);
+
 public sealed record PalworldRestSettingsResult(
     bool Success,
     string Code,
@@ -200,7 +202,8 @@ public sealed record PalworldWorldSettingsResponse(
     IReadOnlyList<string> Categories,
     IReadOnlyList<string> Presets,
     bool HasUnsavedServerRestart = false,
-    DateTimeOffset? LastChangedAtUtc = null);
+    DateTimeOffset? LastChangedAtUtc = null,
+    IReadOnlyDictionary<string, string>? UnknownSettings = null);
 
 public sealed record PalworldWorldSettingsUpdateRequest(
     IReadOnlyDictionary<string, string> Changes,

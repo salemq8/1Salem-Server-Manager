@@ -103,6 +103,9 @@ public partial class HomeDashboardControl : System.Windows.Controls.UserControl,
         DiskText.Text = FormatBytes(snapshot.SystemDriveFreeBytes);
         CountsText.Text =
             $"{snapshot.ActiveServerCount} active · {snapshot.WarningCount} warnings";
+        WindowsUptimeText.Text = FormatDuration(snapshot.WindowsUptime);
+        LastRefreshText.Text =
+            $"Refreshed {snapshot.CapturedAtUtc.ToLocalTime():T}";
         ResourceProfileText.Text = snapshot.ResourceProfileSummary;
         WarningText.Text = snapshot.Warnings.Count == 0
             ? string.Empty
@@ -145,6 +148,7 @@ public partial class HomeDashboardControl : System.Windows.Controls.UserControl,
         var version = minecraft ? MinecraftVersionText : PalworldVersionText;
         var players = minecraft ? MinecraftPlayersText : PalworldPlayersText;
         var resources = minecraft ? MinecraftResourcesText : PalworldResourcesText;
+        var health = minecraft ? MinecraftHealthText : PalworldHealthText;
         var start = minecraft ? MinecraftStartButton : PalworldStartButton;
         var stop = minecraft ? MinecraftStopButton : PalworldStopButton;
         var restart = minecraft ? MinecraftRestartButton : PalworldRestartButton;
@@ -167,7 +171,16 @@ public partial class HomeDashboardControl : System.Windows.Controls.UserControl,
         resources.Text =
             $"Game PID {(server.GameProcessId?.ToString() ?? "—")} · " +
             $"{server.CpuPercent:F1}% · " +
-            FormatBytes(server.WorkingSetBytes);
+            $"{FormatBytes(server.WorkingSetBytes)} working · " +
+            $"{FormatBytes(server.PrivateMemoryBytes)} private";
+        health.Text =
+            $"Process: {HealthWord(server.State == ServerState.Running)} · " +
+            $"Local port: {HealthWord(server.LocalPortOpen)} · " +
+            $"Game ready: {HealthWord(server.State == ServerState.Running && server.LocalPortOpen)} · " +
+            $"Playit: {(server.InternetAddress is null ? "Not configured" : HealthWord(server.PlayitOnline))} · " +
+            $"Management: {(server.Game == GameType.Minecraft ? "Not required" : HealthWord(server.RestManagementConnected))} · " +
+            $"Last backup: {server.LastBackupAtUtc?.ToLocalTime().ToString("g") ?? "None"} · " +
+            $"Update: {server.UpdateStatus ?? "Not checked"}";
         start.IsEnabled = server.Actions.CanStart;
         stop.IsEnabled = server.Actions.CanStop;
         restart.IsEnabled = server.Actions.CanRestart;
@@ -289,4 +302,7 @@ public partial class HomeDashboardControl : System.Windows.Controls.UserControl,
             : duration.Value.TotalDays >= 1
                 ? $"{duration.Value.TotalDays:F1}d"
                 : duration.Value.ToString(@"hh\:mm\:ss");
+
+    private static string HealthWord(bool healthy) =>
+        healthy ? "Ready" : "Unavailable";
 }

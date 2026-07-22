@@ -137,7 +137,8 @@ public sealed class DashboardSnapshotService(
                 management,
                 localPortOpen,
                 playit.IsRunning && playit.IsLinked && playit.IsVerified,
-                management?.State == PalworldManagementState.Online));
+                management?.State == PalworldManagementState.Online,
+                process?.ThreadCount ?? 0));
         }
 
         var warnings = system.Warnings.ToList();
@@ -160,7 +161,8 @@ public sealed class DashboardSnapshotService(
             DateTimeOffset.UtcNow,
             ResourceProfileSummary.Build(
                 resourceGovernor.ActivePolicy,
-                servers.Select(server => server.Game)));
+                servers.Select(server => server.Game)),
+            TimeSpan.FromMilliseconds(Environment.TickCount64));
     }
 
     private static string? ReadRuntimeVersion(GameServerDefinition server)

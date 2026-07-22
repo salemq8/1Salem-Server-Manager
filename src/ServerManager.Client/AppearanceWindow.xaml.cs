@@ -10,6 +10,8 @@ public partial class AppearanceWindow : Window
 {
     private readonly UiPreferencesStore _store = new();
 
+    public event EventHandler<UiPreferences>? PreferencesApplied;
+
     public AppearanceWindow()
     {
         InitializeComponent();
@@ -32,10 +34,8 @@ public partial class AppearanceWindow : Window
         ThemeService.Apply(theme);
         FlowDirection = LayoutDirectionService.ForCulture(
             CultureInfo.GetCultureInfo(language));
-        StatusText.Text =
-            language.StartsWith("ar", StringComparison.OrdinalIgnoreCase)
-                ? "تم حفظ اللغة والمظهر. أعد فتح لوحة التحكم لتطبيق اتجاه جميع صفحات التنقل."
-                : "Language and theme saved. Reopen the dashboard to apply the navigation direction everywhere.";
+        StatusText.Text = LocalizationService.Get("Appearance.Applied");
+        PreferencesApplied?.Invoke(this, preferences);
     }
 
     private static string SelectedTag(Selector selector) =>

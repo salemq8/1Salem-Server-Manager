@@ -21,7 +21,15 @@
                 BorderBrush="#2A3342"
                 BorderThickness="0,0,0,1">
             <Grid Margin="24,0">
-                <StackPanel VerticalAlignment="Center">
+                <Button x:Name="NavigationToggleButton"
+                        Content="{DynamicResource Shell.Navigation}"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Click="ToggleNavigation_Click"
+                        AutomationProperties.Name="Show or hide main navigation" />
+                <StackPanel VerticalAlignment="Center"
+                            Margin="145,0,0,0">
                     <TextBlock Text="{DynamicResource AppTitle}"
                                FontSize="24"
                                FontWeight="Bold" />
@@ -32,7 +40,7 @@
                 <StackPanel HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Orientation="Horizontal">
-                    <Button Content="Admin Tools"
+                    <Button Content="{DynamicResource Shell.AdministratorTools}"
                             Click="OpenAdminTools_Click"
                             Margin="0,0,10,0"
                             Visibility="{Binding IsAdministrator, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -50,14 +58,17 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210" />
+                <ColumnDefinition x:Name="NavigationColumn" Width="210" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Border Background="{DynamicResource PanelBrush}"
+            <Border x:Name="NavigationPanel"
+                    Background="{DynamicResource PanelBrush}"
                     BorderBrush="#2A3342"
                     BorderThickness="0,0,1,0">
-                <ListBox ItemsSource="{Binding Sections}"
+                <ListBox x:Name="NavigationList"
+                         ItemsSource="{Binding Sections}"
                          SelectedItem="{Binding SelectedSection}"
+                         SelectionChanged="NavigationList_SelectionChanged"
                          DisplayMemberPath="Title"
                          Background="Transparent"
                          BorderThickness="0"
@@ -177,7 +188,7 @@
                         </StackPanel>
 
                         <StackPanel Visibility="{Binding IsResourcesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="System" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="Resources" FontSize="30" FontWeight="Bold" />
                             <TextBlock Text="Performance policy, network diagnostics, safe files, logs, and Agent tools."
                                        Margin="0,5,0,18"
                                        Foreground="{DynamicResource MutedTextBrush}" />
@@ -244,15 +255,46 @@
                         </StackPanel>
 
                         <StackPanel Visibility="{Binding IsSettingsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="Settings" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="Dashboard appearance is separate from each server's Auto Start and Auto Restart settings."
+                            <TextBlock Text="{DynamicResource Settings}" FontSize="30" FontWeight="Bold" />
+                            <TextBlock Text="{DynamicResource Appearance.ScopeDescription}"
                                        Margin="0,5,0,18"
                                        Foreground="{DynamicResource MutedTextBrush}" />
+                            <Border Style="{StaticResource ServerCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource Appearance.Title}"
+                                               FontSize="21"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{DynamicResource Appearance.Description}"
+                                               Margin="0,5,0,14"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               TextWrapping="Wrap" />
+                                    <UniformGrid Columns="2">
+                                        <StackPanel Margin="0,0,12,10">
+                                            <TextBlock Text="{DynamicResource Appearance.Language}" />
+                                            <ComboBox x:Name="SettingsLanguageBox">
+                                                <ComboBoxItem Content="{DynamicResource Appearance.English}" Tag="en-US" />
+                                                <ComboBoxItem Content="{DynamicResource Appearance.Arabic}" Tag="ar-SA" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,10">
+                                            <TextBlock Text="{DynamicResource Appearance.Theme}" />
+                                            <ComboBox x:Name="SettingsThemeBox">
+                                                <ComboBoxItem Content="{DynamicResource Appearance.Dark}" Tag="Dark" />
+                                                <ComboBoxItem Content="{DynamicResource Appearance.Light}" Tag="Light" />
+                                                <ComboBoxItem Content="{DynamicResource Appearance.FollowWindows}" Tag="FollowWindows" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <Button Content="{DynamicResource Appearance.Apply}"
+                                            HorizontalAlignment="Left"
+                                            Click="ApplyInlineAppearance_Click" />
+                                    <TextBlock x:Name="InlineAppearanceStatusText"
+                                               Margin="0,5,0,0"
+                                               Foreground="{DynamicResource MutedTextBrush}" />
+                                </StackPanel>
+                            </Border>
                             <WrapPanel>
-                                <Button Content="Language and Theme"
-                                        Click="OpenAppearance_Click" />
-                                <Button Content="Administrator Tools"
-                                        Margin="8,0,0,0"
+                                <Button Content="{DynamicResource Shell.AdministratorTools}"
                                         Click="OpenAdminTools_Click" />
                             </WrapPanel>
                         </StackPanel>
@@ -270,9 +312,20 @@
                                         <TextBlock Text="1Salem Server Manager"
                                                    FontSize="24"
                                                    FontWeight="SemiBold" />
-                                        <TextBlock Text="Version 1.3.1"
+                                        <TextBlock Text="{Binding ProductVersion}"
                                                    Margin="0,5,0,0"
                                                    Foreground="{DynamicResource AccentBrush}" />
+                                        <TextBlock Text="{Binding InstalledClientVersion, StringFormat=Client: {0}}"
+                                                   Margin="0,8,0,0" />
+                                        <TextBlock Text="{Binding InstalledAgentVersion, StringFormat=Agent: {0}}" />
+                                        <TextBlock Text="{Binding InstalledUpdaterVersion, StringFormat=Updater: {0}}" />
+                                        <TextBlock Text="{Binding InstalledUpdateState}"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="{DynamicResource AccentBrush}" />
+                                        <TextBlock Text="{Binding InstalledVersionHistory}"
+                                                   MaxWidth="620"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource MutedTextBrush}" />
                                         <TextBlock Text="Official falcon and server identity"
                                                    Margin="0,5,0,14"
                                                    Foreground="{DynamicResource MutedTextBrush}" />
@@ -298,8 +351,42 @@
                            Foreground="{DynamicResource MutedTextBrush}" />
                 <TextBlock HorizontalAlignment="Right"
                            VerticalAlignment="Center"
-                           Text="Named-pipe control · Loopback API · bounded two-second monitoring"
+                            Text="{DynamicResource Shell.Footer}"
                            Foreground="{DynamicResource MutedTextBrush}" />
+            </Grid>
+        </Border>
+
+        <Border x:Name="NotificationToast"
+                Grid.RowSpan="3"
+                Width="390"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="18"
+                Padding="16"
+                CornerRadius="9"
+                BorderThickness="1"
+                Background="{DynamicResource PanelAltBrush}"
+                BorderBrush="{DynamicResource AccentBrush}"
+                Visibility="Collapsed"
+                Panel.ZIndex="1000">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="NotificationTitle"
+                               FontWeight="Bold"
+                               FontSize="16" />
+                    <TextBlock x:Name="NotificationMessage"
+                               Margin="0,5,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="{DynamicResource Shell.Dismiss}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="12,0,0,0"
+                        Click="DismissNotification_Click" />
             </Grid>
         </Border>
     </Grid>

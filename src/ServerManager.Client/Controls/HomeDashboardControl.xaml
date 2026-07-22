@@ -9,7 +9,7 @@
                        Margin="0,5,0,20"
                        Foreground="{DynamicResource MutedTextBrush}" />
 
-            <UniformGrid Columns="5">
+            <UniformGrid Columns="6">
                 <Border Style="{StaticResource DashboardCardStyle}">
                     <StackPanel>
                         <TextBlock Text="Agent" Foreground="{DynamicResource MutedTextBrush}" />
@@ -43,6 +43,13 @@
                         <TextBlock Text="System drive free" Foreground="{DynamicResource MutedTextBrush}" />
                         <TextBlock x:Name="DiskText" Text="—" Style="{StaticResource CardValueStyle}" />
                         <TextBlock x:Name="CountsText" Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Windows uptime" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock x:Name="WindowsUptimeText" Text="—" Style="{StaticResource CardValueStyle}" />
+                        <TextBlock x:Name="LastRefreshText" Foreground="{DynamicResource MutedTextBrush}" />
                     </StackPanel>
                 </Border>
             </UniformGrid>
@@ -98,6 +105,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="2*" />
@@ -144,7 +152,12 @@
                             <TextBlock Text="Process resources" Foreground="{DynamicResource MutedTextBrush}" />
                             <TextBlock x:Name="MinecraftResourcesText" FontWeight="SemiBold" />
                         </StackPanel>
-                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="0,18,0,0">
+                        <TextBlock x:Name="MinecraftHealthText"
+                                   Grid.Row="1"
+                                   Grid.ColumnSpan="4"
+                                   Margin="0,14,0,0"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Grid.Row="2" Grid.ColumnSpan="4" Margin="0,18,0,0">
                             <Button x:Name="MinecraftStartButton" Content="Start" Tag="Minecraft:start" Click="ServerAction_Click" />
                             <Button x:Name="MinecraftStopButton" Content="Stop" Tag="Minecraft:stop" Click="ServerAction_Click" />
                             <Button x:Name="MinecraftRestartButton" Content="Restart" Tag="Minecraft:restart" Click="ServerAction_Click" />
@@ -179,6 +192,7 @@
                             Click="CreatePalworld_Click" />
                     <Grid x:Name="PalworldDetails" Margin="0,18,0,0">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
@@ -227,7 +241,12 @@
                             <TextBlock Text="Process resources" Foreground="{DynamicResource MutedTextBrush}" />
                             <TextBlock x:Name="PalworldResourcesText" FontWeight="SemiBold" />
                         </StackPanel>
-                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="4" Margin="0,18,0,0">
+                        <TextBlock x:Name="PalworldHealthText"
+                                   Grid.Row="1"
+                                   Grid.ColumnSpan="4"
+                                   Margin="0,14,0,0"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Grid.Row="2" Grid.ColumnSpan="4" Margin="0,18,0,0">
                             <Button x:Name="PalworldStartButton" Content="Start" Tag="Palworld:start" Click="ServerAction_Click" />
                             <Button x:Name="PalworldStopButton" Content="Stop" Tag="Palworld:stop" Click="ServerAction_Click" />
                             <Button x:Name="PalworldRestartButton" Content="Restart" Tag="Palworld:restart" Click="ServerAction_Click" />

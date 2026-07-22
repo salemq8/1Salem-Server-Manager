@@ -101,7 +101,8 @@ public sealed record ServerDashboardCard(
     PalworldManagementSnapshot? PalworldManagement = null,
     bool LocalPortOpen = false,
     bool PlayitOnline = false,
-    bool RestManagementConnected = false);
+    bool RestManagementConnected = false,
+    int ThreadCount = 0);
 
 public sealed record DashboardSnapshot(
     AgentStatusResponse Agent,
@@ -117,4 +118,13 @@ public sealed record DashboardSnapshot(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<ServerDashboardCard> Servers,
     DateTimeOffset CapturedAtUtc,
-    string ResourceProfileSummary = "Active: Balanced · No managed game servers");
+    string ResourceProfileSummary = "Active: Balanced · No managed game servers",
+    TimeSpan WindowsUptime = default);
+
+public sealed record ServerActivityItem(
+    DateTimeOffset TimestampUtc,
+    string Actor,
+    string Action,
+    string DisplayName,
+    bool Succeeded,
+    string? Detail = null);
