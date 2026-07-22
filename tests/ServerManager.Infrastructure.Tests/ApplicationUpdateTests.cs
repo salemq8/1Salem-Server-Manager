@@ -359,7 +359,8 @@ public sealed class ApplicationUpdateTests : IDisposable
             DateTimeOffset.UtcNow,
             true,
             true,
-            false);
+            false,
+            BuildRevision: 1);
         return JsonSerializer.Serialize(
             manifest,
             new JsonSerializerOptions(JsonSerializerDefaults.Web));

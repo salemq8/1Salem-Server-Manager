@@ -1,21 +1,28 @@
 [CmdletBinding()]
 param(
     [switch]$SkipValidation,
-    [switch]$RebuildSameVersion
+    [switch]$RepairSameBuild
 )
 
 $ErrorActionPreference = 'Stop'
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $artifactsRoot = Join-Path $root 'artifacts'
 $releaseVersion = (Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw).Trim()
-if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Stable releases require a three-part VERSION. Found '$releaseVersion'."
+if ($releaseVersion -notmatch '^\d+\.\d+$') {
+    throw "Fixed-version releases require a two-part VERSION. Found '$releaseVersion'."
 }
+$buildRevisionText = (Get-Content -LiteralPath (Join-Path $root 'BUILD_REVISION') -Raw).Trim()
+if ($buildRevisionText -notmatch '^[1-9]\d*$') {
+    throw "BUILD_REVISION must contain a positive integer. Found '$buildRevisionText'."
+}
+$buildRevision = [int]$buildRevisionText
 
 $releaseBase = Join-Path $artifactsRoot 'release'
 $canonicalReleaseRoot = Join-Path $releaseBase $releaseVersion
-$stagingRoot = Join-Path $artifactsRoot "staging\$releaseVersion"
-$validationRoot = Join-Path $artifactsRoot "validation\$releaseVersion\palworld-overview"
+$candidateBase = Join-Path $artifactsRoot 'staging\release-candidates'
+$releaseRoot = Join-Path $candidateBase "$releaseVersion-build-$buildRevision"
+$stagingRoot = Join-Path $artifactsRoot "staging\$releaseVersion-build-$buildRevision"
+$validationRoot = Join-Path $artifactsRoot "validation\$releaseVersion\build-$buildRevision\palworld-overview"
 $dotnet = Join-Path $root '.tools\dotnet\dotnet.exe'
 if (-not (Test-Path -LiteralPath $dotnet)) {
     $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
@@ -60,7 +67,8 @@ function New-EmptyStagingDirectory {
 function Test-ReleaseIntegrity {
     param(
         [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string]$Version
+        [Parameter(Mandatory)][string]$Version,
+        [Parameter(Mandatory)][int]$BuildRevision
     )
     $required = @(
         'Setup.exe',
@@ -68,6 +76,7 @@ function Test-ReleaseIntegrity {
         'Source.zip',
         "1SalemServerManager-Update-$Version.zip",
         'version.json',
+        'build-info.json',
         'SHA256SUMS.txt',
         'RELEASE_NOTES.md'
     )
@@ -82,6 +91,7 @@ function Test-ReleaseIntegrity {
         $packageName = "1SalemServerManager-Update-$Version.zip"
         $packagePath = Join-Path $Path $packageName
         if ($manifest.version -ne $Version -or
+            [int]$manifest.buildRevision -ne $BuildRevision -or
             $manifest.packageFileName -ne $packageName -or
             $manifest.releaseChannel -ne 'Stable' -or
             $manifest.archiveValidation -ne 'passed' -or
@@ -162,6 +172,9 @@ function New-SourceArchive {
         try {
             Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
                 $candidate = $_.FullName
+                -not $candidate.Equals(
+                    (Join-Path $root 'build-info.json'),
+                    [System.StringComparison]::OrdinalIgnoreCase) -and
                 -not ($excluded | Where-Object {
                     $candidate.IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                 })
@@ -176,6 +189,11 @@ function New-SourceArchive {
                     $relative.Replace('\', '/'),
                     [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
             }
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive,
+                $generatedBuildInfo,
+                'build-info.json',
+                [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
         }
         finally {
             $archive.Dispose()
@@ -234,16 +252,7 @@ function Assert-ProductVersion {
 }
 
 New-Item -ItemType Directory -Path $releaseBase -Force | Out-Null
-if (Test-Path -LiteralPath $canonicalReleaseRoot) {
-    if (-not (Test-ReleaseIntegrity $canonicalReleaseRoot $releaseVersion)) {
-        $failedRoot = Join-Path $releaseBase (
-            "failed\{0}-{1}" -f $releaseVersion, [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
-        $null = Assert-InsideArtifacts $failedRoot
-        New-Item -ItemType Directory -Path (Split-Path $failedRoot -Parent) -Force | Out-Null
-        Move-Item -LiteralPath $canonicalReleaseRoot -Destination $failedRoot
-        Write-Host "Preserved incomplete release at $failedRoot"
-    }
-}
+New-Item -ItemType Directory -Path $candidateBase -Force | Out-Null
 
 $preflightArguments = @(
     'run',
@@ -252,21 +261,28 @@ $preflightArguments = @(
     '--',
     'preflight',
     '--repo', $root,
-    '--target', $releaseVersion
+    '--target', $releaseVersion,
+    '--build-revision', $buildRevision
 )
-if ($RebuildSameVersion) {
-    $preflightArguments += '--rebuild-same-version'
+if ($RepairSameBuild) {
+    $preflightArguments += '--repair-same-build'
 }
 & $dotnet @preflightArguments
 Assert-Success 'Release version pre-flight'
 
-$releaseRoot = $canonicalReleaseRoot
-if ($RebuildSameVersion -and (Test-Path -LiteralPath $canonicalReleaseRoot)) {
-    $releaseRoot = Join-Path $releaseBase (
-        "rebuilds\{0}-{1}" -f $releaseVersion, [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
-}
 if (Test-Path -LiteralPath $releaseRoot) {
-    throw "Release output already exists and will not be overwritten: $releaseRoot"
+    if (-not $RepairSameBuild) {
+        throw "Release candidate already exists and will not be overwritten: $releaseRoot"
+    }
+
+    $failedCandidate = Join-Path $artifactsRoot (
+        "staging\failed\{0}-build-{1}-{2}" -f `
+            $releaseVersion,
+            $buildRevision,
+            [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+    New-Item -ItemType Directory -Path (Split-Path $failedCandidate -Parent) -Force | Out-Null
+    Move-Item -LiteralPath $releaseRoot -Destination $failedCandidate
+    Write-Host "Preserved previous candidate at $failedCandidate"
 }
 New-Item -ItemType Directory -Path $releaseRoot | Out-Null
 New-EmptyStagingDirectory $stagingRoot
@@ -294,6 +310,22 @@ $launcherPublish = Join-Path $publishRoot 'Launcher'
 $maintenancePublish = Join-Path $publishRoot 'Maintenance'
 $setupPublish = Join-Path $publishRoot 'SetupHost'
 $buildRoot = Join-Path $stagingRoot 'build'
+$commit = 'unknown'
+$git = Get-Command git -ErrorAction SilentlyContinue
+if ($null -ne $git) {
+    $candidateCommit = & $git.Source -C $root rev-parse --short HEAD
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidateCommit)) {
+        $commit = $candidateCommit.Trim()
+    }
+}
+$builtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+$generatedBuildInfo = Join-Path $stagingRoot 'build-info.json'
+[ordered]@{
+    productVersion = $releaseVersion
+    buildRevision = $buildRevision
+    builtUtc = $builtUtc
+    commit = $commit
+} | ConvertTo-Json | Set-Content -LiteralPath $generatedBuildInfo -Encoding utf8
 
 function Publish-Application {
     param(
@@ -344,6 +376,16 @@ Publish-Application `
     (Join-Path $root 'tools\ServerManager.Setup\ServerManager.Setup.csproj') `
     $maintenancePublish 'Maintenance' -SingleFile
 
+foreach ($output in @(
+    $clientPublish,
+    $agentPublish,
+    $updaterPublish,
+    $launcherPublish,
+    $maintenancePublish
+)) {
+    Copy-Item -LiteralPath $generatedBuildInfo -Destination $output
+}
+
 Copy-Item -LiteralPath $updaterPublish `
     -Destination (Join-Path $clientPublish 'Updater') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $clientPublish 'Launcher') | Out-Null
@@ -355,6 +397,8 @@ if ($null -eq $launcherHost) {
 }
 Copy-Item -LiteralPath $launcherHost.FullName `
     -Destination (Join-Path $clientPublish 'Launcher\1Salem.ServerManager.Launcher.exe')
+Copy-Item -LiteralPath $generatedBuildInfo `
+    -Destination (Join-Path $clientPublish 'Launcher\build-info.json')
 
 foreach ($path in @(
     (Join-Path $clientPublish '1Salem.ServerManager.exe'),
@@ -372,6 +416,8 @@ Copy-Item -LiteralPath $agentPublish -Destination (Join-Path $portableRoot 'Agen
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'CHANGELOG.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'VERSION') -Destination $portableRoot
+Copy-Item -LiteralPath (Join-Path $root 'BUILD_REVISION') -Destination $portableRoot
+Copy-Item -LiteralPath $generatedBuildInfo -Destination $portableRoot
 New-ZipFromDirectory $portableRoot (Join-Path $releaseRoot 'Portable.zip')
 
 $payloadRoot = Join-Path $stagingRoot 'Payload'
@@ -388,6 +434,8 @@ if ($null -eq $maintenanceHost) {
 Assert-ProductVersion $maintenanceHost.FullName
 Copy-Item -LiteralPath $maintenanceHost.FullName `
     -Destination (Join-Path $payloadRoot 'Maintenance\Uninstall 1Salem Server Manager.exe')
+Copy-Item -LiteralPath $generatedBuildInfo `
+    -Destination (Join-Path $payloadRoot 'Maintenance\build-info.json')
 
 $updatePackageName = "1SalemServerManager-Update-$releaseVersion.zip"
 $updatePackagePath = Join-Path $releaseRoot $updatePackageName
@@ -406,6 +454,7 @@ if ($null -eq $setupHost) {
 }
 Assert-ProductVersion $setupHost.FullName
 Copy-Item -LiteralPath $setupHost.FullName -Destination (Join-Path $releaseRoot 'Setup.exe')
+Copy-Item -LiteralPath $generatedBuildInfo -Destination (Join-Path $releaseRoot 'build-info.json')
 
 New-SourceArchive (Join-Path $releaseRoot 'Source.zip')
 $notesSource = Join-Path $root "docs\RELEASE_NOTES_$releaseVersion.md"
@@ -419,6 +468,8 @@ $notesText = [System.IO.File]::ReadAllText($notesSource)
 $published = [DateTimeOffset]::UtcNow.ToString('O')
 $versionDocument = [ordered]@{
     version = $releaseVersion
+    productVersion = $releaseVersion
+    buildRevision = $buildRevision
     minimumSupportedVersion = '1.2.0'
     packageFileName = $updatePackageName
     packageUrl = "https://updates.1salem.app/server-manager/stable/$releaseVersion/$updatePackageName"
@@ -429,13 +480,13 @@ $versionDocument = [ordered]@{
     releaseNotesUrl = "https://updates.1salem.app/server-manager/stable/$releaseVersion/RELEASE_NOTES.md"
     publishedAt = $published
     publishedUtc = $published
-    rollbackCompatibility = '1.2.x, 1.3.0, 1.3.1, and the immediately previous validated Stable version'
-    agentUpdateMode = 'StageIfBusy'
+    rollbackCompatibility = '1.3.2 migration fallback and the immediately previous validated 1.5 Build'
+    agentUpdateMode = 'SafeRestartAndReadopt'
     dashboardShutdownMode = 'VerifiedExactProcess'
     requiresElevation = $true
     requiresServiceRestart = $false
     requiresFullSetup = $false
-    validationPath = "artifacts/validation/$releaseVersion/palworld-overview"
+    validationPath = "artifacts/validation/$releaseVersion/build-$buildRevision/palworld-overview"
     archiveValidation = 'pending'
 }
 $versionDocument | ConvertTo-Json -Depth 6 |
@@ -460,6 +511,7 @@ $checksumFiles = @(
     'Source.zip',
     $updatePackageName,
     'version.json',
+    'build-info.json',
     'RELEASE_NOTES.md'
 )
 $checksumLines = foreach ($name in $checksumFiles) {
@@ -475,6 +527,7 @@ $requiredFiles = @(
     'Source.zip',
     $updatePackageName,
     'version.json',
+    'build-info.json',
     'SHA256SUMS.txt',
     'RELEASE_NOTES.md'
 )
@@ -486,9 +539,10 @@ foreach ($name in $requiredFiles) {
     $stream = [System.IO.File]::OpenRead($path)
     $stream.Dispose()
 }
-if (-not (Test-ReleaseIntegrity $releaseRoot $releaseVersion)) {
+if (-not (Test-ReleaseIntegrity $releaseRoot $releaseVersion $buildRevision)) {
     throw 'The completed release failed its checksum/integrity verification.'
 }
 
-Write-Host "Immutable release created in $releaseRoot"
+Write-Host "Validated release candidate created in $releaseRoot"
+Write-Host "Promote it to $canonicalReleaseRoot only after the installed update succeeds."
 Get-ChildItem -LiteralPath $releaseRoot | Select-Object Name, Length

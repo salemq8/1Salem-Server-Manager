@@ -75,9 +75,12 @@ public sealed class ApplicationUpdateCoordinator
                     : "Last rollback was incomplete; repair with Setup.exe.";
         var stage = _transientStage ?? state.Stage;
         if (lastResult is { Success: true } &&
-            SemanticVersion.TryParse(CurrentVersion, out var current) &&
-            SemanticVersion.TryParse(state.LatestVersion, out var latest) &&
-            current.CompareTo(latest) >= 0)
+            state.Manifest is { } completedManifest &&
+            !IsAvailable(
+                CurrentVersion,
+                CurrentBuildRevision,
+                completedManifest.Version,
+                completedManifest.BuildRevision))
         {
             stage = ApplicationUpdateStage.Succeeded;
         }
@@ -87,7 +90,11 @@ public sealed class ApplicationUpdateCoordinator
             state.LatestVersion,
             settings.Channel,
             stage,
-            IsAvailable(CurrentVersion, state.LatestVersion),
+            IsAvailable(
+                CurrentVersion,
+                CurrentBuildRevision,
+                state.LatestVersion,
+                state.Manifest?.BuildRevision),
             settings.AutomaticChecksEnabled,
             _downloadPercent,
             Interlocked.Read(ref _downloadedBytes),
@@ -99,7 +106,9 @@ public sealed class ApplicationUpdateCoordinator
             _transientError ?? state.LastError,
             IsCurrentBuildSigned(),
             busy,
-            state.History);
+            state.History,
+            CurrentBuildRevision,
+            state.Manifest?.BuildRevision);
     }
 
     public async Task<ApplicationUpdateStatusResponse> SaveSettingsAsync(
@@ -133,7 +142,11 @@ public sealed class ApplicationUpdateCoordinator
                 manifest.ReleaseNotesUrl,
                 cancellationToken);
             var previous = await LoadStateAsync(cancellationToken);
-            var available = IsAvailable(CurrentVersion, manifest.Version);
+            var available = IsAvailable(
+                CurrentVersion,
+                CurrentBuildRevision,
+                manifest.Version,
+                manifest.BuildRevision);
             var belowMinimum = SemanticVersion.Parse(CurrentVersion).CompareTo(
                 SemanticVersion.Parse(manifest.MinimumSupportedVersion)) < 0;
             var stage = (manifest.RequiresFullSetup || belowMinimum) && available
@@ -190,7 +203,11 @@ public sealed class ApplicationUpdateCoordinator
             var state = await LoadStateAsync(cancellationToken);
             var manifest = state.Manifest
                 ?? throw new InvalidOperationException("Check for updates before downloading.");
-            if (!IsAvailable(CurrentVersion, manifest.Version))
+            if (!IsAvailable(
+                    CurrentVersion,
+                    CurrentBuildRevision,
+                    manifest.Version,
+                    manifest.BuildRevision))
             {
                 throw new InvalidOperationException("No newer application update is available.");
             }
@@ -209,7 +226,8 @@ public sealed class ApplicationUpdateCoordinator
                 _storageOptions.DataRoot,
                 "updates",
                 "staging",
-                manifest.Version);
+                manifest.Version,
+                $"build-{manifest.BuildRevision}");
             Directory.CreateDirectory(stagingDirectory);
             var partialPath = Path.Combine(
                 stagingDirectory,
@@ -380,7 +398,8 @@ public sealed class ApplicationUpdateCoordinator
                     ApplicationUpdateStage.Installing,
                     DateTimeOffset.UtcNow,
                     null,
-                    "Updater launched."))
+                    $"Updater launched for Build {manifest.BuildRevision}.",
+                    manifest.BuildRevision))
                 .Take(20)
                 .ToArray();
             await SaveStateAsync(
@@ -449,13 +468,22 @@ public sealed class ApplicationUpdateCoordinator
     }
 
     private static string CurrentVersion =>
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        ProductIdentity.VersionOf(Assembly.GetExecutingAssembly());
 
-    private static bool IsAvailable(string current, string? latest) =>
+    private static int CurrentBuildRevision =>
+        ProductIdentity.BuildRevisionOf(Assembly.GetExecutingAssembly());
+
+    private static bool IsAvailable(
+        string current,
+        int currentBuildRevision,
+        string? latest,
+        int? latestBuildRevision) =>
         latest is not null &&
-        SemanticVersion.TryParse(current, out var currentVersion) &&
-        SemanticVersion.TryParse(latest, out var latestVersion) &&
-        latestVersion.CompareTo(currentVersion) > 0;
+        latestBuildRevision is { } availableBuild &&
+        ProductBuildPolicy.Evaluate(
+            new ProductBuildIdentity(current, currentBuildRevision),
+            new ProductBuildIdentity(latest, availableBuild)).Disposition ==
+            ProductBuildDisposition.UpdateAvailable;
 
     private void ValidateManifestEndpoint(Uri uri)
     {
@@ -562,6 +590,9 @@ public sealed class ApplicationUpdateCoordinator
             "--install-root", installRoot,
             "--data-root", dataRoot,
             "--version", manifest.Version,
+            "--build-revision", manifest.BuildRevision.ToString(
+                System.Globalization.CultureInfo.InvariantCulture),
+            "--package-sha256", manifest.Sha256,
             "--service-name", WindowsServiceManager.ServiceName,
             "--client", Path.Combine(
                 installRoot,
@@ -570,9 +601,13 @@ public sealed class ApplicationUpdateCoordinator
             "--versioned-install",
             "--defer-agent"
         };
-        if (manifest.RequiresServiceRestart)
+        if (manifest.RequiresServiceRestart || manifest.AgentUpdateMode?.Equals(
+                "SafeRestartAndReadopt",
+                StringComparison.OrdinalIgnoreCase) == true)
         {
             result.Add("--restart-agent");
+            result.Add("--allow-managed-game-agent-restart");
+            result.Remove("--defer-agent");
         }
 
         if (manifest.RequiresElevation)

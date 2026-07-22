@@ -48,16 +48,15 @@ for vanilla Minecraft Java and vanilla Palworld dedicated servers.
 
 The release build reads the current value from `VERSION` and writes:
 
-- `artifacts/release/<VERSION>/Setup.exe`
-- `artifacts/release/<VERSION>/Portable.zip`
-- `artifacts/release/<VERSION>/Source.zip`
-- `artifacts/release/<VERSION>/1SalemServerManager-Update-<VERSION>.zip`
-- `artifacts/release/<VERSION>/version.json`
-- `artifacts/release/<VERSION>/SHA256SUMS.txt`
+- Rolling Stable output: `artifacts/release/1.5/`
+- Visible product version remains `1.5`; normal releases increment `BUILD_REVISION` only.
+- Validated candidates are created under `artifacts/staging/release-candidates/` and promoted only after the installed update succeeds.
+- The rolling directory contains Setup.exe, Portable.zip, Source.zip, the update ZIP, version.json, build-info.json, SHA256SUMS.txt, and RELEASE_NOTES.md.
 
 `VERSION` is the only manually edited current product-version source. Use
-`tools\next-version.ps1` to calculate the next semantic version and
-`tools\build-release.ps1` to enforce the installed/released version guard.
+`tools\next-build.ps1` to calculate the next internal Build without changing VERSION.
+`tools\next-version.ps1` is reserved for a future product-version change explicitly authorized by Salem.
+Use `tools\build-release.ps1` to enforce the installed/released Build guard.
 
 See [Installation](docs/INSTALLATION.md), the
 [English guide](docs/USER_GUIDE_EN.md), or the

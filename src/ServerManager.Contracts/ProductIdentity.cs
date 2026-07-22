@@ -14,4 +14,20 @@ public static class ProductIdentity
             ?.InformationalVersion.Split('+', 2)[0]
         ?? assembly.GetName().Version?.ToString(3)
         ?? "0.0.0";
+
+    public static int BuildRevisionOf(Assembly assembly)
+    {
+        var value = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key.Equals(
+                "BuildRevision",
+                StringComparison.Ordinal))
+            ?.Value;
+        return int.TryParse(
+            value,
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var revision)
+            ? revision
+            : 0;
+    }
 }

@@ -13,11 +13,13 @@ public sealed partial class Version132ReleaseWorkflowTests
         var version = File.ReadAllText(Path.Combine(root, "VERSION")).Trim();
         var props = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
 
-        Assert.Equal("1.3.2", version);
+        Assert.Equal("1.5", version);
+        Assert.Equal("1", File.ReadAllText(Path.Combine(root, "BUILD_REVISION")).Trim());
         Assert.Contains("ReadAllText('$(VersionFile)').Trim()", props, StringComparison.Ordinal);
         Assert.Contains("<Version>$(ProductVersion)</Version>", props, StringComparison.Ordinal);
-        Assert.Contains("<AssemblyVersion>$(ProductVersion).0</AssemblyVersion>", props, StringComparison.Ordinal);
-        Assert.DoesNotMatch(@"<Version>\d+\.\d+\.\d+</Version>", props);
+        Assert.Contains("<AssemblyVersion>$(ProductVersion).0.0</AssemblyVersion>", props, StringComparison.Ordinal);
+        Assert.Contains("ReadAllText('$(BuildRevisionFile)').Trim()", props, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"<Version>\d+\.\d+(?:\.\d+)?</Version>", props);
     }
 
     [Fact]
@@ -83,9 +85,9 @@ public sealed partial class Version132ReleaseWorkflowTests
             Assert.True(File.Exists(path), path);
             var info = FileVersionInfo.GetVersionInfo(path);
             Assert.Equal(version, info.ProductVersion);
-            Assert.Equal(version, info.FileVersion);
+            Assert.Equal($"{version}.0.0", info.FileVersion);
             Assert.Equal(
-                new Version($"{version}.0"),
+                new Version($"{version}.0.0"),
                 System.Reflection.AssemblyName.GetAssemblyName(
                     Path.Combine(root, assemblyRelative)).Version);
         }
@@ -148,10 +150,11 @@ public sealed partial class Version132ReleaseWorkflowTests
             script,
             StringComparison.Ordinal);
         Assert.Contains(
-            "validation\\$releaseVersion\\palworld-overview",
+            "validation\\$releaseVersion\\build-$buildRevision\\palworld-overview",
             script,
             StringComparison.Ordinal);
-        Assert.Contains("failed\\{0}-{1}", script, StringComparison.Ordinal);
+        Assert.Contains("release-candidates", script, StringComparison.Ordinal);
+        Assert.Contains("Rolling Stable release promoted", File.ReadAllText(Path.Combine(root, "tools", "promote-release.ps1")), StringComparison.Ordinal);
         Assert.DoesNotContain("$releaseVersion = '1.", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Reset-ArtifactDirectory -Path $releaseRoot", script, StringComparison.Ordinal);
     }
@@ -177,7 +180,7 @@ public sealed partial class Version132ReleaseWorkflowTests
             StringComparison.Ordinal);
         Assert.DoesNotContain("SetCurrentProcessExplicitAppUserModelID", identity, StringComparison.Ordinal);
         Assert.Contains("\"Client\",\n                        \"1Salem.ServerManager.exe\"", installer, StringComparison.Ordinal);
-        Assert.Contains("\"Versions\", ProductVersion, \"Client\"", installer, StringComparison.Ordinal);
+        Assert.Contains("VersionBuildPath(installRoot, \"Client\")", installer, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -3,10 +3,14 @@ param(
     [Parameter(Mandatory)]
     [ValidateSet('Patch', 'Minor', 'Major')]
     [string]$Part,
-    [switch]$Apply
+    [switch]$Apply,
+    [string]$Authorization
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Apply -and $Authorization -cne 'Change the product version.') {
+    throw 'VERSION is locked by Salem fixed-version policy. Explicit authorization text is required: Change the product version.'
+}
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $dotnet = Join-Path $root '.tools\dotnet\dotnet.exe'
 if (-not (Test-Path -LiteralPath $dotnet)) {
@@ -45,7 +49,7 @@ $nextText = '{0}.{1}.{2}' -f $next.Major, $next.Minor, $next.Build
 Write-Host "Highest known version: $highestText"
 Write-Host "$Part result: $nextText"
 if (-not $Apply) {
-    Write-Host 'No files changed. Add -Apply to update VERSION and create release-notes scaffolding.'
+    Write-Host 'No files changed. This tool is reserved for an explicit Salem product-version change.'
     return
 }
 

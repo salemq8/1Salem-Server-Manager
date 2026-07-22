@@ -1,4 +1,5 @@
 using System.Reflection;
+using ServerManager.Contracts;
 
 namespace ServerManager.Client.Shell;
 
@@ -13,4 +14,10 @@ public static class ProductInfo
         ?? "Unknown";
 
     public static string VersionLabel => $"Version {Version}";
+
+    public static int BuildRevision { get; } =
+        ProductIdentity.BuildRevisionOf(typeof(ProductInfo).Assembly);
+
+    public static string DiagnosticsVersionLabel =>
+        $"Version {Version}{Environment.NewLine}Build {BuildRevision}";
 }

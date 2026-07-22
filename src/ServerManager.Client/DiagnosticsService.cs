@@ -42,6 +42,7 @@ public static partial class DiagnosticsService
             {
                 Product = "1Salem Server Manager",
                 Version = ProductInfo.Version,
+                BuildRevision = ProductInfo.BuildRevision,
                 CapturedAtUtc = DateTimeOffset.UtcNow,
                 Os = RuntimeInformation.OSDescription,
                 OsArchitecture = RuntimeInformation.OSArchitecture.ToString(),

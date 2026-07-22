@@ -28,12 +28,24 @@ public static partial class Program
 
             var target = Value(args, "--target") ??
                 throw new ArgumentException("preflight requires --target <version>.");
-            var decision = ReleaseVersionPolicy.Evaluate(
+            var buildText = Value(args, "--build-revision") ??
+                throw new ArgumentException(
+                    "preflight requires --build-revision <positive integer>.");
+            if (!int.TryParse(buildText, out var buildRevision) || buildRevision <= 0)
+            {
+                throw new ArgumentException(
+                    "--build-revision must contain a positive integer.");
+            }
+
+            var decision = ReleaseVersionPolicy.EvaluateBuild(
                 target,
-                audit.Sources.Select(source => source.Version),
-                args.Contains("--rebuild-same-version", StringComparer.OrdinalIgnoreCase));
+                buildRevision,
+                audit.Sources.Select(source => new ProductBuildIdentity(
+                    source.Version,
+                    source.BuildRevision)),
+                args.Contains("--repair-same-build", StringComparer.OrdinalIgnoreCase));
             Console.WriteLine(decision.Message);
-            return decision.Allowed ? 0 : 5;
+            return decision.CanInstall ? 0 : 5;
         }
         catch (Exception exception) when (
             exception is ArgumentException or FormatException or IOException or
@@ -58,10 +70,13 @@ public static partial class Program
         }
 
         Console.WriteLine($"Source VERSION: {audit.SourceVersion}");
+        Console.WriteLine($"Source BUILD_REVISION: {audit.SourceBuildRevision}");
         Console.WriteLine($"Highest known version: {audit.HighestKnownVersion ?? "none"}");
+        Console.WriteLine($"Highest known build: {audit.HighestKnownBuildRevision}");
         foreach (var source in audit.Sources)
         {
-            Console.WriteLine($"{source.Kind}: {source.Version} ({source.Path})");
+            Console.WriteLine(
+                $"{source.Kind}: {source.Version} Build {source.BuildRevision} ({source.Path})");
         }
     }
 
@@ -95,11 +110,17 @@ public static partial class Program
     }
 }
 
-public sealed record VersionSource(string Kind, string Version, string Path);
+public sealed record VersionSource(
+    string Kind,
+    string Version,
+    string Path,
+    int BuildRevision = 0);
 
 public sealed record VersionAudit(
     string SourceVersion,
+    int SourceBuildRevision,
     string? HighestKnownVersion,
+    int HighestKnownBuildRevision,
     InstalledVersionReport Installed,
     IReadOnlyList<VersionSource> Sources);
 
@@ -109,6 +130,12 @@ public static partial class VersionAuditor
     {
         var sourceVersion = File.ReadAllText(Path.Combine(repository, "VERSION")).Trim();
         _ = SemanticVersion.Parse(sourceVersion);
+        var buildText = File.ReadAllText(Path.Combine(repository, "BUILD_REVISION")).Trim();
+        if (!int.TryParse(buildText, out var sourceBuildRevision) ||
+            sourceBuildRevision <= 0)
+        {
+            throw new FormatException("BUILD_REVISION must contain a positive integer.");
+        }
         var installed = InstalledVersionDetector.Detect();
         var sources = new List<VersionSource>();
         AddInstalled(sources, installed);
@@ -123,7 +150,7 @@ public static partial class VersionAuditor
                     continue;
                 }
 
-                sources.Add(new VersionSource("release folder", name, directory));
+                var releaseBuildRevision = 0;
                 var manifest = Path.Combine(directory, "version.json");
                 if (File.Exists(manifest))
                 {
@@ -133,16 +160,29 @@ public static partial class VersionAuditor
                         if (document.RootElement.TryGetProperty("version", out var value) &&
                             SemanticVersion.TryParse(value.GetString(), out var parsed))
                         {
+                            releaseBuildRevision = document.RootElement.TryGetProperty(
+                                    "buildRevision",
+                                    out var buildValue) &&
+                                buildValue.TryGetInt32(out var parsedBuild)
+                                ? parsedBuild
+                                : 0;
                             sources.Add(new VersionSource(
                                 "release manifest",
                                 parsed.ToString(),
-                                manifest));
+                                manifest,
+                                releaseBuildRevision));
                         }
                     }
                     catch (JsonException)
                     {
                     }
                 }
+
+                sources.Add(new VersionSource(
+                    "release folder",
+                    name,
+                    directory,
+                    releaseBuildRevision));
 
                 foreach (var package in Directory.EnumerateFiles(
                              directory,
@@ -156,19 +196,22 @@ public static partial class VersionAuditor
                         sources.Add(new VersionSource(
                             "update package",
                             parsed.ToString(),
-                            package));
+                            package,
+                            releaseBuildRevision));
                     }
                 }
             }
         }
 
         var highest = sources
-            .Select(source => SemanticVersion.Parse(source.Version))
-            .OrderDescending()
+            .OrderByDescending(source => SemanticVersion.Parse(source.Version))
+            .ThenByDescending(source => source.BuildRevision)
             .FirstOrDefault();
         return new VersionAudit(
             sourceVersion,
-            sources.Count == 0 ? null : highest.ToString(),
+            sourceBuildRevision,
+            highest?.Version,
+            highest?.BuildRevision ?? 0,
             installed,
             sources
                 .DistinctBy(source => (source.Kind, source.Version, source.Path))
@@ -193,7 +236,8 @@ public static partial class VersionAuditor
                 sources.Add(new VersionSource(
                     $"installed {component.Name}",
                     component.Version,
-                    component.ExecutablePath ?? component.Source));
+                    component.ExecutablePath ?? component.Source,
+                    component.BuildRevision));
             }
 
             if (!string.IsNullOrWhiteSpace(component.StagedVersion))
@@ -201,7 +245,8 @@ public static partial class VersionAuditor
                 sources.Add(new VersionSource(
                     $"staged {component.Name}",
                     component.StagedVersion,
-                    component.StagedPath ?? component.Source));
+                    component.StagedPath ?? component.Source,
+                    component.StagedBuildRevision ?? 0));
             }
         }
 
@@ -212,7 +257,8 @@ public static partial class VersionAuditor
                 sources.Add(new VersionSource(
                     $"running {component.Name}",
                     component.Version,
-                    component.ExecutablePath ?? component.Source));
+                    component.ExecutablePath ?? component.Source,
+                    component.BuildRevision));
             }
         }
 
@@ -225,6 +271,6 @@ public static partial class VersionAuditor
         }
     }
 
-    [GeneratedRegex(@"^1SalemServerManager-Update-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.zip$")]
+    [GeneratedRegex(@"^1SalemServerManager-Update-(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)\.zip$")]
     private static partial Regex UpdatePackageVersion();
 }

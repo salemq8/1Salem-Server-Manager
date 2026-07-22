@@ -99,7 +99,7 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
                 SkipBinaryVersionVerification: true,
                 UpdateRegistry: false)));
 
-        Assert.Contains("not newer", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("older than installed", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("client-old", await File.ReadAllTextAsync(
             Path.Combine(installRoot, "Client", "1Salem.ServerManager.exe")));
     }
@@ -119,6 +119,84 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidDataException>(
             () => new VersionedUpdateInstaller().ApplyAsync(options));
+    }
+
+    [Fact]
+    public async Task SameProductVersion_HigherBuildActivatesWithoutPatchVersion()
+    {
+        var (installRoot, dataRoot) = CreateInstalledLayout("1.5");
+        await SetInstalledBuildAsync(installRoot, 4);
+
+        var result = await new VersionedUpdateInstaller(
+            managedGameProcessDetector: () => true).ApplyAsync(
+            new VersionedUpdateOptions(
+                CreateVersionedPackage("1.5"),
+                installRoot,
+                dataRoot,
+                "1.5",
+                "test-agent",
+                SkipBinaryVersionVerification: true,
+                UpdateRegistry: false,
+                TargetBuildRevision: 5));
+
+        Assert.True(result.Success, result.Message);
+        Assert.Contains("Version 1.5 Build 5", result.Message, StringComparison.Ordinal);
+        var after = JsonSerializer.Deserialize<InstalledApplicationManifest>(
+            await File.ReadAllTextAsync(Path.Combine(installRoot, "current.json")),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(after);
+        Assert.Equal("1.5", after.ActiveVersion);
+        Assert.Equal(5, after.ActiveBuildRevision);
+        Assert.Equal("1.5", after.PreviousVersion);
+        Assert.Equal(4, after.PreviousBuildRevision);
+        Assert.Contains(
+            Path.Combine("Versions", "1.5", "Builds", "5", "Client"),
+            after.ClientExecutablePath,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SameProductVersion_LowerBuildIsRejected()
+    {
+        var (installRoot, dataRoot) = CreateInstalledLayout("1.5");
+        await SetInstalledBuildAsync(installRoot, 5);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new VersionedUpdateInstaller().ApplyAsync(new VersionedUpdateOptions(
+                CreateVersionedPackage("1.5"),
+                installRoot,
+                dataRoot,
+                "1.5",
+                "test-agent",
+                SkipBinaryVersionVerification: true,
+                UpdateRegistry: false,
+                TargetBuildRevision: 4)));
+
+        Assert.Contains("older than installed", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task IdenticalBuild_IsAlreadyCurrentUnlessRepairModeIsExplicit()
+    {
+        var (installRoot, dataRoot) = CreateInstalledLayout("1.5");
+        await SetInstalledBuildAsync(installRoot, 5);
+        var options = new VersionedUpdateOptions(
+            CreateVersionedPackage("1.5"),
+            installRoot,
+            dataRoot,
+            "1.5",
+            "test-agent",
+            SkipBinaryVersionVerification: true,
+            UpdateRegistry: false,
+            TargetBuildRevision: 5);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new VersionedUpdateInstaller().ApplyAsync(options));
+        var repaired = await new VersionedUpdateInstaller(
+            managedGameProcessDetector: () => true).ApplyAsync(
+            options with { AllowSameVersion = true });
+
+        Assert.True(repaired.Success, repaired.Message);
     }
 
     [Fact]
@@ -350,6 +428,22 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
                 manifest,
                 new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         return (installRoot, dataRoot);
+    }
+
+    private static async Task SetInstalledBuildAsync(
+        string installRoot,
+        int buildRevision)
+    {
+        var path = Path.Combine(installRoot, "current.json");
+        var manifest = JsonSerializer.Deserialize<InstalledApplicationManifest>(
+            await File.ReadAllTextAsync(path),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(manifest);
+        await File.WriteAllTextAsync(
+            path,
+            JsonSerializer.Serialize(
+                manifest with { ActiveBuildRevision = buildRevision },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 
     private string CreateVersionedPackage(string version)

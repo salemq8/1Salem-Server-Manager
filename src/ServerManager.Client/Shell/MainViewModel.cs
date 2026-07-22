@@ -87,8 +87,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         $"{_installedVersions.ReleaseChannel} · {_installedVersions.OverallState}";
 
     public string InstalledVersionHistory =>
-        $"Previous: {_installedVersions.PreviousVersion ?? "None"} · " +
-        $"Rollback: {_installedVersions.RollbackVersion ?? "None"} · " +
+        $"Build: {_installedVersions.ManifestBuildRevision} · " +
+        $"Previous: {BuildLabel(_installedVersions.PreviousVersion, _installedVersions.PreviousBuildRevision)} · " +
+        $"Rollback: {BuildLabel(_installedVersions.RollbackVersion, _installedVersions.RollbackBuildRevision)} · " +
         $"Last update: {_installedVersions.LastSuccessfulUpdateUtc?.ToLocalTime().ToString("g") ?? "Not recorded"}";
 
     public NavigationItem SelectedSection
@@ -297,4 +298,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             key,
             LocalizationService.Get(key),
             LocalizationService.Get($"{key}.Description"));
+
+    private static string BuildLabel(string? version, int? revision) =>
+        version is null
+            ? "None"
+            : revision is > 0
+                ? $"{version} Build {revision}"
+                : version;
 }

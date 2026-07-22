@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Win32;
 using System.Runtime.Versioning;
@@ -19,7 +20,10 @@ public sealed record VersionedUpdateOptions(
     bool UpdateRegistry = true,
     bool SkipServiceHealthCheck = false,
     Uri? HealthUri = null,
-    bool VerifyOnly = false);
+    bool VerifyOnly = false,
+    int TargetBuildRevision = 0,
+    string? TargetPackageSha256 = null,
+    bool AllowManagedGameAgentRestart = false);
 
 public sealed record VersionedUpdateResult(
     bool Success,
@@ -58,6 +62,19 @@ public sealed class VersionedUpdateInstaller
         ValidateOptions(options);
         var target = SemanticVersion.Parse(options.TargetVersion);
         _ = UpdatePackageSecurity.ValidateArchive(options.PackagePath);
+        await using var packageStream = File.OpenRead(options.PackagePath);
+        var actualPackageSha256 = Convert.ToHexString(
+            await SHA256.HashDataAsync(packageStream, cancellationToken));
+        if (!string.IsNullOrWhiteSpace(options.TargetPackageSha256) &&
+            !actualPackageSha256.Equals(
+                options.TargetPackageSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "The update package SHA-256 does not match the requested Build identity.");
+        }
+
+        var targetPackageSha256 = actualPackageSha256;
         var installRoot = Path.GetFullPath(options.InstallRoot);
         var dataRoot = Path.GetFullPath(options.DataRoot);
         EnsureSeparateRoots(installRoot, dataRoot);
@@ -67,11 +84,21 @@ public sealed class VersionedUpdateInstaller
             InspectRunningProcesses: true,
             InspectRegistry: options.UpdateRegistry));
         var currentVersion = HighestActiveVersion(before) ?? new SemanticVersion(0, 0, 0);
-        var comparison = target.CompareTo(currentVersion);
-        if (comparison < 0 || (comparison == 0 && !options.AllowSameVersion))
+        var currentIdentity = new ProductBuildIdentity(
+            before.ManifestVersion ?? currentVersion.ToString(),
+            before.ManifestBuildRevision,
+            before.ActivePackageSha256);
+        var targetIdentity = new ProductBuildIdentity(
+            target.ToString(),
+            options.TargetBuildRevision,
+            targetPackageSha256);
+        var decision = ProductBuildPolicy.Evaluate(
+            currentIdentity,
+            targetIdentity,
+            options.AllowSameVersion);
+        if (!decision.CanInstall)
         {
-            throw new InvalidDataException(
-                $"Update rejected: target {target} is not newer than installed version {currentVersion}.");
+            throw new InvalidDataException(decision.Message);
         }
 
         var operationId = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}";
@@ -81,13 +108,17 @@ public sealed class VersionedUpdateInstaller
             dataRoot,
             "updates",
             "rollback",
-            $"{currentVersion}-to-{target}-{operationId}");
+            $"{SafeIdentity(currentIdentity)}-to-{SafeIdentity(targetIdentity)}-{operationId}");
         Directory.CreateDirectory(extracted);
         PayloadPaths paths;
         try
         {
             UpdatePackageSecurity.ExtractSafe(options.PackagePath, extracted);
-            paths = ValidatePayload(extracted, target.ToString(), options.SkipBinaryVersionVerification);
+            paths = ValidatePayload(
+                extracted,
+                target.ToString(),
+                options.TargetBuildRevision,
+                options.SkipBinaryVersionVerification);
         }
         catch
         {
@@ -102,7 +133,7 @@ public sealed class VersionedUpdateInstaller
                 true,
                 false,
                 false,
-                $"Verified versioned update package {target}; no files changed.",
+                $"Verified update package {targetIdentity}; no files changed.",
                 null,
                 null,
                 before);
@@ -116,7 +147,10 @@ public sealed class VersionedUpdateInstaller
             "Client",
             "Updater",
             "1Salem.ServerManager.Updater.exe");
-        var targetRoot = Path.Combine(installRoot, "Versions", target.ToString());
+        var targetRoot = VersionBuildRoot(
+            installRoot,
+            target.ToString(),
+            options.TargetBuildRevision);
         var agentStopped = false;
         var switched = false;
         var installMutationStarted = false;
@@ -168,7 +202,8 @@ public sealed class VersionedUpdateInstaller
                 installRoot,
                 stableLauncher);
 
-            var activateAgent = options.ActivateAgent && !_managedGameProcessDetector();
+            var activateAgent = options.ActivateAgent &&
+                (!_managedGameProcessDetector() || options.AllowManagedGameAgentRestart);
             if (activateAgent)
             {
                 await _serviceCommand("stop", options.ServiceName, true, cancellationToken);
@@ -193,22 +228,39 @@ public sealed class VersionedUpdateInstaller
                 "Agent",
                 "1Salem.ServerManager.Agent.exe");
             var agentVersion = InstalledVersionDetector.ReadProductVersion(agentPath);
+            var agentBuildRevision = InstalledVersionDetector.ReadBuildRevision(agentPath);
             var agentPending = !string.Equals(
                 agentVersion,
                 target.ToString(),
-                StringComparison.OrdinalIgnoreCase);
-            var previousVersion = comparison == 0
+                StringComparison.OrdinalIgnoreCase) ||
+                agentBuildRevision != options.TargetBuildRevision;
+            var repairingSameBuild = decision.Disposition ==
+                ProductBuildDisposition.RepairAllowed &&
+                SemanticVersion.Parse(currentIdentity.ProductVersion).CompareTo(target) == 0 &&
+                currentIdentity.BuildRevision == options.TargetBuildRevision;
+            var previousVersion = repairingSameBuild
                 ? before.PreviousVersion ?? before.RollbackVersion ?? currentVersion.ToString()
                 : currentVersion.Major == 0
                     ? null
                     : currentVersion.ToString();
-            var rollbackVersion = comparison == 0
+            var rollbackVersion = repairingSameBuild
                 ? before.RollbackVersion ?? before.PreviousVersion ?? currentVersion.ToString()
                 : currentVersion.Major == 0
                     ? null
                     : currentVersion.ToString();
+            var previousBuildRevision = repairingSameBuild
+                ? before.PreviousBuildRevision ?? before.RollbackBuildRevision
+                : currentVersion.Major == 0
+                    ? null
+                    : currentIdentity.BuildRevision;
+            var rollbackBuildRevision = repairingSameBuild
+                ? before.RollbackBuildRevision ?? before.PreviousBuildRevision
+                : previousBuildRevision;
+            var previousPackageSha256 = repairingSameBuild
+                ? before.ActivePackageSha256
+                : before.ActivePackageSha256;
             var manifest = new InstalledApplicationManifest(
-                1,
+                2,
                 target.ToString(),
                 previousVersion,
                 rollbackVersion,
@@ -222,7 +274,16 @@ public sealed class VersionedUpdateInstaller
                     : null,
                 agentPending ? "Agent update pending safe restart" : "Succeeded",
                 DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow,
+                options.TargetBuildRevision,
+                previousBuildRevision,
+                rollbackBuildRevision,
+                targetPackageSha256,
+                previousPackageSha256,
+                repairingSameBuild
+                    ? before.ActivePackageSha256
+                    : previousPackageSha256,
+                rollbackRoot);
             WriteJsonAtomic(currentManifestPath, manifest);
             WriteJsonAtomic(dataManifestPath, manifest);
             switched = true;
@@ -234,6 +295,14 @@ public sealed class VersionedUpdateInstaller
             VerifyVersion(manifest.ClientExecutablePath, target.ToString(), options.SkipBinaryVersionVerification);
             VerifyVersion(manifest.UpdaterExecutablePath, target.ToString(), options.SkipBinaryVersionVerification);
             VerifyVersion(stableLauncher, target.ToString(), options.SkipBinaryVersionVerification);
+            VerifyBuildRevision(
+                manifest.ClientExecutablePath,
+                options.TargetBuildRevision,
+                options.SkipBinaryVersionVerification);
+            VerifyBuildRevision(
+                manifest.UpdaterExecutablePath,
+                options.TargetBuildRevision,
+                options.SkipBinaryVersionVerification);
             var after = InstalledVersionDetector.Detect(new InstalledVersionDetectionOptions(
                 installRoot,
                 dataRoot,
@@ -244,8 +313,8 @@ public sealed class VersionedUpdateInstaller
                 false,
                 agentPending,
                 agentPending
-                    ? $"Updated Client and Updater to {target}; Agent {agentVersion ?? "unknown"} is safely staged for a later restart."
-                    : $"Updated successfully to {target}.",
+                    ? $"Updated Client and Updater to {targetIdentity}; Agent {agentVersion ?? "unknown"} Build {agentBuildRevision} is safely staged for a later restart."
+                    : $"Updated successfully to {targetIdentity}.",
                 rollbackRoot,
                 stableLauncher,
                 after,
@@ -351,6 +420,7 @@ public sealed class VersionedUpdateInstaller
     private static PayloadPaths ValidatePayload(
         string extracted,
         string targetVersion,
+        int targetBuildRevision,
         bool skipVersionVerification)
     {
         var client = Path.Combine(extracted, "Client");
@@ -375,6 +445,7 @@ public sealed class VersionedUpdateInstaller
             }
 
             VerifyVersion(required, targetVersion, skipVersionVerification);
+            VerifyBuildRevision(required, targetBuildRevision, skipVersionVerification);
         }
 
         var maintenance = Path.Combine(
@@ -384,6 +455,7 @@ public sealed class VersionedUpdateInstaller
         if (File.Exists(maintenance))
         {
             VerifyVersion(maintenance, targetVersion, skipVersionVerification);
+            VerifyBuildRevision(maintenance, targetBuildRevision, skipVersionVerification);
         }
 
         return new PayloadPaths(
@@ -413,7 +485,38 @@ public sealed class VersionedUpdateInstaller
         {
             throw new ArgumentException("The Agent service name is not approved.");
         }
+
+        if (SemanticVersion.Parse(options.TargetVersion).CompareTo(
+                SemanticVersion.Parse("1.5")) >= 0 &&
+            options.TargetBuildRevision <= 0)
+        {
+            throw new ArgumentException(
+                "Version 1.5 updates require a positive internal build revision.");
+        }
+
+        if (options.TargetPackageSha256 is { Length: > 0 } hash &&
+            (hash.Length != 64 || !hash.All(Uri.IsHexDigit)))
+        {
+            throw new ArgumentException("The target package SHA-256 is invalid.");
+        }
     }
+
+    private static string SafeIdentity(ProductBuildIdentity identity) =>
+        $"{identity.ProductVersion}-build-{identity.BuildRevision}";
+
+    private static string VersionBuildRoot(
+        string installRoot,
+        string productVersion,
+        int buildRevision) =>
+        buildRevision > 0
+            ? Path.Combine(
+                installRoot,
+                "Versions",
+                productVersion,
+                "Builds",
+                buildRevision.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture))
+            : Path.Combine(installRoot, "Versions", productVersion);
 
     private static SemanticVersion? HighestActiveVersion(InstalledVersionReport report)
     {
@@ -628,6 +731,21 @@ public sealed class VersionedUpdateInstaller
         {
             throw new InvalidDataException(
                 $"{Path.GetFileName(path)} reports {detected ?? "no version"}; expected {expected}.");
+        }
+    }
+
+    private static void VerifyBuildRevision(string path, int expected, bool skip)
+    {
+        if (skip || expected <= 0)
+        {
+            return;
+        }
+
+        var detected = InstalledVersionDetector.ReadBuildRevision(path);
+        if (detected != expected)
+        {
+            throw new InvalidDataException(
+                $"{Path.GetFileName(path)} reports Build {detected}; expected Build {expected}.");
         }
     }
 

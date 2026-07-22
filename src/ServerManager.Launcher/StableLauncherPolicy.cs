@@ -7,7 +7,8 @@ public static class StableLauncherPolicy
     public static string ResolveClientPath(
         string installRoot,
         InstalledApplicationManifest manifest,
-        Func<string, string?>? versionReader = null)
+        Func<string, string?>? versionReader = null,
+        Func<string, int>? buildRevisionReader = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         if (!manifest.ReleaseChannel.Equals(
@@ -41,6 +42,17 @@ public static class StableLauncherPolicy
         {
             throw new InvalidDataException(
                 $"The selected Client reports {detected ?? "no version"}, expected {manifest.ActiveVersion}.");
+        }
+
+        if (manifest.ActiveBuildRevision > 0)
+        {
+            var detectedBuild = (buildRevisionReader ??
+                InstalledVersionDetector.ReadBuildRevision)(candidate);
+            if (detectedBuild != manifest.ActiveBuildRevision)
+            {
+                throw new InvalidDataException(
+                    $"The selected Client reports Build {detectedBuild}, expected Build {manifest.ActiveBuildRevision}.");
+            }
         }
 
         return candidate;

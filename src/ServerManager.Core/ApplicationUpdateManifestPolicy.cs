@@ -23,6 +23,13 @@ public static class ApplicationUpdateManifestPolicy
 
         _ = SemanticVersion.Parse(manifest.Version);
         _ = SemanticVersion.Parse(manifest.MinimumSupportedVersion);
+        if (SemanticVersion.Parse(manifest.Version).CompareTo(
+                SemanticVersion.Parse("1.5")) >= 0 &&
+            manifest.BuildRevision <= 0)
+        {
+            throw new InvalidDataException(
+                "The update manifest build revision must be a positive integer.");
+        }
 
         var channel = expectedChannel.ToString();
         if (!manifest.ReleaseChannel.Equals(channel, StringComparison.OrdinalIgnoreCase))
@@ -53,6 +60,10 @@ public static class ApplicationUpdateManifestPolicy
             !string.Equals(
                 manifest.AgentUpdateMode,
                 "StageIfBusy",
+                StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(
+                manifest.AgentUpdateMode,
+                "SafeRestartAndReadopt",
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException(

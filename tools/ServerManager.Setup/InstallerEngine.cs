@@ -30,6 +30,25 @@ public static class InstallerEngine
     private const string MarkerValue = "1Salem Server Manager v1";
     public static string ProductVersion { get; } =
         ProductIdentity.VersionOf(typeof(InstallerEngine).Assembly);
+    public static int BuildRevision { get; } =
+        ProductIdentity.BuildRevisionOf(typeof(InstallerEngine).Assembly);
+
+    private static string VersionBuildPath(
+        string installRoot,
+        params string[] segments)
+    {
+        var parts = new List<string>
+        {
+            installRoot,
+            "Versions",
+            ProductVersion,
+            "Builds",
+            BuildRevision.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)
+        };
+        parts.AddRange(segments);
+        return Path.Combine(parts.ToArray());
+    }
     private const string UninstallKeyPath =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\1SalemServerManager";
 
@@ -133,7 +152,7 @@ public static class InstallerEngine
                     Path.Combine(installRoot, "Agent"));
                 journal.DeployDirectory(
                     Path.Combine(contentRoot, "Agent"),
-                    Path.Combine(installRoot, "Versions", ProductVersion, "Agent"));
+                    VersionBuildPath(installRoot, "Agent"));
             }
 
             if (includesClient)
@@ -141,7 +160,7 @@ public static class InstallerEngine
                 progress.Report(new InstallProgress(48, "Deploying dashboard files..."));
                 journal.DeployDirectory(
                     Path.Combine(contentRoot, "Client"),
-                    Path.Combine(installRoot, "Versions", ProductVersion, "Client"));
+                    VersionBuildPath(installRoot, "Client"));
                 journal.DeployDirectory(
                     Path.Combine(contentRoot, "Client", "Updater"),
                     Path.Combine(installRoot, "Client", "Updater"));
@@ -251,9 +270,7 @@ public static class InstallerEngine
                         Environment.SpecialFolder.CommonApplicationData),
                     "1SalemServerManager");
                 var versionClient = Path.Combine(
-                    installRoot,
-                    "Versions",
-                    ProductVersion,
+                    VersionBuildPath(installRoot),
                     "Client",
                     "1Salem.ServerManager.exe");
                 var updater = Path.Combine(
@@ -262,7 +279,7 @@ public static class InstallerEngine
                     "Updater",
                     "1Salem.ServerManager.Updater.exe");
                 installationManifest = new InstalledApplicationManifest(
-                    1,
+                    2,
                     ProductVersion,
                     installedBefore.Client.Version,
                     installedBefore.Client.Version,
@@ -274,7 +291,10 @@ public static class InstallerEngine
                     null,
                     "Succeeded",
                     DateTimeOffset.UtcNow,
-                    DateTimeOffset.UtcNow);
+                    DateTimeOffset.UtcNow,
+                    BuildRevision,
+                    null,
+                    null);
                 journal.WriteText(
                     Path.Combine(installRoot, "current.json"),
                     JsonSerializer.Serialize(

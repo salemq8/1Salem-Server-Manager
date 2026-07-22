@@ -13,7 +13,9 @@ public sealed record InstalledComponentVersion(
     bool IsRunning = false,
     int? ProcessId = null,
     string? StagedVersion = null,
-    string? StagedPath = null);
+    string? StagedPath = null,
+    int BuildRevision = 0,
+    int? StagedBuildRevision = null);
 
 public sealed record InstalledApplicationManifest(
     int SchemaVersion,
@@ -28,7 +30,14 @@ public sealed record InstalledApplicationManifest(
     string? StagedAgentExecutablePath,
     string UpdateStatus,
     DateTimeOffset UpdatedAtUtc,
-    DateTimeOffset? LastSuccessfulUpdateUtc = null);
+    DateTimeOffset? LastSuccessfulUpdateUtc = null,
+    int ActiveBuildRevision = 0,
+    int? PreviousBuildRevision = null,
+    int? RollbackBuildRevision = null,
+    string? ActivePackageSha256 = null,
+    string? PreviousPackageSha256 = null,
+    string? RollbackPackageSha256 = null,
+    string? RollbackSnapshotPath = null);
 
 public sealed record InstalledVersionReport(
     string? InstallRoot,
@@ -43,7 +52,12 @@ public sealed record InstalledVersionReport(
     string? PreviousVersion,
     string? RollbackVersion,
     DateTimeOffset? LastSuccessfulUpdateUtc,
-    IReadOnlyList<InstalledComponentVersion> RunningComponents)
+    IReadOnlyList<InstalledComponentVersion> RunningComponents,
+    int ManifestBuildRevision = 0,
+    int? PreviousBuildRevision = null,
+    int? RollbackBuildRevision = null,
+    string? ActivePackageSha256 = null,
+    string? RollbackSnapshotPath = null)
 {
     public IEnumerable<string> KnownVersions()
     {
@@ -144,19 +158,33 @@ public static partial class InstalledVersionDetector
             "Client",
             clientPath,
             runningClient,
-            "active installation");
+            "active installation",
+            fallbackBuildRevision: manifest?.ActiveBuildRevision ?? 0,
+            fallbackProductVersion: manifest?.ActiveVersion);
         var agent = Component(
             "Agent",
             agentPath,
             runningAgent,
             servicePath is null ? "active installation" : "Windows Service",
-            stagedAgentPath);
-        var updater = Component("Updater", updaterPath, null, "installed updater");
+            stagedAgentPath,
+            manifest?.ActiveBuildRevision ?? 0,
+            manifest?.ActiveVersion);
+        var updater = Component(
+            "Updater",
+            updaterPath,
+            null,
+            "installed updater",
+            fallbackBuildRevision: manifest?.ActiveBuildRevision ?? 0,
+            fallbackProductVersion: manifest?.ActiveVersion);
         var state = InstalledVersionStatePolicy.Determine(
             client.Version,
             agent.Version,
             updater.Version,
-            agent.StagedVersion);
+            agent.StagedVersion,
+            client.BuildRevision,
+            agent.BuildRevision,
+            updater.BuildRevision,
+            agent.StagedBuildRevision);
 
         return new InstalledVersionReport(
             installRoot,
@@ -171,7 +199,12 @@ public static partial class InstalledVersionDetector
             manifest?.PreviousVersion,
             manifest?.RollbackVersion,
             manifest?.LastSuccessfulUpdateUtc,
-            running);
+            running,
+            manifest?.ActiveBuildRevision ?? 0,
+            manifest?.PreviousBuildRevision,
+            manifest?.RollbackBuildRevision,
+            manifest?.ActivePackageSha256,
+            manifest?.RollbackSnapshotPath);
     }
 
     public static string? ReadProductVersion(string? executablePath)
@@ -234,21 +267,75 @@ public static partial class InstalledVersionDetector
         return null;
     }
 
+    public static int ReadBuildRevision(string? executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            return 0;
+        }
+
+        var directory = Path.GetDirectoryName(executablePath);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return 0;
+        }
+
+        var path = Path.Combine(directory, "build-info.json");
+        if (!File.Exists(path))
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            return document.RootElement.TryGetProperty("buildRevision", out var value) &&
+                value.TryGetInt32(out var revision) &&
+                revision >= 0
+                ? revision
+                : 0;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return 0;
+        }
+    }
+
     private static InstalledComponentVersion Component(
         string name,
         string? path,
         InstalledComponentVersion? running,
         string source,
-        string? stagedPath = null) =>
-        new(
+        string? stagedPath = null,
+        int fallbackBuildRevision = 0,
+        string? fallbackProductVersion = null)
+    {
+        var version = ReadProductVersion(path);
+        var detectedBuild = ReadBuildRevision(path);
+        return new InstalledComponentVersion(
             name,
-            ReadProductVersion(path),
+            version,
             path,
             source,
             running is not null,
             running?.ProcessId,
             ReadProductVersion(stagedPath),
-            stagedPath);
+            stagedPath,
+            detectedBuild > 0
+                ? detectedBuild
+                : running?.BuildRevision > 0
+                    ? running.BuildRevision
+                    : version is not null && string.Equals(
+                            version,
+                            fallbackProductVersion,
+                            StringComparison.OrdinalIgnoreCase)
+                        ? fallbackBuildRevision
+                        : 0,
+            string.IsNullOrWhiteSpace(stagedPath)
+                ? null
+                : ReadBuildRevision(stagedPath));
+    }
 
     private static string? ResolveInstallRoot(string? requested, bool inspectRegistry)
     {
@@ -371,7 +458,8 @@ public static partial class InstalledVersionDetector
                             path,
                             "running process",
                             true,
-                            process.Id));
+                            process.Id,
+                            BuildRevision: ReadBuildRevision(path)));
                     }
                     catch (Exception exception) when (
                         exception is InvalidOperationException or
@@ -405,7 +493,7 @@ public static partial class InstalledVersionDetector
             StringComparison.OrdinalIgnoreCase);
     }
 
-    [GeneratedRegex(@"(?<!\d)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<!\d)\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?", RegexOptions.CultureInvariant)]
     private static partial Regex ProductVersionRegex();
 }
 
@@ -415,7 +503,11 @@ public static class InstalledVersionStatePolicy
         string? clientVersion,
         string? agentVersion,
         string? updaterVersion,
-        string? stagedAgentVersion = null)
+        string? stagedAgentVersion = null,
+        int clientBuildRevision = 0,
+        int agentBuildRevision = 0,
+        int updaterBuildRevision = 0,
+        int? stagedAgentBuildRevision = null)
     {
         if (!string.IsNullOrWhiteSpace(stagedAgentVersion) &&
             !string.Equals(
@@ -426,11 +518,21 @@ public static class InstalledVersionStatePolicy
             return "Update pending Agent restart";
         }
 
+        if (stagedAgentBuildRevision is { } stagedBuild &&
+            agentBuildRevision != stagedBuild)
+        {
+            return "Update pending Agent restart";
+        }
+
         var versions = new[] { clientVersion, agentVersion, updaterVersion }
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        return versions.Length > 1
+        var builds = new[] { clientBuildRevision, agentBuildRevision, updaterBuildRevision }
+            .Where(value => value > 0)
+            .Distinct()
+            .ToArray();
+        return versions.Length > 1 || builds.Length > 1
             ? "Update incomplete"
             : versions.Length == 1
                 ? "Consistent"

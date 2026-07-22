@@ -10,7 +10,7 @@ public partial class DiagnosticsWindow : Window
     public DiagnosticsWindow()
     {
         InitializeComponent();
-        VersionText.Text = ProductInfo.VersionLabel;
+        VersionText.Text = ProductInfo.DiagnosticsVersionLabel;
     }
 
     private async void Export_Click(object sender, RoutedEventArgs e)

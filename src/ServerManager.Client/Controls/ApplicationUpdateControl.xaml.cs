@@ -70,15 +70,17 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
 
             var installed = InstalledVersionDetector.Detect();
             CurrentVersionText.Text = installed.Client.Version ?? ProductInfo.Version;
-            ClientVersionText.Text = installed.Client.Version ?? "Unavailable";
-            AgentVersionText.Text = installed.Agent.Version ?? "Unavailable";
-            UpdaterVersionText.Text = installed.Updater.Version ?? "Unavailable";
+            ClientVersionText.Text = FormatComponent(installed.Client);
+            AgentVersionText.Text = FormatComponent(installed.Agent);
+            UpdaterVersionText.Text = FormatComponent(installed.Updater);
             ComponentStateText.Text = $"{installed.ReleaseChannel} · {installed.OverallState}";
             InstalledHistoryText.Text =
                 $"Last successful update: {installed.LastSuccessfulUpdateUtc?.ToLocalTime().ToString("g") ?? "Not recorded"} · " +
-                $"Previous: {installed.PreviousVersion ?? "None"} · " +
-                $"Rollback: {installed.RollbackVersion ?? "None"}";
-            LatestVersionText.Text = _status.LatestVersion ?? "Not checked";
+                $"Previous: {FormatBuild(installed.PreviousVersion, installed.PreviousBuildRevision)} · " +
+                $"Rollback: {FormatBuild(installed.RollbackVersion, installed.RollbackBuildRevision)}";
+            LatestVersionText.Text = _status.LatestVersion is null
+                ? "Not checked"
+                : FormatBuild(_status.LatestVersion, _status.LatestBuildRevision);
             StageText.Text = _status.Stage.ToString();
             DownloadProgress.Value = _status.DownloadPercent;
             ProgressText.Text =
@@ -90,7 +92,7 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
             RollbackText.Text = _status.RollbackStatus ?? "No rollback has been needed.";
             ReleaseNotesText.Text = _status.ReleaseNotes ?? string.Empty;
             HistoryList.ItemsSource = _status.History.Select(item => new HistoryItem(
-                $"{item.StartedAtUtc.ToLocalTime():g} · {item.Version} · {item.Result}" +
+                $"{item.StartedAtUtc.ToLocalTime():g} · {FormatBuild(item.Version, item.BuildRevision)} · {item.Result}" +
                 (string.IsNullOrWhiteSpace(item.Message) ? string.Empty : $" · {item.Message}")))
                 .ToArray();
             if (!_editing)
@@ -256,6 +258,18 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
                 : bytes >= 1024L
                     ? $"{bytes / 1024d:0.0} KB"
                     : $"{bytes} B";
+
+    private static string FormatComponent(InstalledComponentVersion component) =>
+        component.Version is null
+            ? "Unavailable"
+            : FormatBuild(component.Version, component.BuildRevision);
+
+    private static string FormatBuild(string? version, int? buildRevision) =>
+        version is null
+            ? "None"
+            : buildRevision is > 0
+                ? $"{version} · Build {buildRevision}"
+                : version;
 
     private sealed record HistoryItem(string Display);
 }

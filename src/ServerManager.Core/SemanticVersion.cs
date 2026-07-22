@@ -6,7 +6,8 @@ public readonly record struct SemanticVersion(
     int Major,
     int Minor,
     int Patch,
-    string? Prerelease = null) : IComparable<SemanticVersion>
+    string? Prerelease = null,
+    int CoreComponents = 3) : IComparable<SemanticVersion>
 {
     public static SemanticVersion Parse(string value)
     {
@@ -44,16 +45,22 @@ public readonly record struct SemanticVersion(
             : null;
         var core = prereleaseIndex >= 0 ? normalized[..prereleaseIndex] : normalized;
         var parts = core.Split('.');
-        if (parts.Length != 3 ||
+        var patch = 0;
+        if (parts.Length is not (2 or 3) ||
             !TryPart(parts[0], out var major) ||
             !TryPart(parts[1], out var minor) ||
-            !TryPart(parts[2], out var patch) ||
+            (parts.Length == 3 && !TryPart(parts[2], out patch)) ||
             (prerelease is not null && !IsValidPrerelease(prerelease)))
         {
             return false;
         }
 
-        version = new SemanticVersion(major, minor, patch, prerelease);
+        version = new SemanticVersion(
+            major,
+            minor,
+            parts.Length == 3 ? patch : 0,
+            prerelease,
+            parts.Length);
         return true;
     }
 
@@ -110,7 +117,9 @@ public readonly record struct SemanticVersion(
     }
 
     public override string ToString() =>
-        $"{Major}.{Minor}.{Patch}" +
+        (CoreComponents == 2 && Patch == 0
+            ? $"{Major}.{Minor}"
+            : $"{Major}.{Minor}.{Patch}") +
         (Prerelease is null ? string.Empty : $"-{Prerelease}");
 
     private static bool TryPart(string value, out int result) =>

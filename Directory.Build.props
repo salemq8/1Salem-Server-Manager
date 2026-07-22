@@ -1,7 +1,9 @@
 <Project>
   <PropertyGroup>
     <VersionFile>$(MSBuildThisFileDirectory)VERSION</VersionFile>
+    <BuildRevisionFile>$(MSBuildThisFileDirectory)BUILD_REVISION</BuildRevisionFile>
     <ProductVersion>$([System.IO.File]::ReadAllText('$(VersionFile)').Trim())</ProductVersion>
+    <BuildRevision>$([System.IO.File]::ReadAllText('$(BuildRevisionFile)').Trim())</BuildRevision>
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -10,8 +12,8 @@
     <Version>$(ProductVersion)</Version>
     <VersionPrefix>$(ProductVersion)</VersionPrefix>
     <PackageVersion>$(ProductVersion)</PackageVersion>
-    <AssemblyVersion>$(ProductVersion).0</AssemblyVersion>
-    <FileVersion>$(ProductVersion)</FileVersion>
+    <AssemblyVersion>$(ProductVersion).0.0</AssemblyVersion>
+    <FileVersion>$(ProductVersion).0.0</FileVersion>
     <InformationalVersion>$(ProductVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ReleaseChannel Condition="'$(ReleaseChannel)' == ''">Stable</ReleaseChannel>
@@ -21,7 +23,13 @@
   </PropertyGroup>
 
   <Target Name="ValidateProductVersion" BeforeTargets="PrepareForBuild">
-    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(ProductVersion)', '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'))"
-           Text="VERSION must contain one semantic product version (for example 1.2.3)." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(ProductVersion)', '^\d+\.\d+$'))"
+           Text="VERSION must contain Salem's fixed two-part visible product version (currently 1.5)." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(BuildRevision)', '^[1-9]\d*$'))"
+           Text="BUILD_REVISION must contain one positive integer." />
   </Target>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildRevision" Value="$(BuildRevision)" />
+  </ItemGroup>
 </Project>

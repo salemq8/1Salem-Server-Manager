@@ -72,7 +72,10 @@ public static class Program
                     AllowSameVersion: arguments.AllowSameVersion,
                     SkipServiceHealthCheck: arguments.SkipHealthCheck,
                     HealthUri: new Uri("http://127.0.0.1:5251/health"),
-                    VerifyOnly: arguments.VerifyOnly));
+                    VerifyOnly: arguments.VerifyOnly,
+                    TargetBuildRevision: arguments.BuildRevision,
+                    TargetPackageSha256: arguments.PackageSha256,
+                    AllowManagedGameAgentRestart: arguments.AllowManagedGameAgentRestart));
                 Console.WriteLine(result.Message);
                 success = result.Success;
                 rolledBack = result.RolledBack;
@@ -163,7 +166,10 @@ public static class Program
         bool DeferAgent,
         bool AllowSameVersion,
         bool VerifyOnly,
-        bool CloseDashboard)
+        bool CloseDashboard,
+        int BuildRevision,
+        string? PackageSha256,
+        bool AllowManagedGameAgentRestart)
     {
         public static UpdateArguments Parse(IReadOnlyList<string> args)
         {
@@ -208,6 +214,22 @@ public static class Program
                     System.Globalization.CultureInfo.InvariantCulture);
             }
 
+            var buildRevision = 0;
+            var buildIndex = Find("--build-revision");
+            if (buildIndex >= 0 &&
+                (buildIndex + 1 >= args.Count ||
+                 !int.TryParse(args[buildIndex + 1], out buildRevision) ||
+                 buildRevision <= 0))
+            {
+                throw new ArgumentException(
+                    "--build-revision must contain a positive integer.");
+            }
+
+            var hashIndex = Find("--package-sha256");
+            var packageSha256 = hashIndex >= 0 && hashIndex + 1 < args.Count
+                ? args[hashIndex + 1]
+                : null;
+
             return new UpdateArguments(
                 Path.GetFullPath(Required("--package")),
                 Path.GetFullPath(Required("--install-root")),
@@ -224,7 +246,10 @@ public static class Program
                 Find("--defer-agent") >= 0,
                 Find("--allow-same-version") >= 0,
                 Find("--verify-only") >= 0,
-                Find("--close-dashboard") >= 0);
+                Find("--close-dashboard") >= 0,
+                buildRevision,
+                packageSha256,
+                Find("--allow-managed-game-agent-restart") >= 0);
         }
     }
 }

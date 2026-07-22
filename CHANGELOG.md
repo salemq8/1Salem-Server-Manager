@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5 — Build 1
+
+- Completed the one-time visible product-version transition from 1.3.2 to 1.5.
+- Added a separate monotonic `BUILD_REVISION` and generated `build-info.json` identity.
+- Changed normal update ordering to compare product version, internal Build revision, and package hash.
+- Added rolling 1.5 release candidates and post-install promotion while preserving historical 1.3.2 artifacts.
+- Added Build-aware installed component reporting, rollback metadata, and stable-launcher validation.
+- Locked normal build preparation to `tools/next-build.ps1`; `VERSION` changes now require Salem's explicit authorization phrase.
+
 ## 1.3.2 - 2026-07-22
 
 - Redesigned the Palworld Overview as a responsive live dashboard with compact

@@ -40,14 +40,16 @@ public sealed record ApplicationUpdateManifest(
     string? RollbackCompatibility = null,
     string? PackageFileName = null,
     string? ReleaseNotes = null,
-    string? AgentUpdateMode = null);
+    string? AgentUpdateMode = null,
+    int BuildRevision = 0);
 
 public sealed record ApplicationUpdateHistoryEntry(
     string Version,
     ApplicationUpdateStage Result,
     DateTimeOffset StartedAtUtc,
     DateTimeOffset? CompletedAtUtc,
-    string? Message);
+    string? Message,
+    int BuildRevision = 0);
 
 public sealed record ApplicationUpdateStatusResponse(
     string CurrentVersion,
@@ -66,7 +68,9 @@ public sealed record ApplicationUpdateStatusResponse(
     string? LastError,
     bool CurrentBuildSigned,
     bool GameServerBusy,
-    IReadOnlyList<ApplicationUpdateHistoryEntry> History);
+    IReadOnlyList<ApplicationUpdateHistoryEntry> History,
+    int CurrentBuildRevision = 0,
+    int? LatestBuildRevision = null);
 
 public sealed record ApplicationUpdateSettingsRequest(
     ApplicationUpdateChannel Channel,
