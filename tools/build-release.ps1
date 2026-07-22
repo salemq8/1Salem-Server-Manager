@@ -312,8 +312,17 @@ $setupPublish = Join-Path $publishRoot 'SetupHost'
 $buildRoot = Join-Path $stagingRoot 'build'
 $commit = 'unknown'
 $git = Get-Command git -ErrorAction SilentlyContinue
-if ($null -ne $git) {
-    $candidateCommit = & $git.Source -C $root rev-parse --short HEAD
+$gitPath = if ($null -ne $git) {
+    $git.Source
+}
+elseif (Test-Path -LiteralPath (Join-Path $root '.tools\mingit\cmd\git.exe')) {
+    Join-Path $root '.tools\mingit\cmd\git.exe'
+}
+else {
+    $null
+}
+if ($null -ne $gitPath) {
+    $candidateCommit = & $gitPath -C $root rev-parse --short HEAD
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidateCommit)) {
         $commit = $candidateCommit.Trim()
     }
