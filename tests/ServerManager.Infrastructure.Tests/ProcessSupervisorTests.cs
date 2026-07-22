@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ServerManager.Contracts;
 using ServerManager.Core;
 using ServerManager.Infrastructure.Processes;
+using System.Diagnostics;
 
 namespace ServerManager.Infrastructure.Tests;
 
@@ -160,6 +161,70 @@ public sealed class ProcessSupervisorTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task AgentDispose_DoesNotTerminateManagedGameProcess()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var supervisor = new ProcessSupervisor(
+            NullLogger<ProcessSupervisor>.Instance,
+            new InMemoryAuditLogStore());
+        var server = CreateServer(GameType.Palworld);
+        var started = await supervisor.StartAsync(server, CreateIndependentHostSpec());
+        supervisor.Dispose();
+        try
+        {
+            using var process = Process.GetProcessById(started.ProcessId);
+            Assert.False(process.HasExited);
+        }
+        finally
+        {
+            TryKill(started.ProcessId);
+        }
+    }
+
+    [Fact]
+    public async Task ReAdoptExistingProcess_RestoresPidAndPreventsDuplicateStart()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var server = CreateServer(GameType.Palworld);
+        var spec = CreateIndependentHostSpec();
+        var firstSupervisor = new ProcessSupervisor(
+            NullLogger<ProcessSupervisor>.Instance,
+            new InMemoryAuditLogStore());
+        var started = await firstSupervisor.StartAsync(server, spec);
+        firstSupervisor.Dispose();
+        var secondSupervisor = new ProcessSupervisor(
+            NullLogger<ProcessSupervisor>.Instance,
+            new InMemoryAuditLogStore());
+        try
+        {
+            var adopted = await secondSupervisor.AdoptAsync(
+                server,
+                spec,
+                started.ProcessId);
+            var duplicateAttempt = await secondSupervisor.StartAsync(server, spec);
+
+            Assert.NotNull(adopted);
+            Assert.Equal(started.ProcessId, adopted.ProcessId);
+            Assert.Equal(started.ProcessId, duplicateAttempt.ProcessId);
+            Assert.Single(await secondSupervisor.GetAllSnapshotsAsync());
+        }
+        finally
+        {
+            await secondSupervisor.StopAsync(server.Id, true);
+            secondSupervisor.Dispose();
+            TryKill(started.ProcessId);
+        }
+    }
+
     public void Dispose() => _supervisor.Dispose();
 
     private static GameServerDefinition CreateServer(GameType game) =>
@@ -186,6 +251,47 @@ public sealed class ProcessSupervisorTests : IDisposable
             "-NoLogo -NoProfile -NonInteractive -Command \"$line=[Console]::ReadLine(); if($line -eq 'stop'){exit 0}; exit 3\"",
             Path.GetTempPath(),
             new Dictionary<string, string>());
+    }
+
+    private static ProcessLaunchSpec CreateIndependentHostSpec()
+    {
+        var powershell = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe");
+        return new ProcessLaunchSpec(
+            powershell,
+            string.Empty,
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            new Dictionary<string, string>(),
+            RedirectStandardInput: false,
+            RedirectStandardOutput: false,
+            RedirectStandardError: false,
+            ArgumentList:
+            [
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "while ($true) { Start-Sleep -Milliseconds 250 }"
+            ]);
+    }
+
+    private static void TryKill(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5_000);
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
     }
 
     private static string CreateProcessTreeBatch()

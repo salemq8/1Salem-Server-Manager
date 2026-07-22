@@ -75,7 +75,7 @@ the browser. The existing Minecraft tunnel stays TCP
 `127.0.0.1:25565`. Create a separate Palworld UDP tunnel to
 `127.0.0.1:8211` using the in-app guide and official Playit portal.
 
-Open **Updates** for Stable/Beta checks, verified downloads, release notes,
+Open **Updates** for Stable/Preview/Development checks, verified downloads, release notes,
 history, and rollback status. Downloading does not stop games. If installation
 needs an Agent restart while a game is active, approve explicitly or choose
 Update Later. Ordinary verified releases install without Setup.exe.

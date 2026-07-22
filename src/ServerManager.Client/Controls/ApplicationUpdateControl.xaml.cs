@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using ServerManager.Contracts;
+using ServerManager.Client.Shell;
 using MessageBox = System.Windows.MessageBox;
 
 namespace ServerManager.Client.Controls;
@@ -67,7 +68,16 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
                 return;
             }
 
-            CurrentVersionText.Text = _status.CurrentVersion;
+            var installed = InstalledVersionDetector.Detect();
+            CurrentVersionText.Text = installed.Client.Version ?? ProductInfo.Version;
+            ClientVersionText.Text = installed.Client.Version ?? "Unavailable";
+            AgentVersionText.Text = installed.Agent.Version ?? "Unavailable";
+            UpdaterVersionText.Text = installed.Updater.Version ?? "Unavailable";
+            ComponentStateText.Text = $"{installed.ReleaseChannel} · {installed.OverallState}";
+            InstalledHistoryText.Text =
+                $"Last successful update: {installed.LastSuccessfulUpdateUtc?.ToLocalTime().ToString("g") ?? "Not recorded"} · " +
+                $"Previous: {installed.PreviousVersion ?? "None"} · " +
+                $"Rollback: {installed.RollbackVersion ?? "None"}";
             LatestVersionText.Text = _status.LatestVersion ?? "Not checked";
             StageText.Text = _status.Stage.ToString();
             DownloadProgress.Value = _status.DownloadPercent;
@@ -85,16 +95,21 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
                 .ToArray();
             if (!_editing)
             {
-                ChannelBox.SelectedIndex =
-                    _status.Channel == ApplicationUpdateChannel.Beta ? 1 : 0;
+                ChannelBox.SelectedIndex = _status.Channel switch
+                {
+                    ApplicationUpdateChannel.Preview => 1,
+                    ApplicationUpdateChannel.Development => 2,
+                    _ => 0
+                };
                 AutomaticChecksBox.IsChecked = _status.AutomaticChecksEnabled;
                 _editing = false;
             }
 
             StatusText.Text = _status.LastError ??
                 (_status.GameServerBusy
-                    ? "A game server is active. Downloading is safe; installation that restarts the Agent requires explicit approval."
+                    ? "A game server is active. The dashboard and Updater can update now; Agent files will be staged until a safe restart."
                     : $"Last checked: {_status.LastCheckedAtUtc?.ToLocalTime().ToString("g") ?? "Never"}");
+            RenderActionAvailability(_status);
         }
         catch (Exception exception) when (
             exception is HttpRequestException or TaskCanceledException)
@@ -107,11 +122,43 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
         }
     }
 
+    private void RenderActionAvailability(
+        ApplicationUpdateStatusResponse status)
+    {
+        var actionRunning = status.Stage is
+            ApplicationUpdateStage.Checking or
+            ApplicationUpdateStage.Downloading or
+            ApplicationUpdateStage.Installing;
+        CheckButton.IsEnabled = !actionRunning;
+        DownloadButton.IsEnabled =
+            !actionRunning &&
+            status.IsUpdateAvailable &&
+            (status.Stage is
+                ApplicationUpdateStage.Available or
+                ApplicationUpdateStage.Failed) &&
+            string.IsNullOrWhiteSpace(status.StagedPackagePath);
+        UpdateNowButton.IsEnabled =
+            !actionRunning &&
+            !string.IsNullOrWhiteSpace(status.StagedPackagePath) &&
+            (status.Stage is
+                ApplicationUpdateStage.Verified or
+                ApplicationUpdateStage.ReadyToInstall);
+        DownloadButton.ToolTip = DownloadButton.IsEnabled
+            ? "Download and verify the available package."
+            : "Check for an available update first.";
+        UpdateNowButton.ToolTip = UpdateNowButton.IsEnabled
+            ? "Install the verified package with rollback protection."
+            : "Download and verify an update before installing.";
+    }
+
     private async void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
-        var channel = ChannelBox.SelectedIndex == 1
-            ? ApplicationUpdateChannel.Beta
-            : ApplicationUpdateChannel.Stable;
+        var channel = ChannelBox.SelectedIndex switch
+        {
+            1 => ApplicationUpdateChannel.Preview,
+            2 => ApplicationUpdateChannel.Development,
+            _ => ApplicationUpdateChannel.Stable
+        };
         using var response = await _httpClient.PostAsJsonAsync(
             "/api/v1/application-updates/settings",
             new ApplicationUpdateSettingsRequest(
@@ -134,28 +181,11 @@ public partial class ApplicationUpdateControl : System.Windows.Controls.UserCont
 
     private async void UpdateNow_Click(object sender, RoutedEventArgs e)
     {
-        var approveBusy = false;
-        if (_status?.GameServerBusy == true)
-        {
-            var choice = MessageBox.Show(
-                "A managed game server is active. Continuing now creates a safety backup, stops the server gracefully, and then restarts the Agent.\n\nChoose No for Update Later. Choose Yes only if you approve the backup and graceful stop.",
-                "Game server active",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-            if (choice != MessageBoxResult.Yes)
-            {
-                StatusText.Text = "Update postponed. No server or application files were changed.";
-                return;
-            }
-
-            approveBusy = true;
-        }
-
         try
         {
             using var response = await _httpClient.PostAsJsonAsync(
                 "/api/v1/application-updates/prepare",
-                new ApplicationUpdateActionRequest(approveBusy));
+                new ApplicationUpdateActionRequest(false));
             var launch = await response.Content.ReadFromJsonAsync<ApplicationUpdateLaunchResponse>();
             if (launch is not { Success: true, UpdaterPath: not null })
             {

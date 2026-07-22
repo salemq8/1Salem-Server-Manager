@@ -134,6 +134,68 @@ public sealed class ProcessSupervisor(
         }
     }
 
+    public async Task<ProcessSnapshot?> AdoptAsync(
+        GameServerDefinition server,
+        ProcessLaunchSpec launchSpec,
+        int? expectedProcessId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) == 1, this);
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(launchSpec);
+        ValidateLaunchSpec(launchSpec);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_processes.TryGetValue(server.Id, out var existing) &&
+            !existing.Process.HasExited)
+        {
+            return existing.CreateSnapshot();
+        }
+
+        var process = FindAdoptableProcess(launchSpec.FileName, expectedProcessId);
+        if (process is null)
+        {
+            return null;
+        }
+
+        var logBuffer = _logs.GetOrAdd(server.Id, _ => new ProcessLogBuffer());
+        var managed = new ManagedProcess(server, launchSpec, process, logBuffer);
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) => _ = HandleExitAsync(managed);
+        if (!_processes.TryAdd(server.Id, managed))
+        {
+            process.Dispose();
+            return _processes.TryGetValue(server.Id, out existing)
+                ? existing.CreateSnapshot()
+                : null;
+        }
+
+        try
+        {
+            managed.MarkAdopted();
+            managed.Job.Assign(process);
+            managed.SetState(ServerState.Running);
+            logBuffer.Publish(new LogEntry(
+                DateTimeOffset.UtcNow,
+                "Information",
+                "Agent",
+                $"Re-adopted existing process PID {process.Id}."));
+            await auditLogStore.WriteAsync(
+                "Agent",
+                "ProcessReadopted",
+                server.Id.ToString(),
+                true,
+                $"PID {process.Id}",
+                cancellationToken);
+            return managed.CreateSnapshot();
+        }
+        catch
+        {
+            _processes.TryRemove(server.Id, out _);
+            managed.Dispose();
+            throw;
+        }
+    }
+
     public async Task<OperationResult> StopAsync(
         Guid serverId,
         bool force,
@@ -425,6 +487,70 @@ public sealed class ProcessSupervisor(
         }
     }
 
+    private static Process? FindAdoptableProcess(
+        string executablePath,
+        int? expectedProcessId)
+    {
+        var expectedPath = Path.GetFullPath(executablePath);
+        if (expectedProcessId is { } processId)
+        {
+            try
+            {
+                var expected = Process.GetProcessById(processId);
+                if (!expected.HasExited && ProcessPathMatches(expected, expectedPath))
+                {
+                    return expected;
+                }
+
+                expected.Dispose();
+            }
+            catch (Exception exception) when (
+                exception is ArgumentException or InvalidOperationException or
+                    System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+            }
+        }
+
+        var candidates = new List<Process>();
+        foreach (var candidate in Process.GetProcessesByName(
+                     Path.GetFileNameWithoutExtension(expectedPath)))
+        {
+            try
+            {
+                if (!candidate.HasExited && ProcessPathMatches(candidate, expectedPath))
+                {
+                    candidates.Add(candidate);
+                }
+                else
+                {
+                    candidate.Dispose();
+                }
+            }
+            catch (Exception exception) when (
+                exception is InvalidOperationException or
+                    System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                candidate.Dispose();
+            }
+        }
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0];
+        }
+
+        foreach (var candidate in candidates)
+        {
+            candidate.Dispose();
+        }
+
+        return null;
+    }
+
+    private static bool ProcessPathMatches(Process process, string expectedPath) =>
+        process.MainModule?.FileName is { } path &&
+        Path.GetFullPath(path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase);
+
     private static async Task RequestGracefulStopAsync(
         ManagedProcess managed,
         CancellationToken cancellationToken)
@@ -595,6 +721,23 @@ public sealed class ProcessSupervisor(
             _lastProcessorTimes[Process.Id] = Process.TotalProcessorTime;
         }
 
+        public void MarkAdopted()
+        {
+            try
+            {
+                _startedAtUtc = new DateTimeOffset(Process.StartTime.ToUniversalTime());
+            }
+            catch (Exception exception) when (
+                exception is InvalidOperationException or
+                    System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                _startedAtUtc = DateTimeOffset.UtcNow;
+            }
+
+            _lastSampleTimestamp = Stopwatch.GetTimestamp();
+            _lastProcessorTimes[Process.Id] = Process.TotalProcessorTime;
+        }
+
         public void SetState(ServerState state) =>
             Interlocked.Exchange(ref _state, (int)state);
 
@@ -629,7 +772,8 @@ public sealed class ProcessSupervisor(
                     gameProcess?.ProcessId,
                     Math.Max(0, members.Count - 1),
                     rootProcess?.ExecutableName,
-                    gameProcess?.ExecutableName);
+                    gameProcess?.ExecutableName,
+                    members.Sum(member => member.ThreadCount));
             }
             catch (Exception exception) when (
                 exception is InvalidOperationException or
@@ -684,7 +828,8 @@ public sealed class ProcessSupervisor(
                         candidate.ProcessName,
                         candidate.WorkingSet64,
                         candidate.PrivateMemorySize64,
-                        candidate.TotalProcessorTime));
+                        candidate.TotalProcessorTime,
+                        candidate.Threads.Count));
                 }
                 catch (Exception exception) when (
                     exception is ArgumentException or
@@ -786,6 +931,7 @@ public sealed class ProcessSupervisor(
             string ExecutableName,
             long WorkingSetBytes,
             long PrivateMemoryBytes,
-            TimeSpan TotalProcessorTime);
+            TimeSpan TotalProcessorTime,
+            int ThreadCount);
     }
 }

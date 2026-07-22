@@ -57,7 +57,8 @@ public sealed record ProcessSnapshot(
     int? GameProcessId = null,
     int ChildProcessCount = 0,
     string? RootExecutableName = null,
-    string? GameExecutableName = null);
+    string? GameExecutableName = null,
+    int ThreadCount = 0);
 
 public sealed record RestartPolicy(
     bool Enabled,

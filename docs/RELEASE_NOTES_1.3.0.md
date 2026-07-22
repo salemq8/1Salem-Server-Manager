@@ -1,41 +1,40 @@
 # 1Salem Server Manager 1.3.0
 
-Version 1.3.0 adds a complete Palworld Control Center while preserving existing
-servers and application data.
+Version 1.3.0 is a desktop experience, configuration reliability, and product
+stabilization release.
 
-## Palworld management
+## Highlights
 
-Management activation resolves the registered server root and edits only
-`Pal\Saved\Config\WindowsServer\PalWorldSettings.ini`. It creates a timestamped
-history copy, preserves unknown parameters and the original text encoding,
-validates a temporary file, atomically replaces the live file, protects the
-admin password with Windows DPAPI, restarts gracefully, waits for the real game
-child, and verifies the official localhost REST API for up to 120 seconds.
-Failures retain exact stage/error information and restore the previous
-configuration when appropriate. REST is never published through Playit.
+- Consistent dark, light, and Follow Windows styling for buttons, tabs, inputs,
+  tables, focus, validation, loading, warning, and disabled states.
+- Responsive twelve-section navigation, a structured live Home dashboard, and
+  clearer per-game overview, console, settings, players, files, backup, update,
+  performance, network, and diagnostics tabs.
+- Palworld settings load from and write to the registered live
+  `PalWorldSettings.ini` with unknown-field preservation, staged validation,
+  atomic replacement, active/pending/unsaved state, and verified restart flow.
+- Expanded Minecraft `server.properties`, Java path, JVM memory, priority, and
+  affinity editing while preserving unknown properties and JVM arguments.
+- Protected configuration restore points are created before settings changes,
+  retain the latest ten per server, redact secrets, and support compare, label,
+  delete, verified restore, and automatic failure recovery.
+- Independent server diagnostics, process-tree resource details, bounded
+  console tools, and consistent in-app notifications.
+- Complete Palworld localhost management, world, memory, priority, Save World,
+  verified backup, scheduling, retention, and rollback-safe restore controls.
 
-## World, memory, priority, and backup controls
+## Compatibility and safety
 
-- Categorized, searchable Palworld world settings with bilingual labels,
-  official parameter names, defaults, ranges, warnings, presets, compare,
-  undo/reset, import/export, configuration history, and verified apply/restart.
-- Native Palworld memory reporting and warning/critical thresholds, Windows
-  reserve, a shared Minecraft/Palworld budget, One Game at a Time mode, and an
-  optional typed-confirmation hard Job Object limit that saves first.
-- Verified root/child process priority and affinity changes with persistent
-  Active/Failed/Permission denied/Server not running status and optional
-  Balanced restoration.
-- Official REST Save World, verified ZIP backup with per-file manifest and
-  SHA-256, destination and free-space checks, schedules, retention, protected
-  backups, metadata, export, and rollback-safe staged restore.
+- Normal upgrades from compatible 1.2.x installations remain supported by the
+  in-application updater.
+- Existing ProgramData, worlds, saves, player data, backups, SteamCMD data,
+  Playit data, tunnels, and previous release artifacts are not removed.
+- The Agent API remains loopback-only by default. This release adds no VPN,
+  relay, cloud, or port-forwarding features.
+- The existing additive database schema remains at version 3.
 
-## Safety and compatibility
+## Installation
 
-The schema version 3 migration is additive. Setup, update, and uninstall do not
-remove game roots, saves, worlds, backups, Playit state, Agent ProgramData, or
-DPAPI credentials. The update ZIP is compatible with the in-app updater used by
-version 1.2.1 and does not require running Setup manually.
-
-Automated validation covers 203 tests across Core, Infrastructure, Agent,
-Client, and Setup. The package is self-contained for Windows 10/11 x64. Local
-release binaries are unsigned.
+Use the in-application updater for a normal upgrade. `Setup.exe` remains
+available for first installation and repair. Local release binaries are
+unsigned.

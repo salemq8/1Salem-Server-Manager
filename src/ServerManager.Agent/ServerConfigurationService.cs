@@ -17,7 +17,8 @@ public sealed partial class ServerConfigurationService(
     INetworkService networkService,
     ISecretStore secretStore,
     GameServerOrchestrator orchestrator,
-    ProcessSupervisor processSupervisor)
+    ProcessSupervisor processSupervisor,
+    ConfigurationRestorePointService restorePoints)
 {
     public async Task<MinecraftConfigurationResponse> GetMinecraftAsync(
         Guid serverId,
@@ -25,6 +26,7 @@ public sealed partial class ServerConfigurationService(
     {
         var server = await GetMinecraftServerAsync(serverId, cancellationToken);
         var values = ReadProperties(server.RootPath);
+        var levelName = ReadString(values, "level-name", "world");
         return new MinecraftConfigurationResponse(
             server.Id,
             server.Name,
@@ -44,7 +46,26 @@ public sealed partial class ServerConfigurationService(
             ReadBool(values, "pvp", true),
             server.AutoStart,
             server.AutoRestart,
-            server.PreferredAdapterId);
+            server.PreferredAdapterId,
+            ReadInt(values, "spawn-protection", 16),
+            ReadBool(values, "enable-command-block", false),
+            ReadBool(values, "allow-flight", false),
+            ReadBool(values, "spawn-animals", true),
+            ReadBool(values, "spawn-monsters", true),
+            ReadBool(values, "spawn-npcs", true),
+            levelName,
+            ReadString(values, "level-seed", string.Empty),
+            ReadString(values, "level-type", "minecraft:normal"),
+            ReadBool(values, "generate-structures", true),
+            !File.Exists(Path.Combine(
+                server.RootPath,
+                levelName,
+                "level.dat")),
+            values.Keys
+                .Where(key =>
+                    !MinecraftPropertiesSerializer.ManagedKeys.Contains(key))
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray());
     }
 
     public async Task<OperationResult> UpdateMinecraftMemoryAsync(
@@ -66,26 +87,62 @@ public sealed partial class ServerConfigurationService(
                 string.Join(" ", recommendation.Warnings));
         }
 
-        await WriteManagedFileAsync(
-            server.RootPath,
-            "user_jvm_args.txt",
-            $"-Xms{request.MinimumMemoryMb}M{Environment.NewLine}" +
-            $"-Xmx{request.MaximumMemoryMb}M{Environment.NewLine}",
+        var restorePoint = await restorePoints.CreateAsync(
+            server,
+            "minecraft-memory",
+            ["user_jvm_args.txt"],
+            new Dictionary<string, string>
+            {
+                ["Xms"] = $"{server.MinimumMemoryMb ?? 1024} MB → {request.MinimumMemoryMb} MB",
+                ["Xmx"] = $"{server.MaximumMemoryMb ?? 4096} MB → {request.MaximumMemoryMb} MB"
+            },
             cancellationToken);
-        var updated = server with
+        try
         {
-            MinimumMemoryMb = request.MinimumMemoryMb,
-            MaximumMemoryMb = request.MaximumMemoryMb
-        };
-        await serverStore.UpsertAsync(updated, server.State, cancellationToken);
-        if (MinecraftMemoryPolicy.ShouldApplyRestart(
+            var argumentsPath = Path.Combine(
+                server.RootPath,
+                "user_jvm_args.txt");
+            var existingArguments = File.Exists(argumentsPath)
+                ? await File.ReadAllTextAsync(argumentsPath, cancellationToken)
+                : string.Empty;
+            await WriteManagedFileAsync(
+                server.RootPath,
+                "user_jvm_args.txt",
+                MergeMinecraftMemoryArguments(
+                    existingArguments,
+                    request.MinimumMemoryMb,
+                    request.MaximumMemoryMb),
+                cancellationToken);
+            var updated = server with
+            {
+                MinimumMemoryMb = request.MinimumMemoryMb,
+                MaximumMemoryMb = request.MaximumMemoryMb
+            };
+            await serverStore.UpsertAsync(updated, server.State, cancellationToken);
+            var restarted = MinecraftMemoryPolicy.ShouldApplyRestart(
                 request.ApplyAndRestart,
-                await IsRunningAsync(server.Id, cancellationToken)))
-        {
-            await orchestrator.RestartAsync(server.Id, cancellationToken);
-        }
+                await IsRunningAsync(server.Id, cancellationToken));
+            if (restarted)
+            {
+                _ = await orchestrator.RestartAsync(server.Id, cancellationToken);
+            }
 
-        return OperationResult.Ok();
+            await restorePoints.CompleteAsync(
+                server.Id,
+                restorePoint.Id,
+                restarted,
+                cancellationToken);
+            return OperationResult.Ok();
+        }
+        catch (Exception exception)
+        {
+            return await RecoverConfigurationFailureAsync(
+                server.Id,
+                restorePoint.Id,
+                "MinecraftMemoryApplyFailed",
+                exception,
+                cancellationToken);
+        }
     }
 
     public async Task<OperationResult> UpdateMinecraftSettingsAsync(
@@ -104,8 +161,53 @@ public sealed partial class ServerConfigurationService(
             request.SimulationDistance,
             request.WhitelistEnabled,
             request.Hardcore,
-            request.Pvp);
-        _ = MinecraftPropertiesSerializer.Serialize(settings, request.Port);
+            request.Pvp,
+            request.SpawnProtection,
+            request.EnableCommandBlocks,
+            request.AllowFlight,
+            request.SpawnAnimals,
+            request.SpawnMonsters,
+            request.SpawnNpcs,
+            request.LevelName,
+            request.LevelSeed,
+            request.LevelType,
+            request.GenerateStructures);
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return OperationResult.Fail(
+                "ServerNameRequired",
+                "Enter a server name before saving.");
+        }
+
+        try
+        {
+            _ = MinecraftPropertiesSerializer.Serialize(settings, request.Port);
+        }
+        catch (ArgumentException exception)
+        {
+            return OperationResult.Fail(
+                "InvalidMinecraftSetting",
+                exception.Message);
+        }
+        var currentProperties = ReadProperties(server.RootPath);
+        var currentLevelName = ReadString(
+            currentProperties,
+            "level-name",
+            "world");
+        var currentSeed = ReadString(
+            currentProperties,
+            "level-seed",
+            string.Empty);
+        if (File.Exists(Path.Combine(
+                server.RootPath,
+                currentLevelName,
+                "level.dat")) &&
+            !request.LevelSeed.Equals(currentSeed, StringComparison.Ordinal))
+        {
+            return OperationResult.Fail(
+                "ExistingWorldSeedLocked",
+                "The seed can only be changed before the selected world is created. Keep the current seed or choose a new level name.");
+        }
         if (request.Port != server.Port)
         {
             var port = await networkService.TestPortAsync(
@@ -134,38 +236,90 @@ public sealed partial class ServerConfigurationService(
             javaPath = java.ExecutablePath;
         }
 
-        var propertiesPath = Path.Combine(server.RootPath, "server.properties");
-        var existing = File.Exists(propertiesPath)
-            ? await File.ReadAllTextAsync(propertiesPath, cancellationToken)
-            : string.Empty;
-        await WriteManagedFileAsync(
-            server.RootPath,
-            "server.properties",
-            MinecraftPropertiesSerializer.Merge(existing, settings, request.Port),
-            cancellationToken);
+        var restorePaths = new List<string> { "server.properties" };
         if (!string.IsNullOrWhiteSpace(javaPath))
         {
+            restorePaths.Add(Path.Combine(".1salem", "java-path.txt"));
+        }
+
+        var restorePoint = await restorePoints.CreateAsync(
+            server,
+            "minecraft-settings",
+            restorePaths,
+            new Dictionary<string, string>
+            {
+                ["Server name"] = $"{server.Name} → {request.Name.Trim()}",
+                ["Port"] = $"{server.Port} → {request.Port}",
+                ["Maximum players"] = request.MaxPlayers.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                ["MOTD"] = request.Motd,
+                ["Game mode"] = request.GameMode,
+                ["Difficulty"] = request.Difficulty
+            },
+            cancellationToken);
+        try
+        {
+            var propertiesPath = Path.Combine(server.RootPath, "server.properties");
+            var existing = File.Exists(propertiesPath)
+                ? await File.ReadAllTextAsync(propertiesPath, cancellationToken)
+                : string.Empty;
             await WriteManagedFileAsync(
                 server.RootPath,
-                Path.Combine(".1salem", "java-path.txt"),
-                javaPath,
+                "server.properties",
+                MinecraftPropertiesSerializer.Merge(
+                    existing,
+                    settings,
+                    request.Port),
+                cancellationToken);
+            var verifiedProperties = MinecraftPropertiesSerializer.Parse(
+                await File.ReadAllTextAsync(propertiesPath, cancellationToken));
+            if (ReadInt(verifiedProperties, "server-port", 0) != request.Port ||
+                ReadInt(verifiedProperties, "max-players", 0) !=
+                request.MaxPlayers)
+            {
+                throw new InvalidDataException(
+                    "The staged Minecraft settings did not pass read-back verification.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(javaPath))
+            {
+                await WriteManagedFileAsync(
+                    server.RootPath,
+                    Path.Combine(".1salem", "java-path.txt"),
+                    javaPath,
+                    cancellationToken);
+            }
+
+            var updated = server with
+            {
+                Name = request.Name.Trim(),
+                Port = request.Port,
+                JavaExecutablePath = javaPath
+            };
+            await serverStore.UpsertAsync(updated, server.State, cancellationToken);
+            var restarted = request.ApplyAndRestart &&
+                await IsRunningAsync(server.Id, cancellationToken);
+            if (restarted)
+            {
+                _ = await orchestrator.RestartAsync(server.Id, cancellationToken);
+            }
+
+            await restorePoints.CompleteAsync(
+                server.Id,
+                restorePoint.Id,
+                restarted,
+                cancellationToken);
+            return OperationResult.Ok();
+        }
+        catch (Exception exception)
+        {
+            return await RecoverConfigurationFailureAsync(
+                server.Id,
+                restorePoint.Id,
+                "MinecraftSettingsApplyFailed",
+                exception,
                 cancellationToken);
         }
-
-        var updated = server with
-        {
-            Name = request.Name.Trim(),
-            Port = request.Port,
-            JavaExecutablePath = javaPath
-        };
-        await serverStore.UpsertAsync(updated, server.State, cancellationToken);
-        if (request.ApplyAndRestart &&
-            await IsRunningAsync(server.Id, cancellationToken))
-        {
-            await orchestrator.RestartAsync(server.Id, cancellationToken);
-        }
-
-        return OperationResult.Ok();
     }
 
     public async Task<OperationResult> UpdateAutomationAsync(
@@ -278,7 +432,16 @@ public sealed partial class ServerConfigurationService(
             request.RconPort,
             metadata.Settings.RestApiEnabled,
             metadata.Settings.RestApiPort);
-        PalworldSettingsSerializer.Validate(settings);
+        try
+        {
+            PalworldSettingsSerializer.Validate(settings);
+        }
+        catch (ArgumentException exception)
+        {
+            return OperationResult.Fail(
+                "InvalidPalworldSetting",
+                exception.Message);
+        }
         if (request.Port != server.Port)
         {
             var port = await networkService.TestPortAsync(
@@ -308,31 +471,116 @@ public sealed partial class ServerConfigurationService(
                 settings.RestApiEnabled,
                 settings.RestApiPort)
         };
-        await WriteManagedFileAsync(
-            server.RootPath,
-            Path.Combine(".1salem", "metadata.json"),
-            JsonSerializer.Serialize(
-                updatedMetadata,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web)
-                {
-                    WriteIndented = true
-                }),
-            cancellationToken);
-        await serverStore.UpsertAsync(
-            server with
+        var metadataRelativePath = Path.Combine(".1salem", "metadata.json");
+        var configurationRelativePath =
+            PalworldConfigurationFile.RelativePath;
+        var restorePoint = await restorePoints.CreateAsync(
+            server,
+            "palworld-settings",
+            [metadataRelativePath, configurationRelativePath],
+            new Dictionary<string, string>
             {
-                Name = settings.ServerName,
-                Port = settings.Port
+                ["Server name"] = $"{server.Name} → {settings.ServerName}",
+                ["Description"] = settings.Description,
+                ["Port"] = $"{server.Port} → {settings.Port}",
+                ["Maximum players"] = settings.MaxPlayers.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                ["Community server"] = settings.CommunityServer.ToString(),
+                ["Server password"] = string.IsNullOrEmpty(request.NewServerPassword)
+                    ? "unchanged"
+                    : "changed",
+                ["Admin password"] = string.IsNullOrEmpty(request.NewAdminPassword)
+                    ? "unchanged"
+                    : "changed"
             },
-            server.State,
             cancellationToken);
-        if (request.ApplyAndRestart &&
-            await IsRunningAsync(server.Id, cancellationToken))
+        try
         {
-            await orchestrator.RestartAsync(server.Id, cancellationToken);
-        }
+            await WriteManagedFileAsync(
+                server.RootPath,
+                metadataRelativePath,
+                JsonSerializer.Serialize(
+                    updatedMetadata,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                    {
+                        WriteIndented = true
+                    }),
+                cancellationToken);
+            var configurationPath =
+                PalworldConfigurationFile.ResolvePath(server.RootPath);
+            if (File.Exists(configurationPath))
+            {
+                var document = await PalworldConfigurationFile.ReadAsync(
+                    server.RootPath,
+                    cancellationToken);
+                await PalworldConfigurationFile.WriteAtomicAsync(
+                    document,
+                    PalworldSettingsSerializer.Merge(
+                        document.Content,
+                        settings),
+                    cancellationToken);
+            }
+            else
+            {
+                await WriteManagedFileAsync(
+                    server.RootPath,
+                    configurationRelativePath,
+                    PalworldSettingsSerializer.Serialize(settings),
+                    cancellationToken);
+            }
 
-        return OperationResult.Ok();
+            var verifiedDocument = await PalworldConfigurationFile.ReadAsync(
+                server.RootPath,
+                cancellationToken);
+            var verifiedValues = PalworldSettingsSerializer.ParseValues(
+                verifiedDocument.Content);
+            if (!verifiedValues.TryGetValue("ServerName", out var serverName) ||
+                !PalworldSettingsSerializer.ReadText(serverName).Equals(
+                    settings.ServerName,
+                    StringComparison.Ordinal) ||
+                !verifiedValues.TryGetValue("PublicPort", out var publicPort) ||
+                !int.TryParse(
+                    publicPort,
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var verifiedPort) ||
+                verifiedPort != settings.Port)
+            {
+                throw new InvalidDataException(
+                    "The Palworld configuration did not pass read-back verification.");
+            }
+
+            await serverStore.UpsertAsync(
+                server with
+                {
+                    Name = settings.ServerName,
+                    Port = settings.Port
+                },
+                server.State,
+                cancellationToken);
+            var restarted = request.ApplyAndRestart &&
+                await IsRunningAsync(server.Id, cancellationToken);
+            if (restarted)
+            {
+                _ = await orchestrator.RestartAsync(server.Id, cancellationToken);
+            }
+
+            await restorePoints.CompleteAsync(
+                server.Id,
+                restorePoint.Id,
+                restarted,
+                cancellationToken);
+            return OperationResult.Ok();
+        }
+        catch (Exception exception)
+        {
+            return await RecoverConfigurationFailureAsync(
+                server.Id,
+                restorePoint.Id,
+                "PalworldSettingsApplyFailed",
+                exception,
+                cancellationToken);
+        }
     }
 
     public async Task<MinecraftPlayersSnapshot> GetMinecraftPlayersAsync(
@@ -427,12 +675,50 @@ public sealed partial class ServerConfigurationService(
         CancellationToken cancellationToken) =>
         await processSupervisor.GetSnapshotAsync(serverId, cancellationToken) is not null;
 
+    private async Task<OperationResult> RecoverConfigurationFailureAsync(
+        Guid serverId,
+        string restorePointId,
+        string errorCode,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        var recovery = await restorePoints.RestoreAsync(
+            serverId,
+            new ConfigurationRestorePointRestoreRequest(
+                restorePointId,
+                ConfirmRestart: true),
+            cancellationToken);
+        return OperationResult.Fail(
+            errorCode,
+            recovery.Success
+                ? $"The settings operation failed and the previous known-working configuration was restored: {exception.Message}"
+                : $"The settings operation failed: {exception.Message} Automatic recovery also failed: {recovery.Message}");
+    }
+
     private static IReadOnlyDictionary<string, string> ReadProperties(string rootPath)
     {
         var path = Path.Combine(rootPath, "server.properties");
         return File.Exists(path)
             ? MinecraftPropertiesSerializer.Parse(File.ReadAllText(path))
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    internal static string MergeMinecraftMemoryArguments(
+        string existing,
+        int minimumMemoryMb,
+        int maximumMemoryMb)
+    {
+        var lines = existing
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line =>
+                !line.StartsWith("-Xms", StringComparison.OrdinalIgnoreCase) &&
+                !line.StartsWith("-Xmx", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        lines.Insert(0, $"-Xmx{maximumMemoryMb}M");
+        lines.Insert(0, $"-Xms{minimumMemoryMb}M");
+        return string.Join(Environment.NewLine, lines) +
+               Environment.NewLine;
     }
 
     private static async Task WriteManagedFileAsync(

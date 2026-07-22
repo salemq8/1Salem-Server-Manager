@@ -27,6 +27,10 @@
                                Margin="0,5,0,0"
                                Foreground="{DynamicResource MutedTextBrush}"
                                TextWrapping="Wrap" />
+                    <TextBlock x:Name="UnknownSettingsText"
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
                 <WrapPanel Grid.Column="1" HorizontalAlignment="Right">
                     <TextBox x:Name="SearchBox"
@@ -84,18 +88,18 @@
                                         Binding="{Binding DisplayName}"
                                         Width="1.5*" />
                     <DataGridTextColumn Header="Current"
-                                        Binding="{Binding CurrentValue}"
+                                        Binding="{Binding CurrentValue, Mode=OneWay}"
                                         IsReadOnly="True"
                                         Width="*" />
                     <DataGridTextColumn Header="Pending"
                                         Binding="{Binding PendingValue, UpdateSourceTrigger=PropertyChanged}"
                                         Width="*" />
                     <DataGridTextColumn Header="Default"
-                                        Binding="{Binding DefaultValue}"
+                                        Binding="{Binding DefaultValue, Mode=OneWay}"
                                         IsReadOnly="True"
                                         Width="*" />
                     <DataGridCheckBoxColumn Header="Restart"
-                                            Binding="{Binding RestartRequired}"
+                                            Binding="{Binding RestartRequired, Mode=OneWay}"
                                             IsReadOnly="True"
                                             Width="75" />
                 </DataGrid.Columns>
@@ -216,6 +220,9 @@
                     <Button Content="Import"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Click="Import_Click" />
+                    <Button Content="Open Raw File"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="OpenRawFile_Click" />
                     <Button Content="Save for Next Restart"
                             Click="SaveNextRestart_Click" />
                     <Button Content="Apply and Restart"

@@ -95,12 +95,46 @@ public sealed class ApplicationUpdateTests : IDisposable
     }
 
     [Fact]
+    public void ZipSafety_RejectsCaseCollisions()
+    {
+        var package = Path.Combine(CreateDirectory("case-collision"), "unsafe.zip");
+        using (var archive = ZipFile.Open(package, ZipArchiveMode.Create))
+        {
+            WriteEntry(archive, "Client/1Salem.ServerManager.exe", "client");
+            WriteEntry(archive, "client/1salem.servermanager.exe", "collision");
+            WriteEntry(archive, "Agent/1Salem.ServerManager.Agent.exe", "agent");
+        }
+
+        Assert.Throws<InvalidDataException>(
+            () => UpdatePackageSecurity.ValidateArchive(package));
+    }
+
+    [Theory]
+    [InlineData("Client/ProgramData/server-manager.db")]
+    [InlineData("Agent/SaveGames/Level.sav")]
+    [InlineData("Client/playit.toml")]
+    [InlineData("Client/backups/private.zip")]
+    public void ZipSafety_RejectsServerDataAndSecretLikeFiles(string unsafePath)
+    {
+        var package = Path.Combine(CreateDirectory(Guid.NewGuid().ToString("N")), "unsafe.zip");
+        using (var archive = ZipFile.Open(package, ZipArchiveMode.Create))
+        {
+            WriteEntry(archive, "Client/1Salem.ServerManager.exe", "client");
+            WriteEntry(archive, "Agent/1Salem.ServerManager.Agent.exe", "agent");
+            WriteEntry(archive, unsafePath, "private");
+        }
+
+        Assert.Throws<InvalidDataException>(
+            () => UpdatePackageSecurity.ValidateArchive(package));
+    }
+
+    [Fact]
     public async Task UpdateStaging_DownloadsAndVerifiesPackage()
     {
         var package = CreatePackageBytes();
         var hash = Convert.ToHexString(SHA256.HashData(package));
         var handler = new UpdateHttpHandler(
-            CreateManifestJson("1.4.0", package.Length, hash),
+            CreateManifestJson("9.9.9", package.Length, hash),
             package);
         var coordinator = CreateCoordinator(handler, "staging");
         await coordinator.InitializeAsync();
@@ -135,7 +169,7 @@ public sealed class ApplicationUpdateTests : IDisposable
         var package = CreatePackageBytes();
         var handler = new UpdateHttpHandler(
             CreateManifestJson(
-                "1.4.0",
+                "9.9.9",
                 package.Length,
                 new string('0', 64)),
             package);

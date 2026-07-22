@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>1Salem.ServerManager.Launcher</AssemblyName>
+    <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ServerManager.Contracts\ServerManager.Contracts.csproj" />
+  </ItemGroup>
+</Project>

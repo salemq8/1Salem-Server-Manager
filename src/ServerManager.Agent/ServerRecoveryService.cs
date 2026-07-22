@@ -19,6 +19,31 @@ public sealed class ServerRecoveryService(
             var servers = await serverStore.ListAsync(stoppingToken);
             foreach (var server in servers)
             {
+                try
+                {
+                    var adopted = await orchestrator.AdoptExistingAsync(
+                        server.Id,
+                        stoppingToken);
+                    if (adopted is not null)
+                    {
+                        logger.LogInformation(
+                            "Re-adopted existing {Game} server {ServerId} with PID {ProcessId}.",
+                            server.Game,
+                            server.Id,
+                            adopted.ProcessId);
+                        continue;
+                    }
+                }
+                catch (Exception exception) when (
+                    exception is InvalidOperationException or
+                        System.ComponentModel.Win32Exception or UnauthorizedAccessException)
+                {
+                    logger.LogWarning(
+                        exception,
+                        "Existing process re-adoption was not available for server {ServerId}; normal recovery policy will continue.",
+                        server.Id);
+                }
+
                 if (!ServerRecoveryPolicy.ShouldAutoStart(
                         server.AutoStart,
                         Directory.Exists(server.RootPath)))

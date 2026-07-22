@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>1Salem.ServerManager.Updater</AssemblyName>
     <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerManager.Contracts\ServerManager.Contracts.csproj" />

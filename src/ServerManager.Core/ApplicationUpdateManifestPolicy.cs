@@ -49,10 +49,14 @@ public static class ApplicationUpdateManifestPolicy
             throw new InvalidDataException("The manifest publication time is missing.");
         }
 
-        if (!manifest.RequiresServiceRestart)
+        if (!manifest.RequiresServiceRestart &&
+            !string.Equals(
+                manifest.AgentUpdateMode,
+                "StageIfBusy",
+                StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException(
-                "This package contains Agent binaries and must declare requiresServiceRestart.");
+                "An Agent package must restart the service or declare StageIfBusy.");
         }
     }
 

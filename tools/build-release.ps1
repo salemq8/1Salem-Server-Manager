@@ -1,14 +1,21 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipValidation
+    [switch]$SkipValidation,
+    [switch]$RebuildSameVersion
 )
 
 $ErrorActionPreference = 'Stop'
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $artifactsRoot = Join-Path $root 'artifacts'
-$releaseVersion = '1.3.1'
-$releaseRoot = Join-Path $artifactsRoot "release\$releaseVersion"
+$releaseVersion = (Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw).Trim()
+if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Stable releases require a three-part VERSION. Found '$releaseVersion'."
+}
+
+$releaseBase = Join-Path $artifactsRoot 'release'
+$canonicalReleaseRoot = Join-Path $releaseBase $releaseVersion
 $stagingRoot = Join-Path $artifactsRoot "staging\$releaseVersion"
+$validationRoot = Join-Path $artifactsRoot "validation\$releaseVersion\palworld-overview"
 $dotnet = Join-Path $root '.tools\dotnet\dotnet.exe'
 if (-not (Test-Path -LiteralPath $dotnet)) {
     $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
@@ -22,52 +29,121 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:DOTNET_NOLOGO = '1'
 
 function Assert-Success {
-    param([string]$Step)
+    param([Parameter(Mandatory)][string]$Step)
     if ($LASTEXITCODE -ne 0) {
         throw "$Step failed with exit code $LASTEXITCODE."
     }
 }
 
-function Reset-ArtifactDirectory {
-    param([string]$Path)
-    $resolved = [System.IO.Path]::GetFullPath($Path)
-    $allowedRoot = [System.IO.Path]::GetFullPath($artifactsRoot) +
+function Assert-InsideArtifacts {
+    param([Parameter(Mandatory)][string]$Path)
+    $candidate = [System.IO.Path]::GetFullPath($Path)
+    $prefix = [System.IO.Path]::GetFullPath($artifactsRoot).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) +
         [System.IO.Path]::DirectorySeparatorChar
-    if (-not $resolved.StartsWith($allowedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to reset a directory outside the repository artifacts root: $resolved"
+    if (-not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to modify a path outside artifacts: $candidate"
     }
+    return $candidate
+}
 
+function New-EmptyStagingDirectory {
+    param([Parameter(Mandatory)][string]$Path)
+    $resolved = Assert-InsideArtifacts $Path
     if (Test-Path -LiteralPath $resolved) {
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
-
     New-Item -ItemType Directory -Path $resolved | Out-Null
+}
+
+function Test-ReleaseIntegrity {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Version
+    )
+    $required = @(
+        'Setup.exe',
+        'Portable.zip',
+        'Source.zip',
+        "1SalemServerManager-Update-$Version.zip",
+        'version.json',
+        'SHA256SUMS.txt',
+        'RELEASE_NOTES.md'
+    )
+    foreach ($name in $required) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Path $name) -PathType Leaf)) {
+            return $false
+        }
+    }
+    try {
+        $manifest = Get-Content -LiteralPath (Join-Path $Path 'version.json') -Raw |
+            ConvertFrom-Json
+        $packageName = "1SalemServerManager-Update-$Version.zip"
+        $packagePath = Join-Path $Path $packageName
+        if ($manifest.version -ne $Version -or
+            $manifest.packageFileName -ne $packageName -or
+            $manifest.releaseChannel -ne 'Stable' -or
+            $manifest.archiveValidation -ne 'passed' -or
+            $manifest.dashboardShutdownMode -ne 'VerifiedExactProcess' -or
+            -not ($manifest.releaseNotes -is [string]) -or
+            (Get-Item -LiteralPath (Join-Path $Path 'version.json')).Length -gt 1MB -or
+            [int64]$manifest.packageSize -ne (Get-Item -LiteralPath $packagePath).Length -or
+            $manifest.sha256 -ne (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash) {
+            return $false
+        }
+        $expected = @{}
+        foreach ($line in Get-Content -LiteralPath (Join-Path $Path 'SHA256SUMS.txt')) {
+            if ($line -match '^([0-9A-Fa-f]{64}) \*(.+)$') {
+                $expected[$Matches[2]] = $Matches[1].ToUpperInvariant()
+            }
+        }
+        foreach ($name in $required | Where-Object { $_ -ne 'SHA256SUMS.txt' }) {
+            if (-not $expected.ContainsKey($name)) {
+                return $false
+            }
+            $actual = (Get-FileHash -LiteralPath (Join-Path $Path $name) -Algorithm SHA256).Hash
+            if ($actual -ne $expected[$name]) {
+                return $false
+            }
+        }
+        foreach ($archive in @(
+            (Join-Path $Path 'Portable.zip'),
+            (Join-Path $Path 'Source.zip'),
+            $packagePath)) {
+            Assert-ArchiveSafe $archive
+        }
+        return $true
+    }
+    catch {
+        return $false
+    }
 }
 
 function New-ZipFromDirectory {
     param(
-        [string]$Source,
-        [string]$Destination
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Destination
     )
     if (Test-Path -LiteralPath $Destination) {
-        Remove-Item -LiteralPath $Destination -Force
+        throw "Archive destination already exists: $Destination"
     }
-
     Compress-Archive -Path (Join-Path $Source '*') -DestinationPath $Destination `
         -CompressionLevel Optimal
 }
 
 function New-SourceArchive {
-    param([string]$Destination)
+    param([Parameter(Mandatory)][string]$Destination)
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     if (Test-Path -LiteralPath $Destination) {
-        Remove-Item -LiteralPath $Destination -Force
+        throw "Source archive destination already exists: $Destination"
     }
-
-    $excludedSegments = @(
+    $excluded = @(
         '\.git\',
+        '\.agents\',
         '\.tools\',
         '\.local-data\',
+        '\.test-localappdata\',
         '\artifacts\',
         '\bin\',
         '\obj\',
@@ -86,10 +162,8 @@ function New-SourceArchive {
         try {
             Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
                 $candidate = $_.FullName
-                -not ($excludedSegments | Where-Object {
-                    $candidate.IndexOf(
-                        $_,
-                        [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                -not ($excluded | Where-Object {
+                    $candidate.IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                 })
             } | ForEach-Object {
                 $relative = $_.FullName.Substring($root.Length).TrimStart(
@@ -112,12 +186,94 @@ function New-SourceArchive {
     }
 }
 
-Reset-ArtifactDirectory -Path $releaseRoot
-Reset-ArtifactDirectory -Path $stagingRoot
+function Assert-ArchiveSafe {
+    param([Parameter(Mandatory)][string]$Path)
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $isSourceArchive = (Split-Path $Path -Leaf) -eq 'Source.zip'
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $names = [System.Collections.Generic.HashSet[string]]::new(
+            [System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($entry in $archive.Entries) {
+            $name = $entry.FullName.Replace('\', '/')
+            if ([string]::IsNullOrWhiteSpace($name) -or
+                $name.StartsWith('/') -or
+                [System.IO.Path]::IsPathRooted($name) -or
+                $name -match '^[A-Za-z]:' -or
+                ($name.Split('/') | Where-Object { $_ -in '.', '..' })) {
+                throw "Unsafe archive path in $Path`: $name"
+            }
+            if (-not $names.Add($name)) {
+                throw "Duplicate or case-colliding archive path in $Path`: $name"
+            }
+            $unixType = (($entry.ExternalAttributes -shr 16) -band 0xF000)
+            if ($unixType -eq 0xA000) {
+                throw "Symbolic link in $Path`: $name"
+            }
+            $segments = $name.Split('/')
+            if ($segments -contains '.local-data' -or
+                $segments -contains 'SaveGames' -or
+                $segments -contains 'ProgramData' -or
+                ((-not $isSourceArchive) -and $segments -contains 'backups') -or
+                $name -match '(?i)(playit\.toml|credentials?\.|private[-_]?config|\.pfx$|\.pem$|\.key$|\.sav$|\.db$)') {
+                throw "Server data or secret-like content in $Path`: $name"
+            }
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
+function Assert-ProductVersion {
+    param([Parameter(Mandatory)][string]$Path)
+    $reported = (Get-Item -LiteralPath $Path).VersionInfo.ProductVersion
+    if ($reported -ne $releaseVersion) {
+        throw "$(Split-Path $Path -Leaf) reports product version '$reported', expected '$releaseVersion'."
+    }
+}
+
+New-Item -ItemType Directory -Path $releaseBase -Force | Out-Null
+if (Test-Path -LiteralPath $canonicalReleaseRoot) {
+    if (-not (Test-ReleaseIntegrity $canonicalReleaseRoot $releaseVersion)) {
+        $failedRoot = Join-Path $releaseBase (
+            "failed\{0}-{1}" -f $releaseVersion, [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+        $null = Assert-InsideArtifacts $failedRoot
+        New-Item -ItemType Directory -Path (Split-Path $failedRoot -Parent) -Force | Out-Null
+        Move-Item -LiteralPath $canonicalReleaseRoot -Destination $failedRoot
+        Write-Host "Preserved incomplete release at $failedRoot"
+    }
+}
+
+$preflightArguments = @(
+    'run',
+    '--project', (Join-Path $root 'tools\ServerManager.Versioning\ServerManager.Versioning.csproj'),
+    '-c', 'Release',
+    '--',
+    'preflight',
+    '--repo', $root,
+    '--target', $releaseVersion
+)
+if ($RebuildSameVersion) {
+    $preflightArguments += '--rebuild-same-version'
+}
+& $dotnet @preflightArguments
+Assert-Success 'Release version pre-flight'
+
+$releaseRoot = $canonicalReleaseRoot
+if ($RebuildSameVersion -and (Test-Path -LiteralPath $canonicalReleaseRoot)) {
+    $releaseRoot = Join-Path $releaseBase (
+        "rebuilds\{0}-{1}" -f $releaseVersion, [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+}
+if (Test-Path -LiteralPath $releaseRoot) {
+    throw "Release output already exists and will not be overwritten: $releaseRoot"
+}
+New-Item -ItemType Directory -Path $releaseRoot | Out-Null
+New-EmptyStagingDirectory $stagingRoot
+New-Item -ItemType Directory -Path $validationRoot -Force | Out-Null
 
 if (-not $SkipValidation) {
-    & $dotnet restore (Join-Path $root '1SalemServerManager.sln') `
-        -p:NuGetAudit=false
+    & $dotnet restore (Join-Path $root '1SalemServerManager.sln') -p:NuGetAudit=false
     Assert-Success 'dotnet restore'
     & $dotnet build (Join-Path $root '1SalemServerManager.sln') -c Release --no-restore `
         -p:NuGetAudit=false
@@ -125,100 +281,178 @@ if (-not $SkipValidation) {
     & $dotnet test (Join-Path $root '1SalemServerManager.sln') -c Release `
         --no-build --no-restore -p:NuGetAudit=false
     Assert-Success 'dotnet test'
+    & $dotnet format (Join-Path $root '1SalemServerManager.sln') `
+        --verify-no-changes --no-restore
+    Assert-Success 'dotnet format --verify-no-changes'
 }
 
 $publishRoot = Join-Path $stagingRoot 'publish'
 $clientPublish = Join-Path $publishRoot 'Client'
 $agentPublish = Join-Path $publishRoot 'Agent'
 $updaterPublish = Join-Path $publishRoot 'Updater'
+$launcherPublish = Join-Path $publishRoot 'Launcher'
+$maintenancePublish = Join-Path $publishRoot 'Maintenance'
 $setupPublish = Join-Path $publishRoot 'SetupHost'
+$buildRoot = Join-Path $stagingRoot 'build'
 
-& $dotnet publish (Join-Path $root 'src\ServerManager.Client\ServerManager.Client.csproj') `
-    -c Release -r win-x64 --self-contained true `
-    -p:NuGetAudit=false `
-    -p:DebugType=None -p:DebugSymbols=false -o $clientPublish
-Assert-Success 'Client publish'
+function Publish-Application {
+    param(
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][string]$Output,
+        [Parameter(Mandatory)][string]$BuildName,
+        [switch]$SingleFile,
+        [string]$PayloadArchive
+    )
+    $arguments = @(
+        'publish', $Project,
+        '-c', 'Release',
+        '-r', 'win-x64',
+        '--self-contained', 'true',
+        '-p:NuGetAudit=false',
+        "-p:BaseOutputPath=$((Join-Path $buildRoot $BuildName) + '/')",
+        '-p:DebugType=None',
+        '-p:DebugSymbols=false',
+        '-o', $Output
+    )
+    if ($SingleFile) {
+        $arguments += @(
+            '-p:PublishSingleFile=true',
+            '-p:IncludeNativeLibrariesForSelfExtract=true',
+            '-p:EnableCompressionInSingleFile=true'
+        )
+    }
+    if (-not [string]::IsNullOrWhiteSpace($PayloadArchive)) {
+        $arguments += "-p:PayloadArchive=$PayloadArchive"
+    }
+    & $dotnet @arguments
+    Assert-Success "Publish $BuildName"
+}
 
-& $dotnet publish (Join-Path $root 'src\ServerManager.Agent\ServerManager.Agent.csproj') `
-    -c Release -r win-x64 --self-contained true `
-    -p:NuGetAudit=false `
-    -p:DebugType=None -p:DebugSymbols=false -o $agentPublish
-Assert-Success 'Agent publish'
-
-& $dotnet publish (Join-Path $root 'src\ServerManager.Updater\ServerManager.Updater.csproj') `
-    -c Release -r win-x64 --self-contained true `
-    -p:NuGetAudit=false `
-    -p:DebugType=None -p:DebugSymbols=false -o $updaterPublish
-Assert-Success 'Updater publish'
+Publish-Application `
+    (Join-Path $root 'src\ServerManager.Client\ServerManager.Client.csproj') `
+    $clientPublish 'Client'
+Publish-Application `
+    (Join-Path $root 'src\ServerManager.Agent\ServerManager.Agent.csproj') `
+    $agentPublish 'Agent'
+Publish-Application `
+    (Join-Path $root 'src\ServerManager.Updater\ServerManager.Updater.csproj') `
+    $updaterPublish 'Updater'
+Publish-Application `
+    (Join-Path $root 'src\ServerManager.Launcher\ServerManager.Launcher.csproj') `
+    $launcherPublish 'Launcher' -SingleFile
+Publish-Application `
+    (Join-Path $root 'tools\ServerManager.Setup\ServerManager.Setup.csproj') `
+    $maintenancePublish 'Maintenance' -SingleFile
 
 Copy-Item -LiteralPath $updaterPublish `
     -Destination (Join-Path $clientPublish 'Updater') -Recurse
+New-Item -ItemType Directory -Path (Join-Path $clientPublish 'Launcher') | Out-Null
+$launcherHost = Get-ChildItem -LiteralPath $launcherPublish -Filter '*.exe' |
+    Where-Object { $_.Name -eq '1Salem.ServerManager.Launcher.exe' } |
+    Select-Object -First 1
+if ($null -eq $launcherHost) {
+    throw 'Published Stable launcher was not found.'
+}
+Copy-Item -LiteralPath $launcherHost.FullName `
+    -Destination (Join-Path $clientPublish 'Launcher\1Salem.ServerManager.Launcher.exe')
+
+foreach ($path in @(
+    (Join-Path $clientPublish '1Salem.ServerManager.exe'),
+    (Join-Path $agentPublish '1Salem.ServerManager.Agent.exe'),
+    (Join-Path $updaterPublish '1Salem.ServerManager.Updater.exe'),
+    (Join-Path $clientPublish 'Launcher\1Salem.ServerManager.Launcher.exe')
+)) {
+    Assert-ProductVersion $path
+}
 
 $portableRoot = Join-Path $stagingRoot 'Portable'
 New-Item -ItemType Directory -Path $portableRoot | Out-Null
-Copy-Item -LiteralPath $clientPublish -Destination (Join-Path $portableRoot 'Client') `
-    -Recurse
-Copy-Item -LiteralPath $agentPublish -Destination (Join-Path $portableRoot 'Agent') `
-    -Recurse
+Copy-Item -LiteralPath $clientPublish -Destination (Join-Path $portableRoot 'Client') -Recurse
+Copy-Item -LiteralPath $agentPublish -Destination (Join-Path $portableRoot 'Agent') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'CHANGELOG.md') -Destination $portableRoot
-Copy-Item -LiteralPath (Join-Path $root 'docs') -Destination $portableRoot -Recurse
-New-ZipFromDirectory -Source $portableRoot `
-    -Destination (Join-Path $releaseRoot 'Portable.zip')
+Copy-Item -LiteralPath (Join-Path $root 'VERSION') -Destination $portableRoot
+New-ZipFromDirectory $portableRoot (Join-Path $releaseRoot 'Portable.zip')
 
 $payloadRoot = Join-Path $stagingRoot 'Payload'
 New-Item -ItemType Directory -Path $payloadRoot | Out-Null
-Copy-Item -LiteralPath $clientPublish -Destination (Join-Path $payloadRoot 'Client') `
-    -Recurse
-Copy-Item -LiteralPath $agentPublish -Destination (Join-Path $payloadRoot 'Agent') `
-    -Recurse
-$payloadZip = Join-Path $stagingRoot 'Payload.zip'
-New-ZipFromDirectory -Source $payloadRoot -Destination $payloadZip
+Copy-Item -LiteralPath $clientPublish -Destination (Join-Path $payloadRoot 'Client') -Recurse
+Copy-Item -LiteralPath $agentPublish -Destination (Join-Path $payloadRoot 'Agent') -Recurse
+New-Item -ItemType Directory -Path (Join-Path $payloadRoot 'Maintenance') | Out-Null
+$maintenanceHost = Get-ChildItem -LiteralPath $maintenancePublish -Filter '*.exe' |
+    Where-Object { $_.Name -eq '1Salem.ServerManager.Setup.exe' } |
+    Select-Object -First 1
+if ($null -eq $maintenanceHost) {
+    throw 'Published maintenance host was not found.'
+}
+Assert-ProductVersion $maintenanceHost.FullName
+Copy-Item -LiteralPath $maintenanceHost.FullName `
+    -Destination (Join-Path $payloadRoot 'Maintenance\Uninstall 1Salem Server Manager.exe')
+
 $updatePackageName = "1SalemServerManager-Update-$releaseVersion.zip"
-Copy-Item -LiteralPath $payloadZip `
-    -Destination (Join-Path $releaseRoot $updatePackageName)
+$updatePackagePath = Join-Path $releaseRoot $updatePackageName
+New-ZipFromDirectory $payloadRoot $updatePackagePath
 
-& $dotnet publish (Join-Path $root 'tools\ServerManager.Setup\ServerManager.Setup.csproj') `
-    -c Release -r win-x64 --self-contained true `
-    -p:NuGetAudit=false `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true `
-    "-p:PayloadArchive=$payloadZip" `
-    -p:DebugType=None -p:DebugSymbols=false -o $setupPublish
-Assert-Success 'Embedded-payload Setup.exe publish'
-
+$payloadZip = Join-Path $stagingRoot 'Payload.zip'
+New-ZipFromDirectory $payloadRoot $payloadZip
+Publish-Application `
+    (Join-Path $root 'tools\ServerManager.Setup\ServerManager.Setup.csproj') `
+    $setupPublish 'SetupHost' -SingleFile -PayloadArchive $payloadZip
 $setupHost = Get-ChildItem -LiteralPath $setupPublish -Filter '*.exe' |
+    Where-Object { $_.Name -eq '1Salem.ServerManager.Setup.exe' } |
     Select-Object -First 1
 if ($null -eq $setupHost) {
     throw 'Published Setup.exe was not found.'
 }
-Copy-Item -LiteralPath $setupHost.FullName `
-    -Destination (Join-Path $releaseRoot 'Setup.exe')
+Assert-ProductVersion $setupHost.FullName
+Copy-Item -LiteralPath $setupHost.FullName -Destination (Join-Path $releaseRoot 'Setup.exe')
 
-New-SourceArchive -Destination (Join-Path $releaseRoot 'Source.zip')
-Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $releaseRoot
-Copy-Item -LiteralPath (Join-Path $root 'CHANGELOG.md') -Destination $releaseRoot
-Copy-Item -LiteralPath (Join-Path $root 'docs\RELEASE_NOTES_1.3.1.md') `
-    -Destination (Join-Path $releaseRoot 'RELEASE_NOTES.md')
+New-SourceArchive (Join-Path $releaseRoot 'Source.zip')
+$notesSource = Join-Path $root "docs\RELEASE_NOTES_$releaseVersion.md"
+if (-not (Test-Path -LiteralPath $notesSource)) {
+    throw "Release notes are missing: $notesSource"
+}
+Copy-Item -LiteralPath $notesSource -Destination (Join-Path $releaseRoot 'RELEASE_NOTES.md')
 
-$updatePackagePath = Join-Path $releaseRoot $updatePackageName
-$updatePackageHash = Get-FileHash -LiteralPath $updatePackagePath -Algorithm SHA256
+$updateHash = Get-FileHash -LiteralPath $updatePackagePath -Algorithm SHA256
+$notesText = [System.IO.File]::ReadAllText($notesSource)
+$published = [DateTimeOffset]::UtcNow.ToString('O')
 $versionDocument = [ordered]@{
     version = $releaseVersion
-    minimumSupportedVersion = '1.2.1'
-    releaseChannel = 'Stable'
+    minimumSupportedVersion = '1.2.0'
+    packageFileName = $updatePackageName
     packageUrl = "https://updates.1salem.app/server-manager/stable/$releaseVersion/$updatePackageName"
     packageSize = (Get-Item -LiteralPath $updatePackagePath).Length
-    sha256 = $updatePackageHash.Hash
+    sha256 = $updateHash.Hash
+    releaseChannel = 'Stable'
+    releaseNotes = $notesText
     releaseNotesUrl = "https://updates.1salem.app/server-manager/stable/$releaseVersion/RELEASE_NOTES.md"
-    publishedAt = [DateTimeOffset]::UtcNow.ToString('O')
+    publishedAt = $published
+    publishedUtc = $published
+    rollbackCompatibility = '1.2.x, 1.3.0, 1.3.1, and the immediately previous validated Stable version'
+    agentUpdateMode = 'StageIfBusy'
+    dashboardShutdownMode = 'VerifiedExactProcess'
     requiresElevation = $true
-    requiresServiceRestart = $true
+    requiresServiceRestart = $false
     requiresFullSetup = $false
+    validationPath = "artifacts/validation/$releaseVersion/palworld-overview"
+    archiveValidation = 'pending'
 }
-$versionPath = Join-Path $releaseRoot 'version.json'
-$versionDocument | ConvertTo-Json -Depth 5 |
-    Set-Content -LiteralPath $versionPath -Encoding utf8
+$versionDocument | ConvertTo-Json -Depth 6 |
+    Set-Content -LiteralPath (Join-Path $releaseRoot 'version.json') -Encoding utf8
+
+foreach ($archive in @(
+    (Join-Path $releaseRoot 'Portable.zip'),
+    (Join-Path $releaseRoot 'Source.zip'),
+    $updatePackagePath
+)) {
+    Assert-ArchiveSafe $archive
+    [System.IO.Compression.ZipFile]::OpenRead($archive).Dispose()
+}
+
+$versionDocument.archiveValidation = 'passed'
+$versionDocument | ConvertTo-Json -Depth 6 |
+    Set-Content -LiteralPath (Join-Path $releaseRoot 'version.json') -Encoding utf8
 
 $checksumFiles = @(
     'Setup.exe',
@@ -235,5 +469,26 @@ $checksumLines = foreach ($name in $checksumFiles) {
 $checksumLines | Set-Content -LiteralPath (Join-Path $releaseRoot 'SHA256SUMS.txt') `
     -Encoding ascii
 
-Write-Host "Release artifacts created in $releaseRoot"
+$requiredFiles = @(
+    'Setup.exe',
+    'Portable.zip',
+    'Source.zip',
+    $updatePackageName,
+    'version.json',
+    'SHA256SUMS.txt',
+    'RELEASE_NOTES.md'
+)
+foreach ($name in $requiredFiles) {
+    $path = Join-Path $releaseRoot $name
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Required release file is missing: $path"
+    }
+    $stream = [System.IO.File]::OpenRead($path)
+    $stream.Dispose()
+}
+if (-not (Test-ReleaseIntegrity $releaseRoot $releaseVersion)) {
+    throw 'The completed release failed its checksum/integrity verification.'
+}
+
+Write-Host "Immutable release created in $releaseRoot"
 Get-ChildItem -LiteralPath $releaseRoot | Select-Object Name, Length

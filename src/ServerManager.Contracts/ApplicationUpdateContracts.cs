@@ -3,7 +3,8 @@ namespace ServerManager.Contracts;
 public enum ApplicationUpdateChannel
 {
     Stable = 1,
-    Beta = 2
+    Preview = 2,
+    Development = 3
 }
 
 public enum ApplicationUpdateStage
@@ -18,7 +19,10 @@ public enum ApplicationUpdateStage
     Succeeded = 7,
     Failed = 8,
     RolledBack = 9,
-    FullSetupRequired = 10
+    FullSetupRequired = 10,
+    UpdatePendingRestart = 11,
+    InstalledVersionNewer = 12,
+    IncompleteComponentUpdate = 13
 }
 
 public sealed record ApplicationUpdateManifest(
@@ -32,7 +36,11 @@ public sealed record ApplicationUpdateManifest(
     DateTimeOffset PublishedAt,
     bool RequiresElevation,
     bool RequiresServiceRestart,
-    bool RequiresFullSetup);
+    bool RequiresFullSetup,
+    string? RollbackCompatibility = null,
+    string? PackageFileName = null,
+    string? ReleaseNotes = null,
+    string? AgentUpdateMode = null);
 
 public sealed record ApplicationUpdateHistoryEntry(
     string Version,

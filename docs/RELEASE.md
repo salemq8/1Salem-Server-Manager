@@ -2,7 +2,7 @@
 
 ## Version
 
-`1.3.1`
+Read from `VERSION`. Never duplicate the current product version in this guide.
 
 ## Required gate
 
@@ -15,20 +15,20 @@ powershell -ExecutionPolicy Bypass -File .\tools\build-release.ps1
 
 The release script repeats restore/build/test, publishes win-x64 Client, Agent,
 Updater,
-and setup host, creates the setup payload, builds `Setup.exe`, creates
+Stable launcher, and setup host, creates the setup payload, builds `Setup.exe`, creates
 `Portable.zip`, `Source.zip`, and
-`1SalemServerManager-Update-1.3.1.zip`, writes the HTTPS update manifest, and
+`1SalemServerManager-Update-<VERSION>.zip`, writes the HTTPS update manifest, and
 writes SHA-256 hashes.
 
 ## Artifact verification
 
-From `artifacts\release\1.3.1`:
+From `artifacts\release\<VERSION>`:
 
 ```powershell
 Get-FileHash .\Setup.exe -Algorithm SHA256
 Get-FileHash .\Portable.zip -Algorithm SHA256
 Get-FileHash .\Source.zip -Algorithm SHA256
-Get-FileHash .\1SalemServerManager-Update-1.3.1.zip -Algorithm SHA256
+Get-FileHash .\1SalemServerManager-Update-<VERSION>.zip -Algorithm SHA256
 ```
 
 Compare the output with `SHA256SUMS.txt`.

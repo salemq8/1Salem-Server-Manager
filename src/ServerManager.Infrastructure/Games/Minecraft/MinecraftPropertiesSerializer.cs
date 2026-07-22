@@ -5,6 +5,34 @@ namespace ServerManager.Infrastructure.Games.Minecraft;
 
 public static class MinecraftPropertiesSerializer
 {
+    public static IReadOnlySet<string> ManagedKeys { get; } =
+        new HashSet<string>(
+            [
+                "allow-flight",
+                "difficulty",
+                "enable-command-block",
+                "enforce-whitelist",
+                "gamemode",
+                "generate-structures",
+                "hardcore",
+                "level-name",
+                "level-seed",
+                "level-type",
+                "max-players",
+                "motd",
+                "online-mode",
+                "pvp",
+                "server-port",
+                "simulation-distance",
+                "spawn-animals",
+                "spawn-monsters",
+                "spawn-npcs",
+                "spawn-protection",
+                "view-distance",
+                "white-list"
+            ],
+            StringComparer.OrdinalIgnoreCase);
+
     private static readonly HashSet<string> Difficulties =
         new(StringComparer.OrdinalIgnoreCase) { "peaceful", "easy", "normal", "hard" };
 
@@ -17,15 +45,25 @@ public static class MinecraftPropertiesSerializer
         var values = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["difficulty"] = settings.Difficulty.ToLowerInvariant(),
-            ["enable-command-block"] = "false",
+            ["allow-flight"] = settings.AllowFlight.ToString().ToLowerInvariant(),
+            ["enable-command-block"] = settings.EnableCommandBlocks.ToString().ToLowerInvariant(),
             ["enforce-whitelist"] = settings.WhitelistEnabled.ToString().ToLowerInvariant(),
+            ["generate-structures"] = settings.GenerateStructures.ToString().ToLowerInvariant(),
             ["gamemode"] = settings.GameMode.ToLowerInvariant(),
             ["hardcore"] = settings.Hardcore.ToString().ToLowerInvariant(),
+            ["level-name"] = Escape(settings.LevelName),
+            ["level-seed"] = Escape(settings.LevelSeed),
+            ["level-type"] = settings.LevelType,
             ["max-players"] = settings.MaxPlayers.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["motd"] = Escape(settings.Motd),
             ["online-mode"] = settings.OnlineMode.ToString().ToLowerInvariant(),
             ["pvp"] = settings.Pvp.ToString().ToLowerInvariant(),
             ["server-port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["spawn-animals"] = settings.SpawnAnimals.ToString().ToLowerInvariant(),
+            ["spawn-monsters"] = settings.SpawnMonsters.ToString().ToLowerInvariant(),
+            ["spawn-npcs"] = settings.SpawnNpcs.ToString().ToLowerInvariant(),
+            ["spawn-protection"] =
+                settings.SpawnProtection.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["simulation-distance"] =
                 settings.SimulationDistance.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["view-distance"] =
@@ -145,6 +183,28 @@ public static class MinecraftPropertiesSerializer
             throw new ArgumentOutOfRangeException(
                 nameof(settings),
                 "View and simulation distances must be between 2 and 32.");
+        }
+
+        if (settings.SpawnProtection is < 0 or > 64)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(settings),
+                "Spawn protection must be between 0 and 64.");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.LevelName) ||
+            settings.LevelName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new ArgumentException(
+                "The Minecraft level name is invalid.",
+                nameof(settings));
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.LevelType))
+        {
+            throw new ArgumentException(
+                "The Minecraft world type is required.",
+                nameof(settings));
         }
     }
 

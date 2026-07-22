@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection;
+using ServerManager.Contracts;
 using ServerManager.Infrastructure.Updates;
 
 namespace ServerManager.Updater;
@@ -10,8 +12,28 @@ public static class Program
         if (args.Contains("--version", StringComparer.OrdinalIgnoreCase) &&
             !args.Contains("--package", StringComparer.OrdinalIgnoreCase))
         {
-            Console.WriteLine("1Salem Server Manager Updater 1.3.1");
+            Console.WriteLine(
+                $"1Salem Server Manager Updater {ProductIdentity.VersionOf(Assembly.GetExecutingAssembly())}");
             return 0;
+        }
+
+        var rollbackIndex = Array.FindIndex(
+            args,
+            value => value.Equals("--validate-rollback", StringComparison.OrdinalIgnoreCase));
+        if (rollbackIndex >= 0)
+        {
+            if (rollbackIndex + 1 >= args.Length)
+            {
+                Console.Error.WriteLine("--validate-rollback requires an absolute snapshot path.");
+                return 2;
+            }
+
+            var valid = VersionedUpdateInstaller.ValidateRollbackSnapshot(
+                Path.GetFullPath(args[rollbackIndex + 1]));
+            Console.WriteLine(valid
+                ? "Rollback snapshot is complete and readable."
+                : "Rollback snapshot is incomplete.");
+            return valid ? 0 : 4;
         }
 
         try
@@ -19,34 +41,77 @@ public static class Program
             var arguments = UpdateArguments.Parse(args);
             if (arguments.WaitProcessId is { } processId)
             {
-                await WaitForProcessAsync(processId, TimeSpan.FromSeconds(30));
+                if (arguments.CloseDashboard)
+                {
+                    await DashboardProcessShutdown.CloseOnlyDashboardAsync(
+                        processId,
+                        arguments.InstallRoot,
+                        arguments.ClientPath);
+                }
+                else
+                {
+                    await WaitForProcessAsync(processId, TimeSpan.FromSeconds(30));
+                }
             }
 
-            var applier = new UpdatePackageApplier();
-            var result = await applier.ApplyAsync(new UpdateApplyOptions(
-                arguments.PackagePath,
-                arguments.InstallRoot,
-                arguments.DataRoot,
-                arguments.Version,
-                arguments.RestartAgent,
-                arguments.ServiceName,
-                arguments.SkipServiceControl,
-                arguments.SkipHealthCheck,
-                new Uri("http://127.0.0.1:5251/health"),
-                arguments.ClientPath));
-            Console.WriteLine(result.Message);
-            if (!result.Success)
+            string launchPath;
+            bool success;
+            bool rolledBack;
+            if (arguments.VersionedInstall)
             {
-                return result.RolledBack ? 3 : 4;
+                var installer = new VersionedUpdateInstaller();
+                var result = await installer.ApplyAsync(new VersionedUpdateOptions(
+                    arguments.PackagePath,
+                    arguments.InstallRoot,
+                    arguments.DataRoot,
+                    arguments.Version,
+                    arguments.ServiceName,
+                    ActivateAgent: arguments.RestartAgent &&
+                        !arguments.DeferAgent &&
+                        !arguments.SkipServiceControl,
+                    AllowSameVersion: arguments.AllowSameVersion,
+                    SkipServiceHealthCheck: arguments.SkipHealthCheck,
+                    HealthUri: new Uri("http://127.0.0.1:5251/health"),
+                    VerifyOnly: arguments.VerifyOnly));
+                Console.WriteLine(result.Message);
+                success = result.Success;
+                rolledBack = result.RolledBack;
+                launchPath = result.StableLauncherPath ?? arguments.ClientPath;
+            }
+            else
+            {
+                var applier = new UpdatePackageApplier();
+                var result = await applier.ApplyAsync(new UpdateApplyOptions(
+                    arguments.PackagePath,
+                    arguments.InstallRoot,
+                    arguments.DataRoot,
+                    arguments.Version,
+                    arguments.RestartAgent,
+                    arguments.ServiceName,
+                    arguments.SkipServiceControl,
+                    arguments.SkipHealthCheck,
+                    new Uri("http://127.0.0.1:5251/health"),
+                    arguments.ClientPath));
+                Console.WriteLine(result.Message);
+                success = result.Success;
+                rolledBack = result.RolledBack;
+                launchPath = arguments.ClientPath;
             }
 
-            if (!arguments.SkipClientStart && File.Exists(arguments.ClientPath))
+            if (!success)
+            {
+                return rolledBack ? 3 : 4;
+            }
+
+            if (!arguments.SkipClientStart &&
+                !arguments.VerifyOnly &&
+                File.Exists(launchPath))
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = arguments.ClientPath,
+                    FileName = launchPath,
                     UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(arguments.ClientPath)!
+                    WorkingDirectory = Path.GetDirectoryName(launchPath)!
                 });
             }
 
@@ -93,7 +158,12 @@ public static class Program
         int? WaitProcessId,
         bool SkipServiceControl,
         bool SkipHealthCheck,
-        bool SkipClientStart)
+        bool SkipClientStart,
+        bool VersionedInstall,
+        bool DeferAgent,
+        bool AllowSameVersion,
+        bool VerifyOnly,
+        bool CloseDashboard)
     {
         public static UpdateArguments Parse(IReadOnlyList<string> args)
         {
@@ -149,7 +219,12 @@ public static class Program
                 waitProcessId,
                 Find("--skip-service-control") >= 0,
                 Find("--skip-health-check") >= 0,
-                Find("--skip-client-start") >= 0);
+                Find("--skip-client-start") >= 0,
+                Find("--versioned-install") >= 0,
+                Find("--defer-agent") >= 0,
+                Find("--allow-same-version") >= 0,
+                Find("--verify-only") >= 0,
+                Find("--close-dashboard") >= 0);
         }
     }
 }

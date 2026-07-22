@@ -36,13 +36,12 @@ public static partial class DiagnosticsService
         Directory.CreateDirectory(staging);
         try
         {
-            var assembly = Assembly.GetExecutingAssembly();
             var resourceProfileSummary =
                 await TryGetResourceProfileSummaryAsync(cancellationToken);
             var report = new
             {
                 Product = "1Salem Server Manager",
-                Version = assembly.GetName().Version?.ToString() ?? "unknown",
+                Version = ProductInfo.Version,
                 CapturedAtUtc = DateTimeOffset.UtcNow,
                 Os = RuntimeInformation.OSDescription,
                 OsArchitecture = RuntimeInformation.OSArchitecture.ToString(),

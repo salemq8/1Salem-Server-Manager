@@ -1,5 +1,61 @@
 # Changelog
 
+## 1.3.2 - 2026-07-22
+
+- Redesigned the Palworld Overview as a responsive live dashboard with compact
+  health badges, six metric cards, explicit quick actions, bounded server
+  activity graphs, recent activity, resource summaries, and separate local and
+  Playit connection cards.
+- Added loading, stale, unavailable, stopped, REST-offline, Playit-offline,
+  minimum-width, dark/light, and Arabic RTL dashboard behavior and validation.
+- Made `VERSION` the single manually maintained product-version source for all
+  assemblies, Setup, Updater, manifests, release paths, and validation output.
+- Added installed Client, Agent, and Updater version detection, mismatch and
+  pending-restart reporting, Stable/Preview/Development channels, and a
+  read-only installed-version history view.
+- Added semantic release pre-flight and next-version tools that reject equal or
+  lower targets, preserve invalid builds under timestamped failed folders, and
+  never overwrite immutable prior releases.
+- Added a permanent Stable launcher, versioned installations, atomic
+  `current.json` switching, rollback snapshots, corrupt-package rejection, and
+  safe Agent staging while a game process is live.
+- Removed Agent-exit game termination for new processes and added existing-game
+  process re-adoption to prevent duplicate starts after a safe Agent restart.
+- Strengthened archive checks for traversal, absolute paths, symbolic links,
+  case collisions, scripts, server data, saves, backups, and secret-like files.
+
+## 1.3.0 - 2026-07-21
+
+- Added a centralized WPF design system with readable disabled states, dark and
+  light input templates, responsive navigation, focus states, and inline
+  validation.
+- Expanded the professional Home and per-game dashboards with independent
+  health indicators, process-tree metrics, structured backup/update state, and
+  distinct local and public addresses.
+- Reworked Palworld and Minecraft settings around active, pending, and unsaved
+  states while preserving unknown configuration keys and real JVM arguments.
+- Added staged, atomic, verified configuration writes with restart validation
+  and protected per-server configuration restore points.
+- Added per-server diagnostics, bounded console filtering/history, toast
+  notifications, dynamic product versions, and immediate English/Arabic and
+  theme application.
+- Added regression tests for configuration recovery, expanded Minecraft
+  settings, UI resources, navigation, versioning, and data preservation.
+- Fixed Palworld management activation by editing and validating the exact live
+  `PalWorldSettings.ini`, preserving unknown values and encoding, atomically
+  replacing it, and rolling back failed REST activation.
+- Added localhost-only REST enable, retry, repair, test, and disable workflows
+  with DPAPI-protected credentials and explicit activation-stage errors.
+- Added categorized bilingual world settings, official defaults, presets,
+  validation, compare/import/export, configuration history, and verified
+  apply/restart.
+- Added native Palworld memory thresholds, Windows reserve, shared game-server
+  budget, optional save-before-enforcement hard limit, and verified process-tree
+  priority/affinity profiles.
+- Added Save World Now, save-before-backup, destination validation, SHA-256 and
+  manifest verification, schedules, storage retention, protected backups, and
+  staged restore with safety backup and rollback.
+
 ## 1.3.1 - 2026-07-18
 
 - Fixed Custom memory-policy selection so the domain policy activates,
@@ -16,27 +72,6 @@
 - Added regression coverage for selection, editing, persistence, locale input,
   validation, stale metrics, budget calculations, conditional summaries, and
   distinct selected and hover states.
-
-## 1.3.0 - 2026-07-18
-
-- Fixed Palworld management activation by editing and validating the exact live
-  `PalWorldSettings.ini`, preserving unknown values and encoding, atomically
-  replacing it, and rolling back failed REST activation.
-- Added localhost-only REST enable, retry, repair, test, and disable workflows
-  with DPAPI-protected credentials and explicit activation-stage errors.
-- Added categorized bilingual world settings, official defaults, presets,
-  validation, compare/import/export, configuration history, save/restart
-  verification, and rollback.
-- Added native Palworld memory thresholds, Windows reserve, shared game-server
-  budget, optional save-before-enforcement hard limit, and verified process-tree
-  priority/affinity profiles.
-- Added Save World Now, save-before-backup, destination validation, SHA-256 and
-  manifest verification, schedules, storage retention, protected backups, and
-  staged restore with safety backup and rollback.
-- Redesigned navigation and Palworld controls with calm navy/teal styling,
-  focused actions, readable states, high-DPI behavior, and Arabic RTL support.
-- Migrated the application database to schema version 3 without removing
-  existing game, tunnel, backup, credential, or ProgramData records.
 
 ## 1.2.1 - 2026-07-18
 

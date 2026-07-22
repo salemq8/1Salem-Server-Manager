@@ -51,7 +51,7 @@ public sealed class InstallerSafetyAndBrandingTests : IDisposable
         var journal = new DeploymentJournal(installRoot, backupRoot);
         var deployed = Path.Combine(installRoot, "Client", "new.exe");
         journal.DeployFile(source, deployed);
-        using var log = new InstallerLog();
+        using var log = new InstallerLog(Path.Combine(_tempRoot, "logs"));
         await journal.RollBackAsync(log, CancellationToken.None);
 
         Assert.False(File.Exists(deployed));

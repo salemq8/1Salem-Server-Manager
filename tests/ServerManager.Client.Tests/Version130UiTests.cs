@@ -22,8 +22,12 @@ public sealed class Version130UiTests
                      "RemoteAccess",
                      "Backups",
                      "Updates",
-                     "System",
-                     "Settings"
+                     "Resources",
+                     "Network",
+                     "Files",
+                     "Logs",
+                     "Settings",
+                     "About"
                  })
         {
             Assert.Contains($"\"{name}\"", viewModel, StringComparison.Ordinal);
@@ -44,6 +48,12 @@ public sealed class Version130UiTests
             "ServerManager.Client",
             "Controls",
             "GameServerPageControl.xaml");
+        var worldSettings = ReadSource(
+            "src",
+            "ServerManager.Client",
+            "Controls",
+            "PalworldWorldSettingsControl.xaml");
+        var combined = xaml + worldSettings;
         foreach (var label in new[]
                  {
                      "Enable Local Management",
@@ -55,7 +65,7 @@ public sealed class Version130UiTests
                      "Save &amp; Backups"
                  })
         {
-            Assert.Contains(label, xaml, StringComparison.Ordinal);
+            Assert.Contains(label, combined, StringComparison.Ordinal);
         }
     }
 

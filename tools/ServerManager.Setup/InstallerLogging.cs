@@ -104,21 +104,26 @@ public sealed class InstallerLog : IDisposable
     private readonly StreamWriter _writer;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public InstallerLog()
+    public InstallerLog(string? logRootOverride = null)
     {
-        var localApplicationData =
-            Environment.GetEnvironmentVariable("LOCALAPPDATA");
-        if (string.IsNullOrWhiteSpace(localApplicationData))
+        var logRoot = logRootOverride;
+        if (string.IsNullOrWhiteSpace(logRoot))
         {
-            localApplicationData = Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData);
+            var localApplicationData =
+                Environment.GetEnvironmentVariable("LOCALAPPDATA");
+            if (string.IsNullOrWhiteSpace(localApplicationData))
+            {
+                localApplicationData = Environment.GetFolderPath(
+                    Environment.SpecialFolder.LocalApplicationData);
+            }
+
+            logRoot = System.IO.Path.Combine(
+                localApplicationData,
+                "1SalemServerManager",
+                "Installer",
+                "Logs");
         }
 
-        var logRoot = System.IO.Path.Combine(
-            localApplicationData,
-            "1SalemServerManager",
-            "Installer",
-            "Logs");
         Directory.CreateDirectory(logRoot);
         Path = System.IO.Path.Combine(
             logRoot,

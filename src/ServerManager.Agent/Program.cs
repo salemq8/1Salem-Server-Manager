@@ -113,6 +113,7 @@ builder.Services.AddSingleton<AgentRuntimeState>();
 builder.Services.AddSingleton<ProcessMetricsCache>();
 builder.Services.AddSingleton<NamedPipeRequestDispatcher>();
 builder.Services.AddSingleton<GameServerOrchestrator>();
+builder.Services.AddSingleton<ConfigurationRestorePointService>();
 builder.Services.AddSingleton<MinecraftCreationCoordinator>();
 builder.Services.AddSingleton<ServerConfigurationService>();
 builder.Services.AddSingleton<DashboardSnapshotService>();
@@ -149,6 +150,9 @@ app.MapGet(
     "/health",
     (AgentRuntimeState runtime) =>
         Results.Ok(new HealthResponse("Healthy", runtime.Version, DateTimeOffset.UtcNow)));
+app.MapGet(
+    "/api/v1/installed-versions",
+    () => Results.Ok(InstalledVersionDetector.Detect()));
 app.MapPost(
     "/api/v1/pairing/challenge",
     async (IPairingService pairingService, CancellationToken cancellationToken) =>
@@ -231,6 +235,26 @@ app.MapGet(
         DashboardSnapshotService dashboard,
         CancellationToken cancellationToken) =>
         Results.Ok(await dashboard.GetAsync(cancellationToken)));
+app.MapGet(
+    "/api/v1/servers/{serverId:guid}/activity",
+    async (
+        Guid serverId,
+        int? limit,
+        IAuditLogStore auditLog,
+        CancellationToken cancellationToken) =>
+    {
+        var items = await auditLog.ListRecentAsync(
+            serverId.ToString(),
+            Math.Clamp(limit ?? 40, 1, 50),
+            cancellationToken);
+        return Results.Ok(items.Select(item => new ServerActivityItem(
+            item.TimestampUtc,
+            item.Actor,
+            item.Action,
+            DescribeActivity(item.Action),
+            item.Succeeded,
+            item.Detail)));
+    });
 app.MapGet(
     "/api/v1/processes",
     (ProcessMetricsCache metrics) => Results.Ok(metrics.Snapshot()));
@@ -942,6 +966,50 @@ app.MapGet(
         Results.Ok(await configuration.GetMinecraftAsync(
             serverId,
             cancellationToken)));
+app.MapGet(
+    "/api/v1/servers/{serverId:guid}/configuration-restore-points",
+    async (
+        Guid serverId,
+        ConfigurationRestorePointService restorePoints,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await restorePoints.ListAsync(
+            serverId,
+            cancellationToken)));
+app.MapPost(
+    "/api/v1/servers/{serverId:guid}/configuration-restore-points/restore",
+    async (
+        Guid serverId,
+        ConfigurationRestorePointRestoreRequest request,
+        ConfigurationRestorePointService restorePoints,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await restorePoints.RestoreAsync(
+            serverId,
+            request,
+            cancellationToken)));
+app.MapPost(
+    "/api/v1/servers/{serverId:guid}/configuration-restore-points/{restorePointId}/label",
+    async (
+        Guid serverId,
+        string restorePointId,
+        ConfigurationRestorePointLabelRequest request,
+        ConfigurationRestorePointService restorePoints,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await restorePoints.SetLabelAsync(
+            serverId,
+            restorePointId,
+            request,
+            cancellationToken)));
+app.MapDelete(
+    "/api/v1/servers/{serverId:guid}/configuration-restore-points/{restorePointId}",
+    async (
+        Guid serverId,
+        string restorePointId,
+        ConfigurationRestorePointService restorePoints,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await restorePoints.DeleteAsync(
+            serverId,
+            restorePointId,
+            cancellationToken)));
 app.MapPost(
     "/api/v1/servers/{serverId:guid}/minecraft/memory",
     async (
@@ -1052,6 +1120,17 @@ app.MapPost(
         CancellationToken cancellationToken) =>
         Results.Ok(await controlCenter.SaveWorldNowAsync(
             serverId,
+            cancellationToken)));
+app.MapPost(
+    "/api/v1/servers/{serverId:guid}/palworld/announcement",
+    async (
+        Guid serverId,
+        PalworldAnnouncementRequest request,
+        PalworldControlCenterService controlCenter,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await controlCenter.AnnounceAsync(
+            serverId,
+            request,
             cancellationToken)));
 app.MapGet(
     "/api/v1/servers/{serverId:guid}/palworld/world-settings",
@@ -1283,13 +1362,48 @@ app.MapPost(
         Guid serverId,
         IGameServerStore store,
         IUpdateService updateService,
+        IAuditLogStore auditLog,
         CancellationToken cancellationToken) =>
     {
         var server = await store.GetAsync(serverId, cancellationToken);
-        return server is null
-            ? Results.NotFound()
-            : Results.Ok(await updateService.UpdateAsync(server, cancellationToken));
+        if (server is null)
+        {
+            return Results.NotFound();
+        }
+
+        var result = await updateService.UpdateAsync(server, cancellationToken);
+        await auditLog.WriteAsync(
+            "LocalAdministrator",
+            "GameUpdated",
+            serverId.ToString(),
+            result.Success,
+            result.Message ?? result.ErrorCode,
+            cancellationToken);
+        return Results.Ok(result);
     });
 app.MapHub<AgentHub>("/hubs/agent");
+
+static string DescribeActivity(string action) => action switch
+{
+    "ProcessStarted" => "Server started",
+    "ProcessStopped" => "Server stopped",
+    "ProcessForceStopped" => "Server force-stopped",
+    "ProcessCrashed" => "Server crashed",
+    "ProcessExited" => "Server exited",
+    "ServerRestarted" => "Server restarted",
+    "PalworldSaveWorld" => "World saved",
+    "PalworldAnnouncement" => "Announcement sent",
+    "BackupCreated" => "Backup created",
+    "BackupRestored" => "Backup restored",
+    "PalworldWorldSettingChanged" => "World setting changed",
+    "PalworldWorldSettingsChanged" => "World settings changed",
+    "PalworldManagementEnabled" => "Local management enabled",
+    "PalworldManagementDisabled" => "Local management disabled",
+    "GameUpdated" => "Server updated",
+    _ => System.Text.RegularExpressions.Regex.Replace(
+        action,
+        "(?<!^)([A-Z])",
+        " $1")
+};
 
 await app.RunAsync();

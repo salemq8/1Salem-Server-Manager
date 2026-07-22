@@ -19,7 +19,17 @@ public sealed record MinecraftServerSettings(
     int SimulationDistance,
     bool WhitelistEnabled,
     bool Hardcore = false,
-    bool Pvp = true);
+    bool Pvp = true,
+    int SpawnProtection = 16,
+    bool EnableCommandBlocks = false,
+    bool AllowFlight = false,
+    bool SpawnAnimals = true,
+    bool SpawnMonsters = true,
+    bool SpawnNpcs = true,
+    string LevelName = "world",
+    string LevelSeed = "",
+    string LevelType = "minecraft:normal",
+    bool GenerateStructures = true);
 
 public sealed record MinecraftInstallRequest(
     string Name,

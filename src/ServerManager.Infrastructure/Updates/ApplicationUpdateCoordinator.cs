@@ -459,13 +459,12 @@ public sealed class ApplicationUpdateCoordinator
 
     private void ValidateManifestEndpoint(Uri uri)
     {
-        var expected = _sourceOptions.ManifestResolver(
-            uri.AbsoluteUri.Equals(
-                _sourceOptions.ManifestResolver(ApplicationUpdateChannel.Beta).AbsoluteUri,
-                StringComparison.OrdinalIgnoreCase)
-                ? ApplicationUpdateChannel.Beta
-                : ApplicationUpdateChannel.Stable);
-        if (!uri.AbsoluteUri.Equals(expected.AbsoluteUri, StringComparison.OrdinalIgnoreCase))
+        var approved = Enum.GetValues<ApplicationUpdateChannel>()
+            .Select(_sourceOptions.ManifestResolver)
+            .Any(expected => uri.AbsoluteUri.Equals(
+                expected.AbsoluteUri,
+                StringComparison.OrdinalIgnoreCase));
+        if (!approved)
         {
             throw new InvalidDataException("The update manifest endpoint is not approved.");
         }
@@ -477,10 +476,12 @@ public sealed class ApplicationUpdateCoordinator
     {
         ValidateTransport(uri);
         var stableHost = _sourceOptions.ManifestResolver(ApplicationUpdateChannel.Stable).Host;
-        var betaHost = _sourceOptions.ManifestResolver(ApplicationUpdateChannel.Beta).Host;
+        var previewHost = _sourceOptions.ManifestResolver(ApplicationUpdateChannel.Preview).Host;
+        var developmentHost = _sourceOptions.ManifestResolver(ApplicationUpdateChannel.Development).Host;
         if (!uri.IsLoopback &&
             !uri.Host.Equals(stableHost, StringComparison.OrdinalIgnoreCase) &&
-            !uri.Host.Equals(betaHost, StringComparison.OrdinalIgnoreCase))
+            !uri.Host.Equals(previewHost, StringComparison.OrdinalIgnoreCase) &&
+            !uri.Host.Equals(developmentHost, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException(
                 "The package host is not an approved update host.");
@@ -565,7 +566,9 @@ public sealed class ApplicationUpdateCoordinator
             "--client", Path.Combine(
                 installRoot,
                 "Client",
-                "1Salem.ServerManager.exe")
+                "1Salem.ServerManager.exe"),
+            "--versioned-install",
+            "--defer-agent"
         };
         if (manifest.RequiresServiceRestart)
         {

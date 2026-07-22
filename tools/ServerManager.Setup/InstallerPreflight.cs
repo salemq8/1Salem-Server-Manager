@@ -57,6 +57,20 @@ public static class InstallerPreflight
             RequireFile(
                 Path.Combine(contentRoot, "Client", "1Salem.ServerManager.exe"),
                 "The Setup payload is missing the dashboard executable.");
+            RequireFile(
+                Path.Combine(
+                    contentRoot,
+                    "Client",
+                    "Launcher",
+                    "1Salem.ServerManager.Launcher.exe"),
+                "The Setup payload is missing the permanent Stable launcher.");
+            RequireFile(
+                Path.Combine(
+                    contentRoot,
+                    "Client",
+                    "Updater",
+                    "1Salem.ServerManager.Updater.exe"),
+                "The Setup payload is missing the installed updater.");
         }
 
         if (includesAgent)

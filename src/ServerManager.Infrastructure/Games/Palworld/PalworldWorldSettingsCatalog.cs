@@ -63,6 +63,11 @@ public static class PalworldWorldSettingsCatalog
     public static IReadOnlyList<string> Categories { get; } =
         Definitions.Select(item => item.Category).Distinct().ToArray();
 
+    public static IReadOnlySet<string> ManagedNames { get; } =
+        Definitions
+            .Select(item => item.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     public static IReadOnlyList<string> Presets { get; } =
     [
         "Official Default",

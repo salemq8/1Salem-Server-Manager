@@ -16,7 +16,8 @@ public static class UpdatePackageSecurity
         new(StringComparer.OrdinalIgnoreCase)
         {
             "Client",
-            "Agent"
+            "Agent",
+            "Maintenance"
         };
 
     public static async Task VerifyFileAsync(
@@ -63,6 +64,7 @@ public static class UpdatePackageSecurity
         }
 
         var files = new List<string>();
+        var normalizedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in archive.Entries)
         {
             var normalized = entry.FullName.Replace('\\', '/');
@@ -79,7 +81,7 @@ public static class UpdatePackageSecurity
             if (!AllowedRoots.Contains(root))
             {
                 throw new InvalidDataException(
-                    $"Update entry is outside the Client/Agent roots: {entry.FullName}");
+                    $"Update entry is outside the Client/Agent/Maintenance roots: {entry.FullName}");
             }
 
             if (IsSymbolicLink(entry))
@@ -93,10 +95,32 @@ public static class UpdatePackageSecurity
                 continue;
             }
 
+            if (!normalizedNames.Add(normalized))
+            {
+                throw new InvalidDataException(
+                    $"Duplicate or case-colliding update ZIP path rejected: {entry.FullName}");
+            }
+
             if (BlockedExtensions.Contains(Path.GetExtension(entry.Name)))
             {
                 throw new InvalidDataException(
                     $"Executable script rejected from update package: {entry.FullName}");
+            }
+
+            var segments = normalized.Split('/');
+            var extension = Path.GetExtension(entry.Name);
+            if (segments.Any(segment => segment.Equals("SaveGames", StringComparison.OrdinalIgnoreCase) ||
+                    segment.Equals("ProgramData", StringComparison.OrdinalIgnoreCase) ||
+                    segment.Equals("backups", StringComparison.OrdinalIgnoreCase)) ||
+                normalized.EndsWith("playit.toml", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".sav", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".db", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".pfx", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".pem", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".key", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"Server data or secret-like file rejected from update package: {entry.FullName}");
             }
 
             files.Add(normalized);

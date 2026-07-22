@@ -18,6 +18,7 @@ public partial class InstallerWindow : Window
     public InstallerWindow()
     {
         InitializeComponent();
+        VersionText.Text = $"Version {InstallerEngine.ProductVersion} • Windows 10/11 x64 setup";
         InstallPathBox.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             "1Salem Server Manager");

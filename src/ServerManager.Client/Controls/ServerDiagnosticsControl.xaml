@@ -1,0 +1,80 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerDiagnosticsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore">
+    <Grid Margin="0,18,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Border Style="{StaticResource ServerCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Server Diagnostics"
+                               FontSize="22"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Independent checks keep optional integrations from hiding the real game-server state."
+                               Margin="0,5,0,0"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="Run Diagnostics"
+                        Click="Run_Click"
+                        automation:AutomationProperties.Name="Run server diagnostics" />
+            </Grid>
+        </Border>
+
+        <DataGrid x:Name="ChecksGrid"
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  Margin="0,0,0,12"
+                  automation:AutomationProperties.Name="Server diagnostic checks">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Check" Binding="{Binding Name}" Width="1.2*" />
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                <DataGridTextColumn Header="Result" Binding="{Binding Detail}" Width="2*" />
+                <DataGridTextColumn Header="Suggested action" Binding="{Binding SuggestedAction}" Width="2*" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Border Grid.Row="2"
+                Background="{DynamicResource PanelBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="9"
+                Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText"
+                           Text="Run diagnostics to refresh every check."
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource MutedTextBrush}"
+                           TextWrapping="Wrap" />
+                <WrapPanel Grid.Column="1">
+                    <Button Content="Retry Failed Checks"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Run_Click" />
+                    <Button Content="Copy Report"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Copy_Click" />
+                    <Button Content="Export Diagnostic ZIP"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Export_Click" />
+                    <Button Content="Open Logs"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="OpenLogs_Click" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

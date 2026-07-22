@@ -13,7 +13,8 @@ public sealed class BackupService(
     IBackupStore backupStore,
     IProcessSupervisor processSupervisor,
     IEnumerable<IGameServerProvider> providers,
-    PalworldRestClient? palworldRestClient = null) : IBackupService
+    PalworldRestClient? palworldRestClient = null,
+    IAuditLogStore? auditLogStore = null) : IBackupService
 {
     private readonly IReadOnlyDictionary<GameType, IGameServerProvider> _providers =
         providers.ToDictionary(provider => provider.Game);
@@ -109,10 +110,32 @@ public sealed class BackupService(
                 server with { LastBackupAtUtc = result.CreatedAtUtc },
                 wasRunning ? ServerState.Running : ServerState.Stopped,
                 cancellationToken);
+            if (auditLogStore is not null)
+            {
+                await auditLogStore.WriteAsync(
+                    request.IsScheduled ? "Scheduler" : "LocalAdministrator",
+                    "BackupCreated",
+                    server.Id.ToString(),
+                    true,
+                    $"BackupId={result.BackupId}; Verified=True; File={Path.GetFileName(result.ArchivePath)}",
+                    cancellationToken);
+            }
+
             return result;
         }
         catch (Exception exception)
         {
+            if (auditLogStore is not null)
+            {
+                await auditLogStore.WriteAsync(
+                    request.IsScheduled ? "Scheduler" : "LocalAdministrator",
+                    "BackupCreated",
+                    server.Id.ToString(),
+                    false,
+                    exception.Message,
+                    cancellationToken);
+            }
+
             await gameServerStore.SetStateWithErrorAsync(
                 server.Id,
                 ServerState.Error,
@@ -249,6 +272,17 @@ public sealed class BackupService(
                 server.Id,
                 wasRunning ? ServerState.Running : ServerState.Stopped,
                 cancellationToken);
+            if (auditLogStore is not null)
+            {
+                await auditLogStore.WriteAsync(
+                    "LocalAdministrator",
+                    "BackupRestored",
+                    server.Id.ToString(),
+                    true,
+                    $"BackupId={backup.Id}; Verified=True",
+                    cancellationToken);
+            }
+
             return OperationResult.Ok();
         }
         catch (Exception exception)
@@ -261,6 +295,17 @@ public sealed class BackupService(
                 wasRunning,
                 cancellationToken);
             await gameServerStore.SetStateAsync(server.Id, ServerState.Error, cancellationToken);
+            if (auditLogStore is not null)
+            {
+                await auditLogStore.WriteAsync(
+                    "LocalAdministrator",
+                    "BackupRestored",
+                    server.Id.ToString(),
+                    false,
+                    exception.Message,
+                    cancellationToken);
+            }
+
             return OperationResult.Fail("RestoreFailed", exception.Message);
         }
         finally

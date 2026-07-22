@@ -10,7 +10,7 @@
         <TextBlock Text="1Salem Server Manager"
                    FontSize="24"
                    FontWeight="Bold" />
-        <TextBlock Text="Version 1.0"
+        <TextBlock x:Name="VersionText"
                    Margin="0,6,0,18"
                    Foreground="{DynamicResource MutedTextBrush}" />
         <TextBlock Text="Diagnostic reports contain application and operating-system details plus a redacted Agent log tail. They never include the SQLite database, game files, passwords, or tokens."

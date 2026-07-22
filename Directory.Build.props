@@ -1,13 +1,27 @@
 <Project>
   <PropertyGroup>
+    <VersionFile>$(MSBuildThisFileDirectory)VERSION</VersionFile>
+    <ProductVersion>$([System.IO.File]::ReadAllText('$(VersionFile)').Trim())</ProductVersion>
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>1.3.1</Version>
+    <Version>$(ProductVersion)</Version>
+    <VersionPrefix>$(ProductVersion)</VersionPrefix>
+    <PackageVersion>$(ProductVersion)</PackageVersion>
+    <AssemblyVersion>$(ProductVersion).0</AssemblyVersion>
+    <FileVersion>$(ProductVersion)</FileVersion>
+    <InformationalVersion>$(ProductVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <ReleaseChannel Condition="'$(ReleaseChannel)' == ''">Stable</ReleaseChannel>
     <Company>1Salem</Company>
     <Product>1Salem Server Manager</Product>
     <Copyright>Copyright © 1Salem</Copyright>
   </PropertyGroup>
+
+  <Target Name="ValidateProductVersion" BeforeTargets="PrepareForBuild">
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(ProductVersion)', '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'))"
+           Text="VERSION must contain one semantic product version (for example 1.2.3)." />
+  </Target>
 </Project>

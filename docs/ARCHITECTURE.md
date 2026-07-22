@@ -69,7 +69,7 @@ executable, refuses duplicates, launches without a visible window, redacts
 supported output, and applies bounded crash recovery. Its startup gate runs
 before game auto-start; failure never blocks local game management.
 
-`ApplicationUpdateCoordinator` checks the approved Stable/Beta manifest and
+`ApplicationUpdateCoordinator` checks the approved Stable/Preview/Development manifest and
 stages a verified package under Agent ProgramData. The external updater
 snapshots only application binaries, swaps Client/Agent directories, restarts
 the Agent only when requested, verifies health and versions, and restores the

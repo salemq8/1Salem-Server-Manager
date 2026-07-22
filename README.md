@@ -1,6 +1,6 @@
 # 1Salem Server Manager
 
-1Salem Server Manager 1.3.1 is a native Windows dashboard and background Agent
+1Salem Server Manager is a native Windows dashboard and background Agent
 for vanilla Minecraft Java and vanilla Palworld dedicated servers.
 
 ## Highlights
@@ -31,22 +31,33 @@ for vanilla Minecraft Java and vanilla Palworld dedicated servers.
   protected retention, SHA-256 validation, and rollback-safe restore.
 - Native-process memory thresholds, shared server budget, optional hard limit,
   and verified root/child process priority and affinity profiles.
+- Unified dark/light/Windows-following design system, responsive navigation,
+  readable control states, inline validation, and immediate English/Arabic
+  appearance switching.
+- Transactional Minecraft and Palworld configuration writes with staged
+  validation, unknown-value preservation, protected restore points, and
+  verified restart recovery.
+- A compact Palworld Overview with status badges, six live metric cards, quick
+  actions, bounded activity graphs, recent activity, resource summaries, and
+  separate local/Internet connection cards.
+- VERSION-driven product metadata, semantic downgrade prevention, immutable
+  release folders, per-component installed-version reporting, and a permanent
+  Stable launcher with atomic active-version switching.
 
 ## Release files
 
-The release build writes:
+The release build reads the current value from `VERSION` and writes:
 
-- `artifacts/release/1.3.1/Setup.exe`
-- `artifacts/release/1.3.1/Portable.zip`
-- `artifacts/release/1.3.1/Source.zip`
-- `artifacts/release/1.3.1/1SalemServerManager-Update-1.3.1.zip`
-- `artifacts/release/1.3.1/version.json`
-- `artifacts/release/1.3.1/SHA256SUMS.txt`
+- `artifacts/release/<VERSION>/Setup.exe`
+- `artifacts/release/<VERSION>/Portable.zip`
+- `artifacts/release/<VERSION>/Source.zip`
+- `artifacts/release/<VERSION>/1SalemServerManager-Update-<VERSION>.zip`
+- `artifacts/release/<VERSION>/version.json`
+- `artifacts/release/<VERSION>/SHA256SUMS.txt`
 
-Version 1.3.1 makes memory-policy presets authoritative and persistent, enables
-validated Custom editing without refresh-time data loss, removes absent games
-from resource summaries and budgets, and adds a recalculated manual one-time
-startup override.
+`VERSION` is the only manually edited current product-version source. Use
+`tools\next-version.ps1` to calculate the next semantic version and
+`tools\build-release.ps1` to enforce the installed/released version guard.
 
 See [Installation](docs/INSTALLATION.md), the
 [English guide](docs/USER_GUIDE_EN.md), or the

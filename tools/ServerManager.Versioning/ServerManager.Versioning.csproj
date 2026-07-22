@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>1Salem.ServerManager.Versioning</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ServerManager.Contracts\ServerManager.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\ServerManager.Core\ServerManager.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -7,7 +7,6 @@ namespace ServerManager.Infrastructure.Processes;
 
 internal sealed class WindowsJobObject : IDisposable
 {
-    private const uint JobObjectLimitKillOnJobClose = 0x00002000;
     private const uint JobObjectLimitJobMemory = 0x00000200;
     private readonly SafeFileHandle? _handle;
 
@@ -50,10 +49,9 @@ internal sealed class WindowsJobObject : IDisposable
         {
             BasicLimitInformation = new JobObjectBasicLimitInformation
             {
-                LimitFlags = JobObjectLimitKillOnJobClose |
-                             (memoryLimitBytes is null
-                                 ? 0
-                                 : JobObjectLimitJobMemory)
+                LimitFlags = memoryLimitBytes is null
+                    ? 0
+                    : JobObjectLimitJobMemory
             },
             JobMemoryLimit = memoryLimitBytes is null
                 ? 0

@@ -79,7 +79,9 @@ public sealed class WindowsServiceCommandBuilderTests
             return;
         }
 
-        using var log = new InstallerLog();
+        using var log = new InstallerLog(Path.Combine(
+            Path.GetTempPath(),
+            $"1salem-sc-test-{Guid.NewGuid():N}"));
         var runner = new InstallerProcessRunner(log);
         var serviceName = $"1SalemSyntaxProbe_{Guid.NewGuid():N}";
         var result = await runner.RunAsync(

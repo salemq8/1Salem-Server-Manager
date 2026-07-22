@@ -7,6 +7,11 @@ using ServerManager.Infrastructure.Processes;
 
 namespace ServerManager.Agent;
 
+public sealed record ManagedProcessIdentity(
+    int ProcessId,
+    string ExecutablePath,
+    DateTimeOffset StartedAtUtc);
+
 public sealed class GameServerOrchestrator(
     IEnumerable<IGameServerProvider> providers,
     IGameServerStore gameServerStore,
@@ -75,6 +80,7 @@ public sealed class GameServerOrchestrator(
                         TimeSpan.FromMinutes(10))
                     : RestartPolicy.Disabled);
             var snapshot = await processSupervisor.StartAsync(server, spec, cancellationToken);
+            await SaveProcessIdentityAsync(serverId, snapshot, spec, cancellationToken);
             var resources = await processResourceController.ApplyResourcesAsync(
                 serverId,
                 server.Priority,
@@ -130,6 +136,55 @@ public sealed class GameServerOrchestrator(
         }
     }
 
+    public async Task<ProcessSnapshot?> AdoptExistingAsync(
+        Guid serverId,
+        CancellationToken cancellationToken = default)
+    {
+        var server = await GetRequiredServerAsync(serverId, cancellationToken);
+        var provider = GetRequiredProvider(server.Game);
+        var spec = provider.CreateLaunchSpec(server);
+        var identity = await settingsStore.GetAsync<ManagedProcessIdentity>(
+            ProcessIdentityKey(serverId),
+            cancellationToken);
+        var snapshot = await processSupervisor.AdoptAsync(
+            server,
+            spec,
+            identity?.ProcessId,
+            cancellationToken);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        processSupervisor.ConfigureRestartPolicy(
+            serverId,
+            server.AutoRestart
+                ? new RestartPolicy(
+                    true,
+                    TimeSpan.FromSeconds(10),
+                    3,
+                    TimeSpan.FromMinutes(10))
+                : RestartPolicy.Disabled);
+        var resources = await processResourceController.ApplyResourcesAsync(
+            serverId,
+            server.Priority,
+            server.CpuAffinityMask,
+            cancellationToken);
+        if (!resources.Success)
+        {
+            throw new InvalidOperationException(
+                $"The existing process was re-adopted but its resource policy failed: {resources.Message}");
+        }
+
+        await SaveProcessIdentityAsync(serverId, snapshot, spec, cancellationToken);
+        await gameServerStore.SetStateWithErrorAsync(
+            serverId,
+            ServerState.Running,
+            null,
+            cancellationToken);
+        return snapshot;
+    }
+
     public async Task<OperationResult> StopAsync(
         Guid serverId,
         bool force,
@@ -142,6 +197,10 @@ public sealed class GameServerOrchestrator(
         if (result.Success)
         {
             await provider.CleanupAfterStopAsync(server, cancellationToken);
+            await settingsStore.SetAsync<ManagedProcessIdentity?>(
+                ProcessIdentityKey(serverId),
+                null,
+                cancellationToken);
         }
 
         await gameServerStore.SetStateAsync(
@@ -155,19 +214,41 @@ public sealed class GameServerOrchestrator(
         Guid serverId,
         CancellationToken cancellationToken = default)
     {
-        var server = await GetRequiredServerAsync(serverId, cancellationToken);
-        var provider = GetRequiredProvider(server.Game);
-        await gameServerStore.SetStateAsync(serverId, ServerState.Restarting, cancellationToken);
-        var stopped = await StopAsync(serverId, false, cancellationToken);
-        if (!stopped.Success)
+        try
         {
-            throw new InvalidOperationException(stopped.Message);
-        }
+            var server = await GetRequiredServerAsync(serverId, cancellationToken);
+            var provider = GetRequiredProvider(server.Game);
+            await gameServerStore.SetStateAsync(serverId, ServerState.Restarting, cancellationToken);
+            var stopped = await StopAsync(serverId, false, cancellationToken);
+            if (!stopped.Success)
+            {
+                throw new InvalidOperationException(stopped.Message);
+            }
 
-        return await StartAsync(
-            serverId,
-            false,
-            cancellationToken);
+            var result = await StartAsync(
+                serverId,
+                false,
+                cancellationToken);
+            await auditLogStore.WriteAsync(
+                "LocalAdministrator",
+                "ServerRestarted",
+                serverId.ToString(),
+                true,
+                $"PID {result.ProcessId}",
+                cancellationToken);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            await auditLogStore.WriteAsync(
+                "LocalAdministrator",
+                "ServerRestarted",
+                serverId.ToString(),
+                false,
+                exception.Message,
+                cancellationToken);
+            throw;
+        }
     }
 
     public Task<OperationResult> SendConsoleAsync(
@@ -181,6 +262,22 @@ public sealed class GameServerOrchestrator(
         CancellationToken cancellationToken) =>
         await gameServerStore.GetAsync(serverId, cancellationToken)
         ?? throw new KeyNotFoundException($"Server {serverId} is not registered.");
+
+    private Task SaveProcessIdentityAsync(
+        Guid serverId,
+        ProcessSnapshot snapshot,
+        ProcessLaunchSpec spec,
+        CancellationToken cancellationToken) =>
+        settingsStore.SetAsync(
+            ProcessIdentityKey(serverId),
+            new ManagedProcessIdentity(
+                snapshot.ProcessId,
+                Path.GetFullPath(spec.FileName),
+                snapshot.StartedAtUtc),
+            cancellationToken);
+
+    private static string ProcessIdentityKey(Guid serverId) =>
+        $"process.identity.{serverId:N}";
 
     private IGameServerProvider GetRequiredProvider(GameType game) =>
         _providers.TryGetValue(game, out var provider)

@@ -1,12 +1,17 @@
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
+using ServerManager.Client.Shell;
 
 namespace ServerManager.Client;
 
 public partial class DiagnosticsWindow : Window
 {
-    public DiagnosticsWindow() => InitializeComponent();
+    public DiagnosticsWindow()
+    {
+        InitializeComponent();
+        VersionText.Text = ProductInfo.VersionLabel;
+    }
 
     private async void Export_Click(object sender, RoutedEventArgs e)
     {

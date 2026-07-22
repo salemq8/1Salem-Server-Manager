@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Diagnostics;
 using Microsoft.Win32;
 using ServerManager.Contracts;
 using ServerManager.Core;
@@ -30,6 +31,7 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
     private Guid? _serverId;
     private bool _loading;
     private bool _syncingEditor;
+    private string? _configurationPath;
 
     public PalworldWorldSettingsControl()
     {
@@ -37,11 +39,13 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
         _settingsView = CollectionViewSource.GetDefaultView(_settings);
         _settingsView.Filter = FilterSetting;
         SettingsGrid.ItemsSource = _settingsView;
+        Loaded += OnLoaded;
     }
 
     public async void SetServer(Guid? serverId)
     {
-        if (_serverId == serverId)
+        if (_serverId == serverId &&
+            (serverId is null || _settings.Count > 0 || !IsLoaded))
         {
             return;
         }
@@ -53,7 +57,36 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
         }
     }
 
-    public void Dispose() => _httpClient.Dispose();
+    public void Dispose()
+    {
+        Loaded -= OnLoaded;
+        _httpClient.Dispose();
+    }
+
+    public bool HasUnsavedChanges => GetChanges().Count > 0;
+
+    public event EventHandler? UnsavedStateChanged;
+
+    public Task<bool> SaveForNextRestartAsync() => SaveAsync(false);
+
+    public void DiscardChanges()
+    {
+        foreach (var setting in _settings)
+        {
+            setting.PendingValue = setting.CurrentValue;
+        }
+
+        RenderSelectedEditor();
+        RenderUnsaved();
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_serverId is not null && _settings.Count == 0)
+        {
+            await LoadAsync();
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -97,6 +130,12 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
             PresetBox.SelectedItem = "Custom";
             ConfigurationPathText.Text =
                 $"Live file: {response.ConfigurationPath}";
+            _configurationPath = response.ConfigurationPath;
+            UnknownSettingsText.Text =
+                response.UnknownSettings is { Count: > 0 } unknown
+                    ? $"Preserved unsupported/newer fields ({unknown.Count}): " +
+                      string.Join(", ", unknown.Keys.Order(StringComparer.OrdinalIgnoreCase))
+                    : "No unsupported fields were detected. Unknown fields are preserved automatically.";
             StatusText.Text =
                 "Values are read from the registered server's live WindowsServer configuration.";
             RenderUnsaved();
@@ -475,10 +514,28 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
         }
     }
 
+    private void OpenRawFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_configurationPath) ||
+            !File.Exists(_configurationPath))
+        {
+            StatusText.Text = "The live Palworld configuration file is unavailable.";
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = _configurationPath,
+            UseShellExecute = true
+        });
+        StatusText.Text =
+            "Opened the live raw file. Save through this editor for validation, checkpoints, and recovery protection.";
+    }
+
     private async void SaveNextRestart_Click(
         object sender,
         RoutedEventArgs e) =>
-        await SaveAsync(false);
+        _ = await SaveAsync(false);
 
     private async void ApplyRestart_Click(
         object sender,
@@ -490,22 +547,22 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) == MessageBoxResult.Yes)
         {
-            await SaveAsync(true);
+            _ = await SaveAsync(true);
         }
     }
 
-    private async Task SaveAsync(bool restart)
+    private async Task<bool> SaveAsync(bool restart)
     {
         if (_serverId is null)
         {
-            return;
+            return false;
         }
 
         var changes = GetChanges();
         if (changes.Count == 0)
         {
             StatusText.Text = "There are no pending changes.";
-            return;
+            return true;
         }
 
         StatusText.Text = restart
@@ -530,12 +587,16 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
             if (result?.Success == true)
             {
                 await LoadAsync();
+                return true;
             }
+
+            return false;
         }
         catch (Exception exception) when (
             exception is HttpRequestException or TaskCanceledException)
         {
             StatusText.Text = $"Settings operation failed: {exception.Message}";
+            return false;
         }
     }
 
@@ -558,6 +619,7 @@ public partial class PalworldWorldSettingsControl : System.Windows.Controls.User
         UnsavedText.Text = count == 0
             ? "No unsaved changes."
             : $"{count} unsaved setting change(s).";
+        UnsavedStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private sealed class SettingRow(

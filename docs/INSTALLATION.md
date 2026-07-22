@@ -80,7 +80,7 @@ data manually only after verifying that it is no longer needed.
 ## Normal application updates
 
 After the first All-in-One installation, open **Updates** in the dashboard.
-Choose Stable or Beta, select **Check Now**, then download and apply the
+Choose Stable, Preview, or Development (Stable is the installed default), select **Check Now**, then download and apply the
 verified package. The dashboard runs the updater outside the install folder,
 closes itself, restarts the Agent only when required, validates health and
 version, and reopens automatically.

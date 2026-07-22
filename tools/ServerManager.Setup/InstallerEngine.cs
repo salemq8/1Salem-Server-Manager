@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Text.Json;
 using Microsoft.Win32;
+using ServerManager.Contracts;
 
 namespace ServerManager.Setup;
 
@@ -26,7 +28,8 @@ public static class InstallerEngine
 {
     private const string MarkerName = ".1salem-install";
     private const string MarkerValue = "1Salem Server Manager v1";
-    private const string ProductVersion = "1.3.1";
+    public static string ProductVersion { get; } =
+        ProductIdentity.VersionOf(typeof(InstallerEngine).Assembly);
     private const string UninstallKeyPath =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\1SalemServerManager";
 
@@ -44,6 +47,8 @@ public static class InstallerEngine
         WindowsServiceInstaller? serviceInstaller = null;
         HttpAgentHealthProbe? healthProbe = null;
         InstalledServiceSnapshot? originalService = null;
+        InstalledApplicationManifest? installationManifest = null;
+        string? installationDataRoot = null;
         var staging = Path.Combine(
             Path.GetTempPath(),
             "1SalemServerManager-Setup",
@@ -61,6 +66,8 @@ public static class InstallerEngine
                 request,
                 InstallerSecurity.IsElevated());
             var installRoot = Path.GetFullPath(request.InstallRoot);
+            var installedBefore = InstalledVersionDetector.Detect(
+                new InstalledVersionDetectionOptions(installRoot));
             InstallerPreflight.ValidateDriveSpace(
                 installRoot,
                 500L * 1024 * 1024);
@@ -124,6 +131,9 @@ public static class InstallerEngine
                 journal.DeployDirectory(
                     Path.Combine(contentRoot, "Agent"),
                     Path.Combine(installRoot, "Agent"));
+                journal.DeployDirectory(
+                    Path.Combine(contentRoot, "Agent"),
+                    Path.Combine(installRoot, "Versions", ProductVersion, "Agent"));
             }
 
             if (includesClient)
@@ -131,7 +141,20 @@ public static class InstallerEngine
                 progress.Report(new InstallProgress(48, "Deploying dashboard files..."));
                 journal.DeployDirectory(
                     Path.Combine(contentRoot, "Client"),
-                    Path.Combine(installRoot, "Client"));
+                    Path.Combine(installRoot, "Versions", ProductVersion, "Client"));
+                journal.DeployDirectory(
+                    Path.Combine(contentRoot, "Client", "Updater"),
+                    Path.Combine(installRoot, "Client", "Updater"));
+                journal.DeployFile(
+                    Path.Combine(
+                        contentRoot,
+                        "Client",
+                        "Launcher",
+                        "1Salem.ServerManager.Launcher.exe"),
+                    Path.Combine(
+                        installRoot,
+                        "Client",
+                        "1Salem.ServerManager.exe"));
             }
 
             var uninstaller = Path.Combine(
@@ -223,6 +246,44 @@ public static class InstallerEngine
                 "1Salem.ServerManager.exe");
             if (includesClient)
             {
+                var dataRoot = Path.Combine(
+                    Environment.GetFolderPath(
+                        Environment.SpecialFolder.CommonApplicationData),
+                    "1SalemServerManager");
+                var versionClient = Path.Combine(
+                    installRoot,
+                    "Versions",
+                    ProductVersion,
+                    "Client",
+                    "1Salem.ServerManager.exe");
+                var updater = Path.Combine(
+                    installRoot,
+                    "Client",
+                    "Updater",
+                    "1Salem.ServerManager.Updater.exe");
+                installationManifest = new InstalledApplicationManifest(
+                    1,
+                    ProductVersion,
+                    installedBefore.Client.Version,
+                    installedBefore.Client.Version,
+                    ProductIdentity.StableChannel,
+                    clientExecutable,
+                    versionClient,
+                    agentExecutable,
+                    updater,
+                    null,
+                    "Succeeded",
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow);
+                journal.WriteText(
+                    Path.Combine(installRoot, "current.json"),
+                    JsonSerializer.Serialize(
+                        installationManifest,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                        {
+                            WriteIndented = true
+                        }));
+                installationDataRoot = dataRoot;
                 progress.Report(new InstallProgress(
                     86,
                     "Creating shortcuts and dashboard startup settings..."));
@@ -252,6 +313,18 @@ public static class InstallerEngine
                 includesClient ? clientExecutable : uninstaller,
                 uninstaller);
             journal.Commit();
+            if (installationManifest is not null && installationDataRoot is not null)
+            {
+                Directory.CreateDirectory(installationDataRoot);
+                File.WriteAllText(
+                    Path.Combine(installationDataRoot, "installation.json"),
+                    JsonSerializer.Serialize(
+                        installationManifest,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                        {
+                            WriteIndented = true
+                        }));
+            }
 
             progress.Report(new InstallProgress(98, "Final verification complete."));
             await log.WriteAsync(
@@ -674,10 +747,16 @@ public static class InstallerEngine
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(processPath) ||
-                    !Path.GetFullPath(processPath).Equals(
-                        expectedPath,
-                        StringComparison.OrdinalIgnoreCase))
+                var normalizedPath = string.IsNullOrWhiteSpace(processPath)
+                    ? null
+                    : Path.GetFullPath(processPath);
+                var normalizedRoot = Path.GetFullPath(installRoot).TrimEnd(
+                        Path.DirectorySeparatorChar,
+                        Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar;
+                if (normalizedPath is null ||
+                    (!normalizedPath.Equals(expectedPath, StringComparison.OrdinalIgnoreCase) &&
+                     !normalizedPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }

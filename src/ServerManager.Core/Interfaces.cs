@@ -30,6 +30,13 @@ public interface IProcessSupervisor
         ProcessLaunchSpec launchSpec,
         CancellationToken cancellationToken = default);
 
+    Task<ProcessSnapshot?> AdoptAsync(
+        GameServerDefinition server,
+        ProcessLaunchSpec launchSpec,
+        int? expectedProcessId = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<ProcessSnapshot?>(null);
+
     Task<OperationResult> StopAsync(
         Guid serverId,
         bool force,
@@ -234,6 +241,12 @@ public interface IAuditLogStore
         bool succeeded,
         string? detail = null,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AuditLogRecord>> ListRecentAsync(
+        string targetPrefix,
+        int limit,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AuditLogRecord>>([]);
 }
 
 public interface IGameServerStore
