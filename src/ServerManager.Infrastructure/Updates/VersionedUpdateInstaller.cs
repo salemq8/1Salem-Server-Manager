@@ -28,7 +28,8 @@ public sealed record VersionedUpdateResult(
     string Message,
     string? RollbackPath,
     string? StableLauncherPath,
-    InstalledVersionReport? InstalledAfter);
+    InstalledVersionReport? InstalledAfter,
+    int ShortcutsRetargeted = 0);
 
 public sealed class VersionedUpdateInstaller
 {
@@ -163,6 +164,10 @@ public sealed class VersionedUpdateInstaller
                     Path.Combine(installRoot, "Uninstall 1Salem Server Manager.exe"));
             }
 
+            var shortcutMigration = StableShortcutMigration.RetargetInstalledShortcuts(
+                installRoot,
+                stableLauncher);
+
             var activateAgent = options.ActivateAgent && !_managedGameProcessDetector();
             if (activateAgent)
             {
@@ -192,11 +197,21 @@ public sealed class VersionedUpdateInstaller
                 agentVersion,
                 target.ToString(),
                 StringComparison.OrdinalIgnoreCase);
+            var previousVersion = comparison == 0
+                ? before.PreviousVersion ?? before.RollbackVersion ?? currentVersion.ToString()
+                : currentVersion.Major == 0
+                    ? null
+                    : currentVersion.ToString();
+            var rollbackVersion = comparison == 0
+                ? before.RollbackVersion ?? before.PreviousVersion ?? currentVersion.ToString()
+                : currentVersion.Major == 0
+                    ? null
+                    : currentVersion.ToString();
             var manifest = new InstalledApplicationManifest(
                 1,
                 target.ToString(),
-                currentVersion.Major == 0 ? null : currentVersion.ToString(),
-                currentVersion.Major == 0 ? null : currentVersion.ToString(),
+                previousVersion,
+                rollbackVersion,
                 ProductIdentity.StableChannel,
                 stableLauncher,
                 Path.Combine(versionClient, "1Salem.ServerManager.exe"),
@@ -233,7 +248,8 @@ public sealed class VersionedUpdateInstaller
                     : $"Updated successfully to {target}.",
                 rollbackRoot,
                 stableLauncher,
-                after);
+                after,
+                shortcutMigration.Updated);
             await WriteResultAsync(dataRoot, result, cancellationToken);
             return result;
         }

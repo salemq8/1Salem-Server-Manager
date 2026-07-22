@@ -1,4 +1,7 @@
 using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using ServerManager.Contracts;
@@ -116,6 +119,105 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidDataException>(
             () => new VersionedUpdateInstaller().ApplyAsync(options));
+    }
+
+    [Fact]
+    public async Task ExplicitSameVersionRepair_PreservesPreviousRollbackVersion()
+    {
+        var (installRoot, dataRoot) = CreateInstalledLayout("1.3.2");
+        var manifestPath = Path.Combine(installRoot, "current.json");
+        var manifest = JsonSerializer.Deserialize<InstalledApplicationManifest>(
+            await File.ReadAllTextAsync(manifestPath),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(manifest);
+        await File.WriteAllTextAsync(
+            manifestPath,
+            JsonSerializer.Serialize(
+                manifest with
+                {
+                    PreviousVersion = "1.3.1",
+                    RollbackVersion = "1.3.1"
+                },
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var result = await new VersionedUpdateInstaller(
+            managedGameProcessDetector: () => true).ApplyAsync(
+            new VersionedUpdateOptions(
+                CreateVersionedPackage("1.3.2"),
+                installRoot,
+                dataRoot,
+                "1.3.2",
+                "test-agent",
+                AllowSameVersion: true,
+                SkipBinaryVersionVerification: true,
+                UpdateRegistry: false));
+
+        Assert.True(result.Success, result.Message);
+        var after = JsonSerializer.Deserialize<InstalledApplicationManifest>(
+            await File.ReadAllTextAsync(manifestPath),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(after);
+        Assert.Equal("1.3.1", after.PreviousVersion);
+        Assert.Equal("1.3.1", after.RollbackVersion);
+    }
+
+    [Theory]
+    [InlineData(@"Versions\1.3.1\Client\1Salem.ServerManager.exe", true)]
+    [InlineData(@"Versions\1.3.2\Client\1Salem.ServerManager.exe", true)]
+    [InlineData(@"Client\1Salem.ServerManager.exe", false)]
+    [InlineData(@"Versions\1.3.2\Agent\1Salem.ServerManager.Agent.exe", false)]
+    public void ShortcutMigration_OnlyRetargetsVersionedClientExecutables(
+        string relativeTarget,
+        bool expected)
+    {
+        var installRoot = Path.Combine(_root, "shortcut-install");
+        var target = Path.Combine(installRoot, relativeTarget);
+
+        Assert.Equal(
+            expected,
+            StableShortcutMigration.IsVersionedClientTarget(installRoot, target));
+    }
+
+    [Fact]
+    public void ShortcutMigration_PreservesLinkAndRetargetsPermanentLauncher()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var installRoot = Path.Combine(_root, "real-shortcut-install");
+        var stableLauncher = Path.Combine(
+            installRoot,
+            "Client",
+            "1Salem.ServerManager.exe");
+        var oldClient = Path.Combine(
+            installRoot,
+            "Versions",
+            "1.3.1",
+            "Client",
+            "1Salem.ServerManager.exe");
+        var shortcutRoot = Path.Combine(_root, "pinned-shortcuts");
+        var shortcutPath = Path.Combine(shortcutRoot, "1Salem.lnk");
+        Directory.CreateDirectory(Path.GetDirectoryName(stableLauncher)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(oldClient)!);
+        Directory.CreateDirectory(shortcutRoot);
+        File.WriteAllText(stableLauncher, "stable launcher");
+        File.WriteAllText(oldClient, "old client");
+        CreateShortcut(shortcutPath, oldClient);
+
+        var result = StableShortcutMigration.RetargetInstalledShortcuts(
+            installRoot,
+            stableLauncher,
+            [shortcutRoot]);
+
+        Assert.True(File.Exists(shortcutPath));
+        Assert.Equal(1, result.Updated);
+        Assert.Empty(result.Failures);
+        Assert.Equal(
+            Path.GetFullPath(stableLauncher),
+            Path.GetFullPath(ReadShortcutTarget(shortcutPath)),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -278,6 +380,70 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
         var entry = archive.CreateEntry(path);
         using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
         writer.Write(content);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void CreateShortcut(string shortcutPath, string targetPath)
+    {
+        WithShortcut(shortcutPath, (shortcut, shortcutType) =>
+        {
+            shortcutType.InvokeMember(
+                "TargetPath",
+                BindingFlags.SetProperty,
+                null,
+                shortcut,
+                [targetPath]);
+            shortcutType.InvokeMember(
+                "Save",
+                BindingFlags.InvokeMethod,
+                null,
+                shortcut,
+                null);
+            return string.Empty;
+        });
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static string ReadShortcutTarget(string shortcutPath) =>
+        WithShortcut(shortcutPath, (shortcut, shortcutType) =>
+            shortcutType.InvokeMember(
+                "TargetPath",
+                BindingFlags.GetProperty,
+                null,
+                shortcut,
+                null) as string ?? string.Empty);
+
+    [SupportedOSPlatform("windows")]
+    private static string WithShortcut(
+        string shortcutPath,
+        Func<object, Type, string> action)
+    {
+        var shellType = Type.GetTypeFromProgID("WScript.Shell")!;
+        object? shell = null;
+        object? shortcut = null;
+        try
+        {
+            shell = Activator.CreateInstance(shellType)!;
+            shortcut = shellType.InvokeMember(
+                "CreateShortcut",
+                BindingFlags.InvokeMethod,
+                null,
+                shell,
+                [shortcutPath])!;
+            return action(shortcut, shortcut.GetType());
+        }
+        finally
+        {
+            if (shortcut is not null && Marshal.IsComObject(shortcut))
+            {
+                _ = Marshal.FinalReleaseComObject(shortcut);
+            }
+
+            if (shell is not null && Marshal.IsComObject(shell))
+            {
+                _ = Marshal.FinalReleaseComObject(shell);
+            }
+        }
     }
 
     public void Dispose()
