@@ -10,11 +10,8 @@ namespace ServerManager.Client;
 
 public partial class FileManagerWindow : Window
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(30)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(30));
     private ManagedFileEntry[] _entries = [];
     private string _currentPath = string.Empty;
     private string? _openTextPath;

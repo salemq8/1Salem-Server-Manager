@@ -12,11 +12,8 @@ public sealed class TrayIconService : IDisposable
 {
     private readonly MainWindow _window;
     private readonly Action _exitDashboard;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(15)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(15));
     private readonly WindowsStartupManager _startupManager = new();
     private readonly Forms.NotifyIcon _notifyIcon;
     private readonly Forms.ContextMenuStrip _menu = new();

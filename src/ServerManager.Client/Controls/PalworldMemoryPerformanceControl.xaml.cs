@@ -20,11 +20,8 @@ public partial class PalworldMemoryPerformanceControl :
     IDisposable
 {
     private const long Gibibyte = 1024L * 1024 * 1024;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(3)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(3));
     private readonly MemoryPolicyEditorViewModel _editor = new();
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private Guid? _serverId;

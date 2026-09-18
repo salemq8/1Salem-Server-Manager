@@ -15,11 +15,8 @@ public partial class RemoteAccessControl : System.Windows.Controls.UserControl, 
 {
     private static readonly Uri DownloadUri = new("https://playit.gg/download/");
     private static readonly Uri TunnelsUri = new("https://playit.gg/account/tunnels");
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(30)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(30));
     private readonly DispatcherTimer _timer = new()
     {
         Interval = TimeSpan.FromSeconds(2)

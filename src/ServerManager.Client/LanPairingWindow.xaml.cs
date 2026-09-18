@@ -20,11 +20,8 @@ public partial class LanPairingWindow : Window
     {
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-                Timeout = TimeSpan.FromSeconds(10)
-            };
+            using var client = AgentTransportDefaults.CreateLoopbackHttpClient(
+                TimeSpan.FromSeconds(10));
             var challenge = await client.PostAsync("/api/v1/pairing/challenge", null);
             challenge.EnsureSuccessStatusCode();
             var value = await challenge.Content.ReadFromJsonAsync<PairingChallenge>();

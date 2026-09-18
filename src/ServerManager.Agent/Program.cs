@@ -11,6 +11,7 @@ using ServerManager.Infrastructure.Games.Palworld;
 using ServerManager.Infrastructure.Games;
 using ServerManager.Infrastructure.Security;
 using ServerManager.Infrastructure.Backups;
+using ServerManager.Infrastructure.Concurrency;
 using ServerManager.Infrastructure.Windows;
 using ServerManager.Infrastructure.Files;
 using ServerManager.Infrastructure.Playit;
@@ -69,6 +70,9 @@ builder.Services.AddSingleton<IClientStore, SqliteClientStore>();
 builder.Services.AddHostedService<DatabaseInitializationService>();
 builder.Services.AddSingleton<ISecretStore>(certificateSecretStore);
 builder.Services.AddSingleton(certificateIdentity);
+builder.Services.AddSingleton<ILocalAgentCredential>(
+    new LocalAgentCredentialStore(agentOptions.DataRoot));
+builder.Services.AddSingleton<IServerOperationCoordinator, ServerOperationCoordinator>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IPairingService, SecurePairingService>();
 builder.Services.AddSingleton<IJavaRuntimeLocator, JavaRuntimeLocator>();
@@ -919,6 +923,9 @@ app.MapPost(
             .FirstOrDefault(item =>
                 item.ServerId == request.ServerId &&
                 item.Kind.Equals("Backup", StringComparison.OrdinalIgnoreCase));
+        var existingSettings = await settingsStore.GetAsync<BackupCenterSettings>(
+            $"backup.center.{server.Id:N}",
+            cancellationToken);
         var schedule = new ScheduleRecord(
             existing?.Id ?? Guid.NewGuid(),
             request.ServerId,
@@ -942,7 +949,8 @@ app.MapPost(
                 request.KeepWeekly,
                 schedule.NextRunAtUtc,
                 schedule.LastRunAtUtc,
-                null),
+                existingSettings?.LastSuccessfulWorldSaveAtUtc,
+                existingSettings?.LastRunStatusMessage),
             cancellationToken);
         return Results.Ok(schedule);
     });

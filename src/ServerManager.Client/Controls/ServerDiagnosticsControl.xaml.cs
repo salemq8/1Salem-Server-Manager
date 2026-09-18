@@ -18,11 +18,8 @@ public partial class ServerDiagnosticsControl :
     System.Windows.Controls.UserControl,
     IDisposable
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(20));
     private Guid? _serverId;
     private IReadOnlyList<DiagnosticRow> _checks = [];
     private bool _running;

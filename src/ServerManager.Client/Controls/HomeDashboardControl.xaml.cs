@@ -14,11 +14,8 @@ public sealed record ServerNavigationRequest(GameType Game, int TabIndex);
 public partial class HomeDashboardControl : System.Windows.Controls.UserControl, IDisposable
 {
     private const long Gibibyte = 1024L * 1024 * 1024;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(20));
     private readonly DispatcherTimer _timer = new()
     {
         Interval = TimeSpan.FromSeconds(2)

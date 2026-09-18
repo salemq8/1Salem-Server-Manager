@@ -21,11 +21,8 @@ namespace ServerManager.Client.Controls;
 public partial class GameServerPageControl : System.Windows.Controls.UserControl, IDisposable
 {
     private const long Mebibyte = 1024L * 1024;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(30)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(30));
     private readonly DispatcherTimer _timer = new()
     {
         Interval = TimeSpan.FromSeconds(2)

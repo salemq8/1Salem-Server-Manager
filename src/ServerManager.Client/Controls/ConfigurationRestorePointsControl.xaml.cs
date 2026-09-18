@@ -15,11 +15,8 @@ public partial class ConfigurationRestorePointsControl :
     System.Windows.Controls.UserControl,
     IDisposable
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(5)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(5));
     private Guid? _serverId;
     private bool _loading;
 

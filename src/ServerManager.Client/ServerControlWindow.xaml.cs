@@ -13,11 +13,8 @@ public partial class ServerControlWindow : Window
 {
     private const long Mebibyte = 1024L * 1024;
     private readonly GameType _game;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(20)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(20));
     private readonly DispatcherTimer _timer = new()
     {
         Interval = TimeSpan.FromSeconds(2)

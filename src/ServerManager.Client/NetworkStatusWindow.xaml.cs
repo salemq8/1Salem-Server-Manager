@@ -8,11 +8,8 @@ namespace ServerManager.Client;
 
 public partial class NetworkStatusWindow : Window
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(15)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(15));
 
     public NetworkStatusWindow()
     {

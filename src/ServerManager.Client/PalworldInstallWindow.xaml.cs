@@ -9,11 +9,8 @@ namespace ServerManager.Client;
 
 public partial class PalworldInstallWindow : Window
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(40)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(40));
 
     public PalworldInstallWindow()
     {

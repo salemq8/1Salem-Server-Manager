@@ -8,11 +8,8 @@ namespace ServerManager.Client;
 
 public partial class BackupCenterWindow : Window
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(30)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(30));
 
     public BackupCenterWindow()
     {

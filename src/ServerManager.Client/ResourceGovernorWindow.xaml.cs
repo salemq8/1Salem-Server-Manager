@@ -10,11 +10,8 @@ namespace ServerManager.Client;
 public partial class ResourceGovernorWindow : Window
 {
     private const long Gibibyte = 1024L * 1024 * 1024;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(20));
 
     public ResourceGovernorWindow()
     {

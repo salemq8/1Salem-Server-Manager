@@ -13,11 +13,8 @@ namespace ServerManager.Client;
 public partial class MinecraftInstallWindow : Window
 {
     private const long Gibibyte = 1024L * 1024 * 1024;
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(30)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(30));
     private readonly List<string> _progressLines = [];
     private MinecraftCreationPlan? _plan;
     private MinecraftCreationProgress? _lastProgress;

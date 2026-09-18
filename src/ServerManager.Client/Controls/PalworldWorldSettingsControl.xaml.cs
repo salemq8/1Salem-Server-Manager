@@ -21,11 +21,8 @@ namespace ServerManager.Client.Controls;
 
 public partial class PalworldWorldSettingsControl : System.Windows.Controls.UserControl, IDisposable
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromMinutes(5)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(5));
     private readonly ObservableCollection<SettingRow> _settings = [];
     private readonly ICollectionView _settingsView;
     private Guid? _serverId;

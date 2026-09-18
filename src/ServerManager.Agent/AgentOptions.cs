@@ -7,19 +7,15 @@ public sealed record AgentOptions(
     string PipeName,
     string ApiUrl,
     bool LanEnabled = false,
-    int LanPort = 5252,
-    bool TrustLocalhost = true)
+    int LanPort = 5252)
 {
     public static AgentOptions Parse(IReadOnlyList<string> args)
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        var dataRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "1SalemServerManager");
+        var dataRoot = AgentTransportDefaults.ResolveDataRoot();
         var lanEnabled = false;
         var lanPort = 5252;
-        var trustLocalhost = true;
         var pipeName = AgentTransportDefaults.ResolvePipeName();
         var apiUrl = AgentTransportDefaults.ResolveLoopbackApiUrl();
 
@@ -55,12 +51,6 @@ public sealed record AgentOptions(
                 }
 
                 lanPort = ParsePort(args[++index]);
-            }
-            else if (argument.Equals(
-                         "--lan-no-localhost-trust",
-                         StringComparison.OrdinalIgnoreCase))
-            {
-                trustLocalhost = false;
             }
             else if (argument.StartsWith("--api-url=", StringComparison.OrdinalIgnoreCase))
             {
@@ -100,8 +90,7 @@ public sealed record AgentOptions(
             pipeName,
             apiUrl,
             lanEnabled,
-            lanPort,
-            trustLocalhost);
+            lanPort);
     }
 
     private static int ParsePort(string value) =>

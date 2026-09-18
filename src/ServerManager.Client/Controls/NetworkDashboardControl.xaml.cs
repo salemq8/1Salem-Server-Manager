@@ -12,11 +12,8 @@ namespace ServerManager.Client.Controls;
 
 public partial class NetworkDashboardControl : System.Windows.Controls.UserControl, IDisposable
 {
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+    private readonly HttpClient _httpClient =
+        AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(20));
     private readonly DispatcherTimer _timer = new()
     {
         Interval = TimeSpan.FromSeconds(2)
