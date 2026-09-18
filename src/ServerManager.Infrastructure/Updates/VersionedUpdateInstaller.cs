@@ -190,7 +190,22 @@ public sealed class VersionedUpdateInstaller
 
             Directory.CreateDirectory(Path.GetDirectoryName(stableLauncher)!);
             AtomicCopy(paths.LauncherPath, stableLauncher);
-            CopyDirectory(paths.UpdaterRoot, Path.GetDirectoryName(rootUpdater)!);
+            var liveUpdaterRoot = Path.GetDirectoryName(rootUpdater)!;
+            if (Directory.Exists(liveUpdaterRoot))
+            {
+                // The self-updater payload is replaced with the same stage-then-atomic-swap
+                // sequence as the Agent below: a crash mid-copy must never leave the live
+                // Updater executable truncated, since a corrupted Updater breaks every future
+                // self-update attempt until a manual Setup.exe repair redeploys it.
+                ReplaceDirectory(
+                    liveUpdaterRoot,
+                    paths.UpdaterRoot,
+                    Path.Combine(workRoot, "old-updater"));
+            }
+            else
+            {
+                CopyDirectory(paths.UpdaterRoot, liveUpdaterRoot);
+            }
             if (paths.MaintenanceExecutable is not null)
             {
                 AtomicCopy(
@@ -663,19 +678,96 @@ public sealed class VersionedUpdateInstaller
         }
     }
 
-    private static void ReplaceDirectory(string live, string source, string old)
+    /// <summary>
+    /// Replaces a live directory's contents without ever leaving <paramref name="live"/> in a
+    /// partially-copied state. The new content is fully staged and verified in a location that
+    /// is not <paramref name="live"/> first; only then are two back-to-back atomic directory
+    /// renames used to swap it in (<paramref name="live"/> -> <paramref name="old"/>, staged ->
+    /// <paramref name="live"/>). This shrinks the unsafe window from "however long the entire
+    /// file-by-file copy takes" (the previous behavior: a crash mid-copy left <paramref name="live"/>
+    /// with an arbitrary mix of old and new files) down to the duration of two near-instantaneous
+    /// filesystem renames. If a crash lands in that narrower window and <paramref name="live"/>
+    /// ends up missing, this method still recovers correctly on any later call for the same
+    /// <paramref name="live"/> path (a subsequent update attempt, or a Setup.exe repair that
+    /// redeploys the directory from scratch): it tolerates <paramref name="live"/> already being
+    /// absent and simply activates the freshly staged content directly.
+    /// </summary>
+    internal static void ReplaceDirectory(string live, string source, string old)
     {
         if (Directory.Exists(old))
         {
             throw new IOException($"Temporary update path already exists: {old}");
         }
 
-        if (Directory.Exists(live))
+        var staged = $"{live}.staged-{Guid.NewGuid():N}";
+        try
         {
-            Directory.Move(live, old);
+            CopyDirectory(source, staged);
+            VerifyDirectoryCopy(source, staged);
+
+            if (Directory.Exists(live))
+            {
+                Directory.Move(live, old);
+            }
+
+            try
+            {
+                Directory.Move(staged, live);
+            }
+            catch
+            {
+                // Activation failed after the swap-out. Restore the previous working
+                // directory immediately rather than leaving `live` missing.
+                if (Directory.Exists(old) && !Directory.Exists(live))
+                {
+                    Directory.Move(old, live);
+                }
+
+                throw;
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(staged);
+        }
+    }
+
+    /// <summary>
+    /// Confirms a staged copy has the same files, in the same relative locations, with the
+    /// same sizes, as its source -- defense against a copy that silently truncated or dropped a
+    /// file without the underlying I/O call itself throwing.
+    /// </summary>
+    internal static void VerifyDirectoryCopy(string source, string staged)
+    {
+        var sourceFiles = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)
+            .ToDictionary(
+                file => Path.GetRelativePath(source, file),
+                file => new FileInfo(file).Length,
+                StringComparer.OrdinalIgnoreCase);
+        var stagedFiles = Directory.EnumerateFiles(staged, "*", SearchOption.AllDirectories)
+            .ToDictionary(
+                file => Path.GetRelativePath(staged, file),
+                file => new FileInfo(file).Length,
+                StringComparer.OrdinalIgnoreCase);
+        if (sourceFiles.Count != stagedFiles.Count)
+        {
+            throw new IOException(
+                $"Staged copy is incomplete: expected {sourceFiles.Count} files, found {stagedFiles.Count}.");
         }
 
-        CopyDirectory(source, live);
+        foreach (var (relative, size) in sourceFiles)
+        {
+            if (!stagedFiles.TryGetValue(relative, out var stagedSize))
+            {
+                throw new IOException($"Staged copy is missing an expected file: {relative}");
+            }
+
+            if (stagedSize != size)
+            {
+                throw new IOException(
+                    $"Staged copy has the wrong size for {relative}: expected {size}, found {stagedSize}.");
+            }
+        }
     }
 
     private static void CopyDirectory(
