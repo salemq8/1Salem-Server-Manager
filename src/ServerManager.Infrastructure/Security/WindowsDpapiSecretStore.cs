@@ -6,9 +6,18 @@ using ServerManager.Core;
 
 namespace ServerManager.Infrastructure.Security;
 
+/// <summary>
+/// Protects secrets with per-user (not per-machine) DPAPI: only the Windows account that
+/// encrypted a value -- always the account running the process that created it, whether that
+/// is the Agent's fixed LocalSystem service account or the interactive Client user -- can
+/// decrypt it again. Every current caller of this store (the Agent's own HTTPS certificate key,
+/// which only the Agent itself ever reads back; and the Client's own paired LAN credential,
+/// which only that Client process ever reads back) is single-principal, so there is no
+/// legitimate need for machine-wide (CRYPTPROTECT_LOCAL_MACHINE) scope, which would make the
+/// value decryptable by every other local account on the machine.
+/// </summary>
 public sealed class WindowsDpapiSecretStore : ISecretStore
 {
-    private const uint CryptProtectLocalMachine = 0x4;
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("1Salem.ServerManager.v1");
 
     public string Protect(string plaintext)
@@ -26,7 +35,7 @@ public sealed class WindowsDpapiSecretStore : ISecretStore
                     ref entropy,
                     nint.Zero,
                     nint.Zero,
-                    CryptProtectLocalMachine,
+                    0,
                     out var output))
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "DPAPI protection failed.");

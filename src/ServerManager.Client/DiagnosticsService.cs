@@ -127,12 +127,8 @@ public static partial class DiagnosticsService
     {
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress =
-                    new Uri(AgentTransportDefaults.ResolveLoopbackApiUrl()),
-                Timeout = TimeSpan.FromSeconds(5)
-            };
+            using var client = AgentTransportDefaults.CreateLoopbackHttpClient(
+                TimeSpan.FromSeconds(5));
             var dashboard =
                 await client.GetFromJsonAsync<DashboardSnapshot>(
                     "/api/v1/dashboard",
@@ -147,8 +143,25 @@ public static partial class DiagnosticsService
         }
     }
 
+    // The previous value pattern excluded whitespace (`[^,""'\s}]+`), so it stopped at the
+    // first internal space -- meaning only the first word of a multi-word secret (e.g. an ini
+    // value like `ServerPassword="my secret pass"`) was ever replaced, leaking the rest in
+    // exported diagnostics, copied reports, and inline error text.
+    //
+    // The value is now matched as either a properly-delimited quoted string (which can contain
+    // spaces and even embedded newlines without ending the match early -- it only ends at its
+    // own matching quote) or, if unquoted, a run that stops at the next comma, semicolon,
+    // quote, closing brace/bracket, or line break rather than the first space. The key/value
+    // separator no longer treats a quote character as part of itself (previously `[""':=]+`
+    // could swallow a JSON value's own opening quote), so a quoted value is matched as a
+    // complete, self-contained unit.
+    //
+    // The boundary around the keyword uses `(?<![a-zA-Z])`/`(?![a-zA-Z])` instead of `\b`, so a
+    // keyword still matches when adjacent to `_` or a digit (e.g. the `access_token` query
+    // parameter this Agent's own SignalR hub authentication uses) -- `\b` alone does not treat
+    // `_` as a boundary.
     [GeneratedRegex(
-        @"(?i)\b(password|token|secret|credential|adminpassword|serverpassword)\b\s*[""':=]+\s*[""']?[^,""'\s}]+",
+        @"(?i)(?<![a-zA-Z])(password|token|secret|credential|adminpassword|serverpassword)(?![a-zA-Z])""?\s*[:=]+\s*(?:""(?:[^""\\]|\\.)*""|'(?:[^'\\]|\\.)*'|[^,;""'\]\}\r\n]+)",
         RegexOptions.CultureInvariant)]
     private static partial Regex SecretPattern();
 }
