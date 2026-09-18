@@ -35,7 +35,8 @@ public sealed record BackupCenterSettings(
     bool KeepWeekly,
     DateTimeOffset? NextRunAtUtc,
     DateTimeOffset? LastRunAtUtc,
-    DateTimeOffset? LastSuccessfulWorldSaveAtUtc);
+    DateTimeOffset? LastSuccessfulWorldSaveAtUtc,
+    string? LastRunStatusMessage = null);
 
 public sealed record BackupDestinationValidationResult(
     bool IsValid,

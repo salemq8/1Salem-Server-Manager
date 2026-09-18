@@ -21,7 +21,8 @@ public sealed class GameServerOrchestrator(
     ProcessSupervisor processRuntime,
     ISettingsStore settingsStore,
     ISystemResourceReader systemResourceReader,
-    IAuditLogStore auditLogStore)
+    IAuditLogStore auditLogStore,
+    IServerOperationCoordinator coordinator)
 {
     private readonly IReadOnlyDictionary<GameType, IGameServerProvider> _providers =
         providers.ToDictionary(provider => provider.Game);
@@ -40,6 +41,15 @@ public sealed class GameServerOrchestrator(
         Guid serverId,
         bool overrideUnsafeBudget,
         CancellationToken cancellationToken = default)
+    {
+        await using var _ = await coordinator.AcquireAsync(serverId, "Start", cancellationToken: cancellationToken);
+        return await StartCoreAsync(serverId, overrideUnsafeBudget, cancellationToken);
+    }
+
+    private async Task<ProcessSnapshot> StartCoreAsync(
+        Guid serverId,
+        bool overrideUnsafeBudget,
+        CancellationToken cancellationToken)
     {
         var server = await GetRequiredServerAsync(serverId, cancellationToken);
         var budget = await CalculateStartBudgetAsync(server, cancellationToken);
@@ -140,6 +150,14 @@ public sealed class GameServerOrchestrator(
         Guid serverId,
         CancellationToken cancellationToken = default)
     {
+        await using var _ = await coordinator.AcquireAsync(serverId, "Adopt", cancellationToken: cancellationToken);
+        return await AdoptExistingCoreAsync(serverId, cancellationToken);
+    }
+
+    private async Task<ProcessSnapshot?> AdoptExistingCoreAsync(
+        Guid serverId,
+        CancellationToken cancellationToken)
+    {
         var server = await GetRequiredServerAsync(serverId, cancellationToken);
         var provider = GetRequiredProvider(server.Game);
         var spec = provider.CreateLaunchSpec(server);
@@ -190,6 +208,15 @@ public sealed class GameServerOrchestrator(
         bool force,
         CancellationToken cancellationToken = default)
     {
+        await using var _ = await coordinator.AcquireAsync(serverId, "Stop", cancellationToken: cancellationToken);
+        return await StopCoreAsync(serverId, force, cancellationToken);
+    }
+
+    private async Task<OperationResult> StopCoreAsync(
+        Guid serverId,
+        bool force,
+        CancellationToken cancellationToken)
+    {
         var server = await GetRequiredServerAsync(serverId, cancellationToken);
         var provider = GetRequiredProvider(server.Game);
         await gameServerStore.SetStateAsync(serverId, ServerState.Stopping, cancellationToken);
@@ -214,18 +241,21 @@ public sealed class GameServerOrchestrator(
         Guid serverId,
         CancellationToken cancellationToken = default)
     {
+        // Held for the whole Stop+Start sequence -- not just each half separately -- so no
+        // other Start/Stop/Restart/Adopt for this server can interleave in between.
+        await using var _ = await coordinator.AcquireAsync(serverId, "Restart", cancellationToken: cancellationToken);
         try
         {
             var server = await GetRequiredServerAsync(serverId, cancellationToken);
             var provider = GetRequiredProvider(server.Game);
             await gameServerStore.SetStateAsync(serverId, ServerState.Restarting, cancellationToken);
-            var stopped = await StopAsync(serverId, false, cancellationToken);
+            var stopped = await StopCoreAsync(serverId, false, cancellationToken);
             if (!stopped.Success)
             {
                 throw new InvalidOperationException(stopped.Message);
             }
 
-            var result = await StartAsync(
+            var result = await StartCoreAsync(
                 serverId,
                 false,
                 cancellationToken);

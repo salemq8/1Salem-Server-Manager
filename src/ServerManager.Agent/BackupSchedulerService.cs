@@ -57,7 +57,12 @@ public sealed class BackupSchedulerService(
                     destination = BackupDestinationPolicy.GetDefaultRoot(server);
                 }
 
-                await backupService.CreateAsync(
+                // SafeOffline is requested only for Minecraft; a running Palworld server backs
+                // up via its own REST-based world save when available, falling back to a
+                // safe-offline stop/backup/restart cycle inside BackupService itself only if
+                // that REST save isn't available. Either way this call must succeed -- a
+                // scheduled backup must never depend on an optional feature being enabled.
+                var result = await backupService.CreateAsync(
                     new BackupRequest(
                         server.Id,
                         destination,
@@ -97,7 +102,8 @@ public sealed class BackupSchedulerService(
                             LastSuccessfulWorldSaveAtUtc =
                                 server.Game == GameType.Palworld
                                     ? now
-                                    : settings.LastSuccessfulWorldSaveAtUtc
+                                    : settings.LastSuccessfulWorldSaveAtUtc,
+                            LastRunStatusMessage = result.StatusMessage
                         },
                         cancellationToken);
                 }
@@ -108,6 +114,27 @@ public sealed class BackupSchedulerService(
                     exception,
                     "Scheduled backup {ScheduleId} failed.",
                     schedule.Id);
+
+                // A failed scheduled backup must be just as visible as a successful one --
+                // silently leaving LastRunAtUtc stale is how this went unnoticed before.
+                var settingsKey = $"backup.center.{schedule.ServerId!.Value:N}";
+                var settings = await settingsStore.GetAsync<BackupCenterSettings>(
+                    settingsKey,
+                    cancellationToken);
+                if (settings is not null)
+                {
+                    await settingsStore.SetAsync(
+                        settingsKey,
+                        settings with
+                        {
+                            LastRunAtUtc = now,
+                            NextRunAtUtc = ScheduleExpression.GetNextRun(
+                                schedule.CronExpression,
+                                now),
+                            LastRunStatusMessage = $"Backup failed: {exception.Message}"
+                        },
+                        cancellationToken);
+                }
             }
             finally
             {

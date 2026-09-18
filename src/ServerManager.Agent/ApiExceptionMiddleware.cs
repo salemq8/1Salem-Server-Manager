@@ -1,4 +1,5 @@
 using ServerManager.Contracts;
+using ServerManager.Core;
 
 namespace ServerManager.Agent;
 
@@ -53,6 +54,12 @@ public sealed class ApiExceptionMiddleware(
                 "UnsafeServerBudget",
                 "The current memory policy does not have enough safe capacity for this start.",
                 "Open Palworld Performance, recalculate, save valid values, or use Start Anyway Once when explicitly enabled.",
+                true),
+            ServerBusyException => (
+                StatusCodes.Status409Conflict,
+                "ServerBusy",
+                "Another operation is already in progress for this server.",
+                "Wait for the in-progress operation to finish, then retry.",
                 true),
             KeyNotFoundException => (
                 StatusCodes.Status404NotFound,

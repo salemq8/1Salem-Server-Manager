@@ -101,7 +101,8 @@ public sealed record BackupResult(
     string Sha256,
     long SizeBytes,
     int FileCount,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    string StatusMessage = "Backup succeeded.");
 
 public sealed record ResourcePolicy(
     ResourceMode Mode,

@@ -96,6 +96,14 @@ public interface IBackupService
         string? notes,
         bool isProtected,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Completes any restore transactions left behind by a crash or forced shutdown that
+    /// occurred after live files were swapped but before the restore committed. Safe to call
+    /// on every Agent startup; returns the number of interrupted restores it repaired.
+    /// </summary>
+    Task<int> RecoverInterruptedRestoresAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(0);
 }
 
 public interface IResourceGovernor
@@ -123,6 +131,41 @@ public interface IProcessResourceController
 public interface ISystemResourceReader
 {
     SystemResourceSnapshot Capture(ResourcePolicy activePolicy);
+}
+
+/// <summary>
+/// Serializes conflicting operations against the same registered server (Start, Stop, Restart,
+/// Backup, Restore, ...) across every service that shares one instance of this coordinator, so
+/// two callers can never mutate the same server's live process or files at the same time.
+/// Locking is per-server, not global -- operations against different servers never wait on
+/// each other.
+/// </summary>
+public interface IServerOperationCoordinator
+{
+    /// <summary>
+    /// Waits (up to <paramref name="timeout"/>) for exclusive access to <paramref name="serverId"/>,
+    /// then returns a handle that releases it on disposal. Throws <see cref="ServerBusyException"/>
+    /// if another operation against the same server is still in flight when the timeout elapses.
+    /// <paramref name="operationName"/> (e.g. "Start", "Restore") is surfaced in that exception so a
+    /// caller blocked behind another in-flight operation knows what it's waiting on.
+    /// </summary>
+    Task<IAsyncDisposable> AcquireAsync(
+        Guid serverId,
+        string operationName,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Thrown when a caller could not obtain exclusive access to a server within the allotted time
+/// because another operation (Start/Stop/Restart/Backup/Restore/...) against the same server is
+/// still in flight.
+/// </summary>
+public sealed class ServerBusyException(Guid serverId, string operationInProgress)
+    : InvalidOperationException(
+        $"Another operation ({operationInProgress}) is already in progress for this server. Wait for it to finish and try again.")
+{
+    public Guid ServerId { get; } = serverId;
 }
 
 public interface INetworkService
