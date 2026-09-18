@@ -9,6 +9,9 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // The launcher itself never shows a window, but setting this before it does anything
+        // else costs nothing and keeps every process in the Stable launch chain consistent.
+        ProductIdentity.ApplyExplicitAppUserModelId(ProductIdentity.AppUserModelId);
         try
         {
             var launcherPath = Environment.ProcessPath ??

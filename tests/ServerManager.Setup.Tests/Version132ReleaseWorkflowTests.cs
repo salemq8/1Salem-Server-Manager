@@ -178,7 +178,15 @@ public sealed partial class Version132ReleaseWorkflowTests
             "StableLauncherRelativePath = @\"Client\\1Salem.ServerManager.exe\"",
             identity,
             StringComparison.Ordinal);
-        Assert.DoesNotContain("SetCurrentProcessExplicitAppUserModelID", identity, StringComparison.Ordinal);
+        // The Stable AppUserModelID is a single fixed constant (not derived from a version or
+        // build path), and the raw Win32 call is only ever reached from behind an
+        // OperatingSystem.IsWindows() guard -- never called unconditionally from this
+        // cross-platform contracts file.
+        Assert.Contains(
+            "public const string AppUserModelId = \"1Salem.ServerManager.Client\";",
+            identity,
+            StringComparison.Ordinal);
+        Assert.Contains("OperatingSystem.IsWindows()", identity, StringComparison.Ordinal);
         Assert.Contains("\"Client\",\n                        \"1Salem.ServerManager.exe\"", installer, StringComparison.Ordinal);
         Assert.Contains("VersionBuildPath(installRoot, \"Client\")", installer, StringComparison.Ordinal);
     }

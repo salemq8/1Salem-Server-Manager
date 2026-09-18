@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using ServerManager.Client.Shell;
+using ServerManager.Contracts;
 
 namespace ServerManager.Client.Preview;
 
@@ -8,6 +9,10 @@ public partial class App : Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // A distinct identity from the real Stable app (ProductIdentity.AppUserModelId), so
+        // this developer-only design/screenshot harness can never visually merge with, or be
+        // mistaken for, the real running application in the taskbar.
+        ProductIdentity.ApplyExplicitAppUserModelId(ProductIdentity.PreviewAppUserModelId);
         base.OnStartup(e);
         var options = PreviewOptions.Parse(e.Args);
         LocalizationService.Apply(options.Language);

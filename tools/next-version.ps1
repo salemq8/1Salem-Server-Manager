@@ -1,11 +1,18 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Patch', 'Minor', 'Major')]
+    [ValidateSet('Minor', 'Major')]
     [string]$Part,
     [switch]$Apply,
     [string]$Authorization
 )
+
+# VERSION is Salem's fixed two-part visible product version (Major.Minor), enforced by the
+# ValidateProductVersion MSBuild target in Directory.Build.props (`^\d+\.\d+$`). There is no
+# "Patch" concept at this level any more -- ordinary patch-level changes are the internal
+# BUILD_REVISION's job (see tools/next-build.ps1), not a VERSION change. This tool is reserved
+# for the rare, explicitly-authorized case where Salem decides the visible product version
+# itself should change (e.g. 1.5 -> 1.6 or 1.5 -> 2.0).
 
 $ErrorActionPreference = 'Stop'
 if ($Apply -and $Authorization -cne 'Change the product version.') {
@@ -40,11 +47,13 @@ else {
 }
 $highest = [version]$highestText
 $next = switch ($Part) {
-    'Patch' { [version]::new($highest.Major, $highest.Minor, $highest.Build + 1) }
-    'Minor' { [version]::new($highest.Major, $highest.Minor + 1, 0) }
-    'Major' { [version]::new($highest.Major + 1, 0, 0) }
+    'Minor' { [version]::new($highest.Major, $highest.Minor + 1) }
+    'Major' { [version]::new($highest.Major + 1, 0) }
 }
-$nextText = '{0}.{1}.{2}' -f $next.Major, $next.Minor, $next.Build
+# Two-part only (Major.Minor) -- matches the exact format ValidateProductVersion in
+# Directory.Build.props requires. A 3-part value here would pass this script but fail the very
+# next build with "VERSION must contain Salem's fixed two-part visible product version".
+$nextText = '{0}.{1}' -f $next.Major, $next.Minor
 
 Write-Host "Highest known version: $highestText"
 Write-Host "$Part result: $nextText"

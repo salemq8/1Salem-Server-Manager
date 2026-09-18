@@ -11,6 +11,12 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Must happen before the first top-level window is created (Windows freezes the
+        // AppUserModelID at that point) so the taskbar button for this running process merges
+        // with a shortcut pinned via WindowsShortcutManager, which stamps the same ID onto the
+        // .lnk itself -- neither alone is sufficient, since the two are matched by this ID, not
+        // by the (version-dependent) executable path.
+        ProductIdentity.ApplyExplicitAppUserModelId(ProductIdentity.AppUserModelId);
         base.OnStartup(e);
         var preferences = new UiPreferencesStore().Load();
         LocalizationService.Apply(preferences.Language);
