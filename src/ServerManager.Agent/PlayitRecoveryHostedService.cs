@@ -73,15 +73,16 @@ public sealed class PlayitRecoveryHostedService(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await supervisor.StopAsync(cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception, "Playit did not stop cleanly with the Agent.");
-        }
-
+        // Agent host shutdown -- a binary update, a Windows Service restart, or a crash -- must
+        // never imply "stop Playit". Only an explicit user/admin action (the real Stop Playit
+        // button, calling OfficialPlayitSupervisor.StopAsync directly) may terminate the real
+        // process. This deliberately does NOT stop it: the OS process keeps running
+        // independently of this Agent instance's own lifetime, and the next Agent instance's
+        // PlayitRecoveryHostedService.ExecuteAsync re-adopts it via TryAdoptExistingAsync
+        // instead of starting a new one. Previously this called supervisor.StopAsync(), which
+        // genuinely killed a live tunnel on every graceful Agent restart -- a real
+        // production-safety defect fixed in Version 1.5 Build 3.
+        supervisor.ReleaseWithoutStopping();
         await base.StopAsync(cancellationToken);
     }
 }

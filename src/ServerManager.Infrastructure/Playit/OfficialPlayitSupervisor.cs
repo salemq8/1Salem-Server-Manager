@@ -190,6 +190,7 @@ public sealed class OfficialPlayitSupervisor : IDisposable
             process.Start();
             _process = process;
             AddLog("Official Playit agent started in hidden mode.");
+            await PersistProcessIdentityAsync(process, cancellationToken);
             return new PlayitActionResponse(
                 true,
                 "Playit started.",
@@ -228,6 +229,7 @@ public sealed class OfficialPlayitSupervisor : IDisposable
                 _process = null;
             }
 
+            await ClearProcessIdentityAsync(cancellationToken);
             _state = PlayitRuntimeState.Stopped;
             _verified = false;
             return new PlayitActionResponse(
@@ -238,6 +240,24 @@ public sealed class OfficialPlayitSupervisor : IDisposable
         finally
         {
             _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Detaches this instance's in-memory tracking of the managed Playit process WITHOUT
+    /// stopping it -- the OS process keeps running untouched. This is the only thing an Agent
+    /// host shutdown (a binary update, a service restart, a crash) is allowed to do to Playit;
+    /// only an explicit <see cref="StopAsync"/> call (a real user/admin Stop-Playit action) may
+    /// actually terminate it. The next Agent instance is expected to re-adopt the still-running
+    /// process via <see cref="TryAdoptExistingAsync"/> rather than start a new one.
+    /// </summary>
+    public void ReleaseWithoutStopping()
+    {
+        if (_process is not null)
+        {
+            _process.Exited -= OnExited;
+            _process.Dispose();
+            _process = null;
         }
     }
 
@@ -291,9 +311,173 @@ public sealed class OfficialPlayitSupervisor : IDisposable
         }
 
         var settings = await LoadSettingsAsync(cancellationToken);
-        if (settings.Enabled)
+        if (!settings.Enabled)
         {
-            _ = await StartAsync(cancellationToken);
+            return;
+        }
+
+        // Re-adopt a Playit agent left running by a prior Agent instance (a binary update, a
+        // service restart, or a crash never stops Playit -- see ReleaseWithoutStopping) before
+        // ever considering starting a new one. StartAsync's own duplicate-prevention check
+        // (existing.Count > 0 => RunningExternally, no Process.Start) is still the backstop if
+        // adoption is skipped or declined here, so this can never result in two Playit
+        // processes either way.
+        if (await TryAdoptExistingAsync(cancellationToken))
+        {
+            return;
+        }
+
+        _ = await StartAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Attempts to re-adopt an already-running Playit agent instead of starting a new one.
+    /// Returns true only if a process was actually adopted. Never adopts when more than one
+    /// candidate process exists and none of them match a previously-recorded identity -- that
+    /// is surfaced as an error rather than guessed at, and no process is started or stopped.
+    /// </summary>
+    public async Task<bool> TryAdoptExistingAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_process is { HasExited: false })
+            {
+                return true;
+            }
+
+            var installation = _locator.Detect();
+            if (!installation.IsInstalled || installation.ExecutablePath is null)
+            {
+                return false;
+            }
+
+            var settings = await LoadSettingsAsync(cancellationToken);
+            if (!settings.Enabled)
+            {
+                return false;
+            }
+
+            var candidateIds = _processDiscovery.FindRunningProcessIds(installation.ExecutablePath);
+            if (candidateIds.Count == 0)
+            {
+                return false;
+            }
+
+            IPlayitProcess? adopted = candidateIds.Count == 1
+                ? TryValidateAndAttach(candidateIds[0], settings)
+                : settings.LastKnownProcessId is { } lastPid && candidateIds.Contains(lastPid)
+                    ? TryValidateAndAttach(lastPid, settings)
+                    : null;
+
+            if (adopted is null)
+            {
+                if (candidateIds.Count > 1)
+                {
+                    _lastError =
+                        "Multiple existing Playit processes were found and could not be " +
+                        "safely disambiguated; none were adopted automatically.";
+                    AddLog(_lastError);
+                }
+
+                return false;
+            }
+
+            adopted.Exited += OnExited;
+            _process = adopted;
+            _stopRequested = false;
+            _lastError = null;
+            _state = PlayitRuntimeState.Online;
+            _linked = true;
+            _verified = true;
+            AddLog($"Re-adopted the already-running official Playit agent (PID {adopted.Id}).");
+            await PersistProcessIdentityAsync(adopted, cancellationToken);
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Attaches to the given PID and, only when a specific prior identity was recorded for that
+    /// exact PID, confirms its start time still matches before trusting it -- protecting against
+    /// Windows having recycled that PID for an unrelated process since it was last recorded. A
+    /// PID with no prior recorded identity (e.g. the sole running candidate on first adoption
+    /// ever) is trusted on executable-path identity alone, which FindRunningProcessIds already
+    /// established.
+    /// </summary>
+    private IPlayitProcess? TryValidateAndAttach(int processId, PlayitSettings settings)
+    {
+        var process = _processFactory.Attach(processId);
+        if (process is null)
+        {
+            return null;
+        }
+
+        if (settings.LastKnownProcessId == processId &&
+            settings.LastKnownProcessStartTimeUtc is { } expectedStart)
+        {
+            var actualStart = process.StartTimeUtc;
+            if (actualStart is null || !AreCloseEnough(expectedStart, actualStart.Value))
+            {
+                process.Dispose();
+                return null;
+            }
+        }
+
+        return process;
+    }
+
+    private static bool AreCloseEnough(DateTimeOffset expected, DateTimeOffset actual) =>
+        (expected - actual).Duration() < TimeSpan.FromSeconds(2);
+
+    private async Task PersistProcessIdentityAsync(
+        IPlayitProcess process,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await LoadSettingsAsync(cancellationToken);
+            await _settingsStore.SetAsync(
+                SettingsKey,
+                settings with
+                {
+                    LastKnownProcessId = process.Id,
+                    LastKnownProcessStartTimeUtc = process.StartTimeUtc
+                },
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not persist the Playit process identity.");
+        }
+    }
+
+    private async Task ClearProcessIdentityAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await LoadSettingsAsync(cancellationToken);
+            if (settings.LastKnownProcessId is null &&
+                settings.LastKnownProcessStartTimeUtc is null)
+            {
+                return;
+            }
+
+            await _settingsStore.SetAsync(
+                SettingsKey,
+                settings with
+                {
+                    LastKnownProcessId = null,
+                    LastKnownProcessStartTimeUtc = null
+                },
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not clear the persisted Playit process identity.");
         }
     }
 
@@ -486,7 +670,9 @@ public sealed class OfficialPlayitSupervisor : IDisposable
         string? PalworldPublicAddress,
         string? SecretPath,
         bool LinkedPreviously,
-        DateTimeOffset? LastConnectionAtUtc)
+        DateTimeOffset? LastConnectionAtUtc,
+        int? LastKnownProcessId = null,
+        DateTimeOffset? LastKnownProcessStartTimeUtc = null)
     {
         public static PlayitSettings Default { get; } = new(
             false,

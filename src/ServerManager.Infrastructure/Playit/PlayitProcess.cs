@@ -10,6 +10,14 @@ public interface IPlayitProcess : IDisposable
 
     int Id { get; }
 
+    /// <summary>
+    /// The OS-reported start time of this process, used to detect PID reuse when re-adopting a
+    /// process recorded by a prior Agent instance: a different start time at the same PID means
+    /// Windows recycled that PID for an unrelated process, and it must not be adopted. Null if
+    /// unavailable (e.g. the process has already exited, or its start time could not be read).
+    /// </summary>
+    DateTimeOffset? StartTimeUtc { get; }
+
     bool HasExited { get; }
 
     void Start();
@@ -20,6 +28,15 @@ public interface IPlayitProcess : IDisposable
 public interface IPlayitProcessFactory
 {
     IPlayitProcess Create(ProcessStartInfo startInfo);
+
+    /// <summary>
+    /// Wraps an already-running process by PID -- used to re-adopt a Playit agent left running
+    /// by a prior Agent instance, instead of starting a new one. Never itself validates identity
+    /// beyond "a process with this PID currently exists"; the caller is responsible for
+    /// confirming it is genuinely the expected Playit process (executable path, prior recorded
+    /// start time) before trusting it. Returns null if no process with that PID exists.
+    /// </summary>
+    IPlayitProcess? Attach(int processId);
 }
 
 public interface IPlayitProcessDiscovery
@@ -31,6 +48,19 @@ public sealed class SystemPlayitProcessFactory : IPlayitProcessFactory
 {
     public IPlayitProcess Create(ProcessStartInfo startInfo) =>
         new SystemPlayitProcess(startInfo);
+
+    public IPlayitProcess? Attach(int processId)
+    {
+        try
+        {
+            return new SystemPlayitProcess(Process.GetProcessById(processId));
+        }
+        catch (ArgumentException)
+        {
+            // No process with this PID exists (already exited, or never existed).
+            return null;
+        }
+    }
 }
 
 public sealed class SystemPlayitProcessDiscovery : IPlayitProcessDiscovery
@@ -68,6 +98,7 @@ public sealed class SystemPlayitProcessDiscovery : IPlayitProcessDiscovery
 internal sealed class SystemPlayitProcess : IPlayitProcess
 {
     private readonly Process _process;
+    private readonly bool _adopted;
 
     public SystemPlayitProcess(ProcessStartInfo startInfo)
     {
@@ -103,6 +134,32 @@ internal sealed class SystemPlayitProcess : IPlayitProcess
         };
     }
 
+    /// <summary>
+    /// Wraps an already-running process (re-adoption), rather than one this instance starts
+    /// itself. Output/error redirection is unavailable for a process this instance did not
+    /// start -- Windows does not allow retroactively redirecting another process's already-open
+    /// standard streams -- so <see cref="OutputReceived"/>/<see cref="ErrorReceived"/> never
+    /// fire for an adopted process; only <see cref="Exited"/> (which needs no redirection, just
+    /// <c>EnableRaisingEvents</c>) and <see cref="StopAsync"/> remain available.
+    /// </summary>
+    public SystemPlayitProcess(Process existingProcess)
+    {
+        _process = existingProcess;
+        _adopted = true;
+        _process.EnableRaisingEvents = true;
+        _process.Exited += (_, _) =>
+        {
+            try
+            {
+                Exited?.Invoke(_process.ExitCode);
+            }
+            catch (InvalidOperationException)
+            {
+                Exited?.Invoke(-1);
+            }
+        };
+    }
+
     public event Action<string>? OutputReceived;
 
     public event Action<string>? ErrorReceived;
@@ -111,10 +168,35 @@ internal sealed class SystemPlayitProcess : IPlayitProcess
 
     public int Id => _process.Id;
 
+    public DateTimeOffset? StartTimeUtc
+    {
+        get
+        {
+            try
+            {
+                return _process.HasExited ? null : _process.StartTime.ToUniversalTime();
+            }
+            catch (Exception exception) when (
+                exception is InvalidOperationException or
+                System.ComponentModel.Win32Exception or
+                NotSupportedException)
+            {
+                return null;
+            }
+        }
+    }
+
     public bool HasExited => _process.HasExited;
 
     public void Start()
     {
+        if (_adopted)
+        {
+            // Already running -- adoption means using the existing process as-is, never
+            // starting a second one.
+            return;
+        }
+
         if (!_process.Start())
         {
             throw new InvalidOperationException("The official Playit process could not be started.");
