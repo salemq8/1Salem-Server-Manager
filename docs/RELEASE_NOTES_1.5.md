@@ -1,4 +1,28 @@
-# 1Salem Server Manager 1.5 — Build 3
+# 1Salem Server Manager 1.5 — Build 4
+
+## Palworld process re-adoption repair (Build 4)
+
+Found during real local acceptance testing of Build 3, by comparing what the Agent
+reported against what Windows actually showed — an internal accuracy fix, with no change
+to the visible Version 1.5 identity:
+
+- After the Agent restarts and re-adopts an already-running Palworld server, it now
+  correctly identifies the real game process again. Previously the thin `PalServer.exe`
+  launcher was reported as both the root and the game process: the game process ID
+  collapsed onto the launcher's, the child count read zero, and the thread and memory
+  figures described the launcher instead of the actual server. The game itself was never
+  disrupted by this — only the Agent's view of it, until the next full server restart.
+- The cause was that the process tree was read from the Windows Job Object the Agent
+  creates when it adopts a server. A Job Object only knows the processes assigned to it,
+  and a game process started before that Agent instance existed was never one of them.
+  The tree is now read from real Windows parent-child process relationships instead, so it
+  is correct whether the Agent started the server itself or inherited it.
+- Process priority and CPU affinity now apply to every process in a re-adopted server's
+  tree. A hard memory limit is enforced by Windows at the Job level, so it can only cover
+  processes that actually joined the Job; the Agent now attempts to bring an inherited
+  game process in, and records plainly when it could not, instead of reporting a limit as
+  covering more than it does. Nothing is ever restarted just to make that membership work.
+- Agent restarts still never stop a running game server or the Playit tunnel.
 
 ## Playit tunnel continuity repair (Build 3)
 
