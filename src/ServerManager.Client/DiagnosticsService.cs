@@ -56,7 +56,7 @@ public static partial class DiagnosticsService
                 Elevated = ElevationService.IsAdministrator(),
                 ProcessWorkingSetBytes = Process.GetCurrentProcess().WorkingSet64,
                 ProcessorCount = Environment.ProcessorCount,
-                ResourceProfileSummary = resourceProfileSummary,
+                ResourceProfileSummary = Redact(resourceProfileSummary),
                 DataRoot = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                     "1SalemServerManager")

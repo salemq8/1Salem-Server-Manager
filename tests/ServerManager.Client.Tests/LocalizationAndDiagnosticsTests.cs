@@ -99,6 +99,19 @@ public sealed class LocalizationAndDiagnosticsTests
         Assert.DoesNotContain("sentinel.jwt.fragment", redacted, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("password=THIS IS A MULTI WORD SECRET 928374")]
+    [InlineData("token=THIS IS A MULTI WORD SECRET 928374")]
+    [InlineData("secret=\"THIS IS A MULTI WORD SECRET 928374\"")]
+    public void Redact_TheExactReviewedMultiWordSecretPhrase_IsFullyHidden(string input)
+    {
+        var redacted = DiagnosticsService.Redact(input);
+
+        Assert.DoesNotContain("THIS IS A MULTI WORD SECRET 928374", redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain("928374", redacted, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", redacted, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Redact_ValueSpanningMultipleLines_DoesNotLeakLaterLines()
     {
@@ -108,6 +121,43 @@ public sealed class LocalizationAndDiagnosticsTests
 
         Assert.DoesNotContain("sentinel", redacted, StringComparison.Ordinal);
         Assert.Contains("NextField=visible", redacted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopyDiagnosticsToClipboard_RedactsLastErrorAndConsoleLinesBeforeCopying()
+    {
+        // GameServerPageControl's "Copy Diagnostics" button previously copied the server's raw
+        // last-error text and raw console log lines straight to the clipboard with no
+        // redaction at all -- a real, user-reachable bypass of the P1-04 repair, since game
+        // server console output frequently echoes admin/RCON passwords on startup. This is a
+        // source-level regression guard (WPF UserControls in this project are not
+        // instantiated in the test suite): it fails if a future edit removes the Redact calls
+        // from that specific method.
+        var source = ReadSource("src", "ServerManager.Client", "Controls", "GameServerPageControl.xaml.cs");
+        var methodStart = source.IndexOf("private void CopyDiagnostics_Click", StringComparison.Ordinal);
+        Assert.True(methodStart >= 0, "CopyDiagnostics_Click was not found in GameServerPageControl.xaml.cs.");
+        var methodEnd = source.IndexOf("\n    }\n", methodStart, StringComparison.Ordinal);
+        Assert.True(methodEnd > methodStart, "Could not locate the end of CopyDiagnostics_Click.");
+        var method = source[methodStart..methodEnd];
+
+        Assert.Contains("DiagnosticsService.Redact(_server.LastError", method, StringComparison.Ordinal);
+        Assert.Contains("DiagnosticsService.Redact(log.Message)", method, StringComparison.Ordinal);
+    }
+
+    private static string ReadSource(params string[] parts)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "VERSION")))
+        {
+            root = root.Parent;
+        }
+
+        if (root is null)
+        {
+            throw new DirectoryNotFoundException("Repository root was not found.");
+        }
+
+        return File.ReadAllText(Path.Combine([root.FullName, .. parts]));
     }
 
     [Fact]

@@ -2153,6 +2153,10 @@ public partial class GameServerPageControl : System.Windows.Controls.UserControl
             return;
         }
 
+        // Game server console output frequently echoes admin/RCON passwords or connection
+        // strings on startup, so both the last-error text and the console tail must be
+        // redacted before they reach the clipboard, same as every other diagnostics
+        // copy/export path in this application.
         var diagnostics = new StringBuilder()
             .AppendLine($"Game: {Game}")
             .AppendLine($"Server: {_server.Name}")
@@ -2160,9 +2164,11 @@ public partial class GameServerPageControl : System.Windows.Controls.UserControl
             .AppendLine($"Address: {_server.LocalAddress}")
             .AppendLine($"PID: {_server.ProcessId}")
             .AppendLine($"Version: {_server.InstalledVersion}")
-            .AppendLine($"Last error: {_server.LastError}")
+            .AppendLine($"Last error: {DiagnosticsService.Redact(_server.LastError ?? string.Empty)}")
             .AppendLine("Last console lines:")
-            .AppendJoin(Environment.NewLine, _logs.TakeLast(50).Select(log => log.Message))
+            .AppendJoin(
+                Environment.NewLine,
+                _logs.TakeLast(50).Select(log => DiagnosticsService.Redact(log.Message)))
             .ToString();
         ConsoleStatusText.Text =
             ServerManager.Client.Shell.SafeClipboard.TrySetText(diagnostics)
