@@ -68,45 +68,51 @@ public sealed class BackupService(
         // unbackuppable just because REST management happens to be off -- which is the default.
         var safeOffline = request.SafeOffline;
         string? restSaveNote = null;
-        if (server.Game == GameType.Palworld && wasRunning)
-        {
-            var saveOutcome = palworldRestClient is null
-                ? new PalworldRestOperationResult(
-                    false,
-                    "RestClientUnavailable",
-                    "Palworld REST management is not configured for this installation.",
-                    DateTimeOffset.UtcNow)
-                : await palworldRestClient.SaveWorldAsync(server, cancellationToken);
-            if (saveOutcome.Success)
-            {
-                await WaitForPalworldSaveFilesToSettleAsync(server.RootPath, cancellationToken);
-            }
-            else
-            {
-                // REST save/flush isn't available right now (commonly: REST management is
-                // disabled, which is the default). Fall back to the same safe-offline
-                // stop/backup/restart cycle Minecraft already uses, regardless of what the
-                // caller originally requested, so the backup still completes instead of
-                // failing outright.
-                safeOffline = true;
-                restSaveNote = $"{saveOutcome.Code}: {saveOutcome.Message}";
-            }
-        }
-
-        if (safeOffline && wasRunning)
-        {
-            var stopped = await processSupervisor.StopAsync(server.Id, false, cancellationToken);
-            if (!stopped.Success)
-            {
-                throw new InvalidOperationException(stopped.Message);
-            }
-
-            await provider.CleanupAfterStopAsync(server, cancellationToken);
-        }
-
         await gameServerStore.SetStateAsync(server.Id, ServerState.BackingUp, cancellationToken);
         try
         {
+            // The REST save attempt, its post-save settle-wait, and the safe-offline stop are
+            // all inside this same transactional boundary as archive creation: a failure in any
+            // of them (PalworldRestClient is documented to never throw, but a save-settle
+            // timeout or a process-stop failure legitimately can) must go through the same
+            // Error-state/audit-log/best-effort-restart handling below as an archiving failure,
+            // not escape unhandled.
+            if (server.Game == GameType.Palworld && wasRunning)
+            {
+                var saveOutcome = palworldRestClient is null
+                    ? new PalworldRestOperationResult(
+                        false,
+                        "RestClientUnavailable",
+                        "Palworld REST management is not configured for this installation.",
+                        DateTimeOffset.UtcNow)
+                    : await palworldRestClient.SaveWorldAsync(server, cancellationToken);
+                if (saveOutcome.Success)
+                {
+                    await WaitForPalworldSaveFilesToSettleAsync(server.RootPath, cancellationToken);
+                }
+                else
+                {
+                    // REST save/flush isn't available right now (commonly: REST management is
+                    // disabled, which is the default). Fall back to the same safe-offline
+                    // stop/backup/restart cycle Minecraft already uses, regardless of what the
+                    // caller originally requested, so the backup still completes instead of
+                    // failing outright.
+                    safeOffline = true;
+                    restSaveNote = $"{saveOutcome.Code}: {saveOutcome.Message}";
+                }
+            }
+
+            if (safeOffline && wasRunning)
+            {
+                var stopped = await processSupervisor.StopAsync(server.Id, false, cancellationToken);
+                if (!stopped.Success)
+                {
+                    throw new InvalidOperationException(stopped.Message);
+                }
+
+                await provider.CleanupAfterStopAsync(server, cancellationToken);
+            }
+
             var archived = await CreateArchiveAsync(server, request, cancellationToken);
             var verification = await VerifyAsync(archived.BackupId, cancellationToken);
             if (!verification.IsValid)

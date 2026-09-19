@@ -120,6 +120,28 @@ public sealed class PalworldRestClientTests : IDisposable
         Assert.Equal("Unauthorized", result.Code);
     }
 
+    [Fact]
+    public async Task SaveWorld_WhenMetadataFileIsCorrupt_ReturnsFailureInsteadOfThrowing()
+    {
+        // This is the exact "never throws" contract every caller (e.g. BackupService, which
+        // falls back to a safe-offline backup on any REST failure) relies on. ReadMetadataAsync
+        // throws InvalidDataException when metadata.json deserializes to null; that exception
+        // type was previously NOT covered by this method's catch filter (it doesn't derive from
+        // IOException), so a corrupt metadata file -- plausible after a crash mid-write --
+        // would have escaped this "never throws" client unhandled.
+        var server = await CreateServerAsync(true);
+        await File.WriteAllTextAsync(
+            Path.Combine(_root, ".1salem", "metadata.json"),
+            "null");
+        var client = new PalworldRestClient(
+            new HttpClient(new OfficialApiHandler()),
+            new PlainSecretStore());
+
+        var result = await client.SaveWorldAsync(server);
+
+        Assert.False(result.Success);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))

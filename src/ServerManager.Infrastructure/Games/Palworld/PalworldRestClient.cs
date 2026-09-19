@@ -88,7 +88,9 @@ public sealed class PalworldRestClient(
             TaskCanceledException or
             JsonException or
             IOException or
-            InvalidOperationException)
+            InvalidOperationException or
+            UnauthorizedAccessException or
+            InvalidDataException)
         {
             return Failure(exception);
         }
@@ -143,7 +145,9 @@ public sealed class PalworldRestClient(
             TaskCanceledException or
             JsonException or
             IOException or
-            InvalidOperationException)
+            InvalidOperationException or
+            UnauthorizedAccessException or
+            InvalidDataException)
         {
             var failure = Failure(exception);
             return new PalworldRestSettingsResult(
@@ -241,7 +245,9 @@ public sealed class PalworldRestClient(
             TaskCanceledException or
             JsonException or
             IOException or
-            InvalidOperationException)
+            InvalidOperationException or
+            UnauthorizedAccessException or
+            InvalidDataException)
         {
             return Unavailable(
                 server.Id,
@@ -430,6 +436,10 @@ public sealed class PalworldRestClient(
         return false;
     }
 
+    // Can throw UnauthorizedAccessException (metadata.json locked/inaccessible) or
+    // InvalidDataException (metadata.json deserializes to null) -- every public method on this
+    // class that reaches here through ReadContextAsync must catch both alongside the usual
+    // HTTP/IO exception types, so this "never throws" REST client genuinely never does.
     private static async Task<PalworldServerMetadata> ReadMetadataAsync(
         string rootPath,
         CancellationToken cancellationToken)
@@ -518,7 +528,9 @@ public sealed class PalworldRestClient(
             TaskCanceledException or
             JsonException or
             IOException or
-            InvalidOperationException)
+            InvalidOperationException or
+            UnauthorizedAccessException or
+            InvalidDataException)
         {
             return Failure(exception);
         }
