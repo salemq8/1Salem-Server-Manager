@@ -28,13 +28,10 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
         var sentinel = Path.Combine(dataRoot, "game-save.sav");
         await File.WriteAllTextAsync(sentinel, "UNCHANGED SAVE");
         var package = CreateVersionedPackage("1.3.2");
-        var serviceOperations = new List<string>();
+        var serviceControl = new HealthyFakeServiceControl();
+        var serviceOperations = serviceControl.Operations;
         var installer = new VersionedUpdateInstaller(
-            (operation, _, _, _) =>
-            {
-                serviceOperations.Add(operation);
-                return Task.CompletedTask;
-            },
+            serviceControl,
             managedGameProcessDetector: () => true);
 
         var result = await installer.ApplyAsync(new VersionedUpdateOptions(
@@ -351,13 +348,10 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
     public async Task FailedAgentActivation_RestoresClientAgentAndCurrentManifest()
     {
         var (installRoot, dataRoot) = CreateInstalledLayout("1.3.1");
-        var operations = new List<string>();
+        var serviceControl = new HealthyFakeServiceControl();
+        var operations = serviceControl.Operations;
         var installer = new VersionedUpdateInstaller(
-            (operation, _, _, _) =>
-            {
-                operations.Add(operation);
-                return Task.CompletedTask;
-            },
+            serviceControl,
             (_, _, _) => throw new InvalidOperationException("simulated health failure"),
             () => false);
 
@@ -373,7 +367,9 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
 
         Assert.False(result.Success);
         Assert.True(result.RolledBack);
-        Assert.Equal(["stop", "start"], operations);
+        // Recovery stops the service again before restoring the Agent directory, rather than
+        // starting it back up on top of files the rollback is about to replace.
+        Assert.Equal(["stop", "start", "stop", "start"], operations);
         Assert.Equal("client-old", await File.ReadAllTextAsync(
             Path.Combine(installRoot, "Client", "1Salem.ServerManager.exe")));
         // Rollback restores the whole "Client" directory as a single atomic swap (the same

@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using System.Runtime.Versioning;
 using ServerManager.Contracts;
 using ServerManager.Core;
+using ServerManager.Infrastructure.Windows;
 
 namespace ServerManager.Infrastructure.Updates;
 
@@ -39,18 +40,24 @@ public sealed class VersionedUpdateInstaller
 {
     private const string UninstallKey =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\1SalemServerManager";
+    private static readonly TimeSpan ServiceStopTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ServiceStartTimeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private readonly Func<string, string, bool, CancellationToken, Task> _serviceCommand;
+    private readonly IWindowsServiceControl _serviceControl;
+    private readonly WindowsServiceTransition _serviceTransition;
     private readonly Func<Uri, string, CancellationToken, Task> _healthVerifier;
     private readonly Func<bool> _managedGameProcessDetector;
 
     public VersionedUpdateInstaller(
-        Func<string, string, bool, CancellationToken, Task>? serviceCommand = null,
+        IWindowsServiceControl? serviceControl = null,
         Func<Uri, string, CancellationToken, Task>? healthVerifier = null,
-        Func<bool>? managedGameProcessDetector = null)
+        Func<bool>? managedGameProcessDetector = null,
+        Func<TimeSpan, CancellationToken, Task>? serviceDelay = null,
+        Func<DateTimeOffset>? utcNow = null)
     {
-        _serviceCommand = serviceCommand ?? RunServiceCommandAsync;
+        _serviceControl = serviceControl ?? new WindowsServiceControl();
+        _serviceTransition = new WindowsServiceTransition(_serviceControl, serviceDelay, utcNow);
         _healthVerifier = healthVerifier ?? VerifyHealthAsync;
         _managedGameProcessDetector = managedGameProcessDetector ?? HasManagedGameProcesses;
     }
@@ -152,6 +159,7 @@ public sealed class VersionedUpdateInstaller
             target.ToString(),
             options.TargetBuildRevision);
         var agentStopped = false;
+        var agentStopRequested = false;
         var switched = false;
         var installMutationStarted = false;
         var rollbackCreated = false;
@@ -221,13 +229,27 @@ public sealed class VersionedUpdateInstaller
                 (!_managedGameProcessDetector() || options.AllowManagedGameAgentRestart);
             if (activateAgent)
             {
-                await _serviceCommand("stop", options.ServiceName, true, cancellationToken);
+                // The stop has to be confirmed, not merely requested: the Agent process holds
+                // open handles under its own installation directory until it has genuinely
+                // exited, and replacing that directory a moment too early fails with access
+                // denied. A stop that never completes throws here -- deliberately before any
+                // Agent file is touched, so a service that is merely slow to stop leaves the
+                // installed Build completely intact instead of needing a rollback.
+                agentStopRequested = true;
+                await _serviceTransition.EnsureStoppedAsync(
+                    options.ServiceName,
+                    ServiceStopTimeout,
+                    cancellationToken);
                 agentStopped = true;
-                ReplaceDirectory(
+                ReplaceAgentDirectory(
+                    options.ServiceName,
                     Path.Combine(installRoot, "Agent"),
                     versionAgent,
                     Path.Combine(workRoot, "old-agent"));
-                await _serviceCommand("start", options.ServiceName, false, cancellationToken);
+                await _serviceTransition.EnsureRunningAsync(
+                    options.ServiceName,
+                    ServiceStartTimeout,
+                    cancellationToken);
                 agentStopped = false;
                 if (!options.SkipServiceHealthCheck)
                 {
@@ -339,15 +361,25 @@ public sealed class VersionedUpdateInstaller
         }
         catch (Exception exception)
         {
-            if (agentStopped)
+            // Recovery order matters: restore files first, then start. Starting the service
+            // before the rollback would put a running Agent back on top of the very directory
+            // the rollback is about to replace, which is the same conflict this repair exists
+            // to remove. Restoring the Agent additionally requires it to be genuinely stopped.
+            if (agentStopRequested && options.ActivateAgent)
             {
                 try
                 {
-                    await _serviceCommand("start", options.ServiceName, false, cancellationToken);
+                    await _serviceTransition.EnsureStoppedAsync(
+                        options.ServiceName,
+                        ServiceStopTimeout,
+                        CancellationToken.None);
+                    agentStopped = true;
                 }
-                catch (Exception startException)
+                catch (Exception stopException)
                 {
-                    exception = new AggregateException(exception, startException);
+                    // Could not confirm it stopped, so the Agent directory must be left alone.
+                    agentStopped = false;
+                    exception = new AggregateException(exception, stopException);
                 }
             }
 
@@ -357,9 +389,24 @@ public sealed class VersionedUpdateInstaller
                     rollbackRoot,
                     workRoot,
                     switched,
-                    options.ActivateAgent,
+                    options.ActivateAgent && agentStopped,
                     options.UpdateRegistry,
                     registryBefore);
+
+            if (agentStopRequested)
+            {
+                try
+                {
+                    await _serviceTransition.EnsureRunningAsync(
+                        options.ServiceName,
+                        ServiceStartTimeout,
+                        CancellationToken.None);
+                }
+                catch (Exception startException)
+                {
+                    exception = new AggregateException(exception, startException);
+                }
+            }
             var result = new VersionedUpdateResult(
                 false,
                 rolledBack,
@@ -379,6 +426,29 @@ public sealed class VersionedUpdateInstaller
         {
             TryDeleteDirectory(workRoot);
         }
+    }
+
+    /// <summary>
+    /// Replaces the live Agent directory, re-confirming immediately beforehand that the service
+    /// is genuinely stopped. The caller already waited for Stopped; this is a last guard so the
+    /// invariant "no Agent file is mutated while its service is running or still stopping"
+    /// cannot be broken by a future edit that reorders the transaction.
+    /// </summary>
+    private void ReplaceAgentDirectory(
+        string serviceName,
+        string liveAgentRoot,
+        string stagedAgentRoot,
+        string backupRoot)
+    {
+        var state = _serviceControl.GetState(serviceName);
+        if (state is not (WindowsServiceState.Stopped or WindowsServiceState.NotInstalled))
+        {
+            throw new InvalidOperationException(
+                $"Refusing to replace the Agent directory while the {serviceName} service " +
+                $"reports {state}; it must be fully stopped first.");
+        }
+
+        ReplaceDirectory(liveAgentRoot, stagedAgentRoot, backupRoot);
     }
 
     private static void VerifyInstallRootWritable(string installRoot, string operationId)
@@ -883,35 +953,6 @@ public sealed class VersionedUpdateInstaller
     {
         using var key = Registry.LocalMachine.CreateSubKey(UninstallKey, true);
         key?.SetValue("DisplayVersion", version);
-    }
-
-    private static async Task RunServiceCommandAsync(
-        string operation,
-        string serviceName,
-        bool allowAlreadyStopped,
-        CancellationToken cancellationToken)
-    {
-        var start = new ProcessStartInfo
-        {
-            FileName = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "sc.exe"),
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.ArgumentList.Add(operation);
-        start.ArgumentList.Add(serviceName);
-        using var process = Process.Start(start) ??
-            throw new InvalidOperationException("Windows service control could not start.");
-        await process.WaitForExitAsync(cancellationToken);
-        if (process.ExitCode != 0 && !(allowAlreadyStopped && process.ExitCode == 1062))
-        {
-            throw new IOException(
-                $"Agent service {operation} failed with code {process.ExitCode}: " +
-                await process.StandardError.ReadToEndAsync(cancellationToken));
-        }
     }
 
     private static async Task VerifyHealthAsync(
