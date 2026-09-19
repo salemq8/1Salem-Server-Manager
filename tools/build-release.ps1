@@ -170,7 +170,13 @@ function New-SourceArchive {
             [System.IO.Compression.ZipArchiveMode]::Create,
             $true)
         try {
-            Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
+            # -ErrorAction SilentlyContinue (only for this enumeration, not the script-wide
+            # 'Stop' preference): a subdirectory that is unreadable by the current account --
+            # e.g. leftover, ACL-restricted debris from a prior local installed-update/rollback
+            # validation run under an excluded path such as .tools\ -- must not abort the whole
+            # source archive; it is skipped like any other excluded path, not fatal.
+            Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object {
                 $candidate = $_.FullName
                 -not $candidate.Equals(
                     (Join-Path $root 'build-info.json'),
