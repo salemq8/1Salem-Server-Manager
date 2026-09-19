@@ -157,7 +157,12 @@ public sealed class LocalizationAndDiagnosticsTests
             throw new DirectoryNotFoundException("Repository root was not found.");
         }
 
-        return File.ReadAllText(Path.Combine([root.FullName, .. parts]));
+        // Normalized to \n regardless of how this checkout happens to have materialized the
+        // file on disk: git archive (used by tools/verify-clean-checkout.ps1) re-applies
+        // core.autocrlf on export, which can produce \r\n here even where the working tree
+        // stores bare \n, and callers search for method boundaries using literal \n patterns.
+        return File.ReadAllText(Path.Combine([root.FullName, .. parts]))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
     [Fact]
