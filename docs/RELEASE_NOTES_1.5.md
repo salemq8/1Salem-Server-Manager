@@ -1,4 +1,25 @@
-# 1Salem Server Manager 1.5 — Build 4
+# 1Salem Server Manager 1.5 — Build 5
+
+## Update reliability repair (Build 5)
+
+Found when a real Build 4 installation failed partway through and rolled itself back. No
+game server or tunnel was affected, and the installation recovered to its previous Build,
+but the update could not complete:
+
+- Installing a new Agent now waits for the Windows service to genuinely finish stopping
+  before any Agent file is replaced. Previously the installer only waited for the stop
+  *command* to return, which happens while the service is still shutting down and still
+  has its own files open — so the update could fail with "access denied" through no fault
+  of the installation.
+- If the service cannot be confirmed stopped within 60 seconds, the update now stops
+  cleanly before touching anything, leaving the installed Build completely intact. A
+  service that is merely slow to stop no longer costs you a rollback.
+- Starting the Agent back up waits for it to actually reach Running, and never issues a
+  second start to a service that is already starting or already running — the condition
+  that previously surfaced as a confusing "code 1056" failure.
+- Recovery after a failed update now restores files first and starts the Agent afterwards.
+  The previous order could start the Agent on top of files the recovery was still
+  replacing.
 
 ## Palworld process re-adoption repair (Build 4)
 
