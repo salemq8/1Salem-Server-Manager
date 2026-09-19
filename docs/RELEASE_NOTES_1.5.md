@@ -1,4 +1,25 @@
-# 1Salem Server Manager 1.5 — Build 2
+# 1Salem Server Manager 1.5 — Build 3
+
+## Playit tunnel continuity repair (Build 3)
+
+Found during real local Windows acceptance testing of Build 2 against a live Palworld
+server and Playit tunnel, before any production Agent activation was performed — this is
+an internal continuity fix, not a change to the visible Version 1.5 identity:
+
+- A normal Agent restart (an application update, a Windows Service restart, or a crash
+  and recovery) no longer stops the real Playit tunnel process. Previously, the Agent's
+  own graceful shutdown unconditionally terminated a live, managed Playit process as a
+  side effect — meaning every Agent-updating install could interrupt an already-working
+  tunnel and change its process identity, even though the game servers it tunnels to were
+  never restarted.
+- On startup, the Agent now looks for and re-adopts an already-running Playit process
+  before ever starting a new one — the same continuity guarantee Palworld and Minecraft
+  server processes already had. Re-adoption validates the process's executable path and,
+  when a prior identity was recorded, its exact start time, so a Windows-recycled process
+  ID is never mistaken for the real one; when it cannot be safely confirmed, no process is
+  started or stopped rather than guessing.
+- The real, explicit "Stop Playit" / "Disable Playit" actions are unaffected — those still
+  intentionally stop the managed process exactly as before.
 
 ## Safety and reliability repairs (Build 2)
 
