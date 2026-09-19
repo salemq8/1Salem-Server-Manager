@@ -73,25 +73,54 @@ public sealed class SystemPlayitProcessDiscovery : IPlayitProcessDiscovery
         {
             using (process)
             {
-                try
+                var path = TryReadMainModuleFileName(process);
+                if (path is not null &&
+                    Path.GetFullPath(path).Equals(expected, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (process.MainModule?.FileName is { } path &&
-                        Path.GetFullPath(path).Equals(
-                            expected,
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        result.Add(process.Id);
-                    }
-                }
-                catch (Exception exception) when (
-                    exception is InvalidOperationException or
-                    System.ComponentModel.Win32Exception)
-                {
+                    result.Add(process.Id);
                 }
             }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Process.MainModule can transiently report an empty FileName for a process that has only
+    /// just been created -- the Windows loader has not finished initializing the main module
+    /// yet, a documented Win32/.NET race, not specific to this application (the same underlying
+    /// issue DashboardProcessShutdown.ReadMainModuleFileNameAsync retries around on a different
+    /// call path). Retries briefly rather than treating a freshly-started, genuinely-matching
+    /// Playit process as "not found" -- which would otherwise risk starting a duplicate.
+    /// </summary>
+    private static string? TryReadMainModuleFileName(Process process)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            try
+            {
+                var path = process.MainModule?.FileName;
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    return path;
+                }
+            }
+            catch (Exception exception) when (
+                exception is InvalidOperationException or
+                System.ComponentModel.Win32Exception)
+            {
+                return null;
+            }
+
+            if (process.HasExited)
+            {
+                return null;
+            }
+
+            Thread.Sleep(25);
+        }
+
+        return null;
     }
 }
 
