@@ -73,7 +73,10 @@ public sealed class ApiAuthenticationMiddleware(
             context.RequestAborted);
         if (client is null)
         {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            // credential is guaranteed non-empty here (checked above), so this is a
+            // present-but-wrong LAN credential -- 403, not 401, per RejectUnauthenticated's
+            // documented 401-for-none/403-for-wrong contract.
+            RejectUnauthenticated(context, credential);
             return;
         }
 

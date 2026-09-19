@@ -84,6 +84,24 @@ public sealed class ApiAuthenticationMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_LanRequestWithWrongCredential_IsForbiddenNotUnauthorized()
+    {
+        // A non-empty but unrecognized LAN credential must be treated the same as every other
+        // present-but-wrong credential in this middleware: 403, not 401 (401 is reserved for
+        // "no credential presented at all").
+        var probe = new NextProbe();
+        var middleware = CreateMiddleware(probe, lanEnabled: true);
+        var context = CreateContext(IPAddress.Parse("192.168.1.50"), "/api/v1/servers");
+        context.Request.Headers.Authorization = "Bearer wrong-lan-token";
+        var pairing = new FakePairingService { CredentialToAccept = "correct-lan-token" };
+
+        await middleware.InvokeAsync(context, pairing, new FakeLocalCredential(LocalKey));
+
+        Assert.False(probe.Called);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task InvokeAsync_LanRequestWithPairedCredential_IsAccepted()
     {
         var probe = new NextProbe();
