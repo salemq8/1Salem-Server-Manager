@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using ServerManager.Contracts;
 using ServerManager.Infrastructure.Updates;
+using ServerManager.Infrastructure.Windows;
 
 namespace ServerManager.Infrastructure.Tests;
 
@@ -296,6 +297,13 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
             Path.GetFullPath(stableLauncher),
             Path.GetFullPath(ReadShortcutTarget(shortcutPath)),
             StringComparer.OrdinalIgnoreCase);
+        // A shortcut retargeted onto the Stable launcher by an in-app update must carry the
+        // fixed Stable AppUserModelID, the same as one created fresh by Setup.exe -- otherwise
+        // an already-pinned taskbar icon would stop merging with the running app's button the
+        // moment an update retargets it.
+        Assert.Equal(
+            ProductIdentity.AppUserModelId,
+            WindowsShortcutManager.TryReadAppUserModelId(shortcutPath));
     }
 
     [Fact]

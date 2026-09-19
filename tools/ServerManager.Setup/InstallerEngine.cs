@@ -612,7 +612,7 @@ public static class InstallerEngine
         }
     }
 
-    private static void CreateShortcuts(
+    internal static void CreateShortcuts(
         string clientExecutable,
         string installRoot,
         bool desktop,
@@ -627,7 +627,8 @@ public static class InstallerEngine
                     "1Salem Server Manager.lnk"),
                 clientExecutable,
                 string.Empty,
-                clientExecutable);
+                clientExecutable,
+                stampAppUserModelId: true);
         }
 
         if (!startMenu)
@@ -643,12 +644,14 @@ public static class InstallerEngine
             Path.Combine(folder, "1Salem Server Manager.lnk"),
             clientExecutable,
             string.Empty,
-            clientExecutable);
+            clientExecutable,
+            stampAppUserModelId: true);
         CreateShortcut(
             Path.Combine(folder, "1Salem Server Manager (Administrator).lnk"),
             clientExecutable,
             "--admin",
-            clientExecutable);
+            clientExecutable,
+            stampAppUserModelId: true);
         var uninstaller = Path.Combine(
             installRoot,
             "Uninstall 1Salem Server Manager.exe");
@@ -659,11 +662,12 @@ public static class InstallerEngine
             uninstaller);
     }
 
-    private static void CreateShortcut(
+    internal static void CreateShortcut(
         string path,
         string target,
         string arguments,
-        string iconPath)
+        string iconPath,
+        bool stampAppUserModelId = false)
     {
         var shellType = Type.GetTypeFromProgID("WScript.Shell") ??
             throw new InvalidOperationException(
@@ -675,6 +679,18 @@ public static class InstallerEngine
         shortcut.WorkingDirectory = Path.GetDirectoryName(target);
         shortcut.IconLocation = $"{iconPath},0";
         shortcut.Save();
+
+        // Stamped only on shortcuts that launch the Client itself (never the uninstaller,
+        // which is a different utility and should not visually merge with the app in the
+        // taskbar/jump-list). See ProductIdentity.StampShortcutAppUserModelId for why this
+        // matters: without it, a shortcut created by a normal install and pinned to the
+        // taskbar -- the only supported pinning method -- would never carry the fixed Stable
+        // AppUserModelID the running Client process sets on itself, so Windows would fail to
+        // merge the pinned icon with the running app's taskbar button.
+        if (stampAppUserModelId)
+        {
+            ProductIdentity.StampShortcutAppUserModelId(path, ProductIdentity.AppUserModelId);
+        }
     }
 
     private static void SetStartup(string clientExecutable, bool enabled)

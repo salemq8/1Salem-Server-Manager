@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using ServerManager.Contracts;
 
 namespace ServerManager.Infrastructure.Updates;
 
@@ -214,6 +215,13 @@ public static class StableShortcutMigration
                 null,
                 shortcut,
                 null);
+
+            // This shortcut just had its target retargeted onto the Stable launcher (confirmed
+            // by IsVersionedClientTarget above), so it must carry the same fixed Stable
+            // AppUserModelID the running Client process sets on itself -- otherwise Windows
+            // falls back to a path-derived identity that changes across updates, and a taskbar
+            // icon pinned from this shortcut can fail to merge with the running app's button.
+            ProductIdentity.StampShortcutAppUserModelId(shortcutPath, ProductIdentity.AppUserModelId);
             return true;
         }
         finally

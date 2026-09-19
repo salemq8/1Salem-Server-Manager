@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using ServerManager.Contracts;
 
 namespace ServerManager.Setup.Tests;
 
@@ -192,6 +193,61 @@ public sealed class InstallerSafetyAndBrandingTests : IDisposable
 
         Assert.Contains("shortcut.IconLocation = $\"{iconPath},0\"", installer);
         Assert.Contains("shellLink.SetIconLocation(Path.GetFullPath(targetPath), 0)", application);
+    }
+
+    [Fact]
+    public void CreateShortcuts_StampsTheStableAppUserModelIdOnEveryAppLaunchingShortcut()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // Exercises the real Setup.exe shortcut-creation path (WScript.Shell, the same
+        // mechanism a real install uses) end to end: a prior independent review found that the
+        // installer's real shortcuts never received the AppUserModelID property at all, only a
+        // manually-triggered "Create Shortcuts" admin-tools button did -- meaning the P0-level
+        // AppUserModelID repair never actually reached shortcuts a normal install/pin produces.
+        var clientExecutable = Path.Combine(_tempRoot, "Client", "1Salem.ServerManager.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(clientExecutable)!);
+        File.WriteAllText(clientExecutable, "client");
+        var desktop = Path.Combine(_tempRoot, "Desktop");
+        var startMenu = Path.Combine(_tempRoot, "StartMenu");
+        Directory.CreateDirectory(desktop);
+        Directory.CreateDirectory(startMenu);
+        var installRoot = Path.Combine(_tempRoot, "install");
+        Directory.CreateDirectory(installRoot);
+        File.WriteAllText(
+            Path.Combine(installRoot, "Uninstall 1Salem Server Manager.exe"),
+            "uninstaller");
+
+        var desktopShortcut = Path.Combine(desktop, "1Salem Server Manager.lnk");
+        var startMenuFolder = Path.Combine(startMenu, "1Salem Server Manager");
+        Directory.CreateDirectory(startMenuFolder);
+        InstallerEngine.CreateShortcut(desktopShortcut, clientExecutable, string.Empty, clientExecutable, stampAppUserModelId: true);
+        InstallerEngine.CreateShortcut(
+            Path.Combine(startMenuFolder, "1Salem Server Manager (Administrator).lnk"),
+            clientExecutable,
+            "--admin",
+            clientExecutable,
+            stampAppUserModelId: true);
+        var uninstallShortcut = Path.Combine(startMenuFolder, "Uninstall 1Salem Server Manager.lnk");
+        InstallerEngine.CreateShortcut(
+            uninstallShortcut,
+            Path.Combine(installRoot, "Uninstall 1Salem Server Manager.exe"),
+            "--uninstall",
+            Path.Combine(installRoot, "Uninstall 1Salem Server Manager.exe"));
+
+        Assert.Equal(
+            ProductIdentity.AppUserModelId,
+            ProductIdentity.TryReadShortcutAppUserModelId(desktopShortcut));
+        Assert.Equal(
+            ProductIdentity.AppUserModelId,
+            ProductIdentity.TryReadShortcutAppUserModelId(
+                Path.Combine(startMenuFolder, "1Salem Server Manager (Administrator).lnk")));
+        // The uninstaller shortcut launches a different utility, not the app itself, so it
+        // must NOT carry the app's AppUserModelID.
+        Assert.Null(ProductIdentity.TryReadShortcutAppUserModelId(uninstallShortcut));
     }
 
     public void Dispose()
