@@ -101,6 +101,7 @@ builder.Services.AddHostedService<PalworldManagementPollingService>();
 builder.Services.AddSingleton<PalworldControlCenterService>();
 builder.Services.AddSingleton<IUpdateService, GameUpdateService>();
 builder.Services.AddSingleton<IBackupService, BackupService>();
+builder.Services.AddSingleton<IProcessTreeDiscovery, WindowsProcessTreeDiscovery>();
 builder.Services.AddSingleton<ProcessSupervisor>();
 builder.Services.AddSingleton<IProcessSupervisor>(
     services => services.GetRequiredService<ProcessSupervisor>());

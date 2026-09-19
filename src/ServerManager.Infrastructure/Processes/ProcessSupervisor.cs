@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using ServerManager.Contracts;
@@ -8,13 +8,16 @@ namespace ServerManager.Infrastructure.Processes;
 
 public sealed class ProcessSupervisor(
     ILogger<ProcessSupervisor> logger,
-    IAuditLogStore auditLogStore) :
+    IAuditLogStore auditLogStore,
+    IProcessTreeDiscovery? processTreeDiscovery = null) :
     IProcessSupervisor,
     IProcessResourceController,
     IConsoleService,
     ILogStreamService,
     IDisposable
 {
+    private readonly IProcessTreeDiscovery _processTreeDiscovery =
+        processTreeDiscovery ?? new WindowsProcessTreeDiscovery();
     private static readonly TimeSpan GracefulStopTimeout = TimeSpan.FromSeconds(20);
     private readonly ConcurrentDictionary<Guid, ManagedProcess> _processes = new();
     private readonly ConcurrentDictionary<Guid, ProcessLogBuffer> _logs = new();
@@ -72,7 +75,7 @@ public sealed class ProcessSupervisor(
             EnableRaisingEvents = true
         };
         var logBuffer = _logs.GetOrAdd(server.Id, _ => new ProcessLogBuffer());
-        var managed = new ManagedProcess(server, launchSpec, process, logBuffer);
+        var managed = new ManagedProcess(server, launchSpec, process, logBuffer, _processTreeDiscovery);
         process.OutputDataReceived += (_, args) =>
             PublishOutput(managed, args.Data, false);
         process.ErrorDataReceived += (_, args) =>
@@ -158,7 +161,7 @@ public sealed class ProcessSupervisor(
         }
 
         var logBuffer = _logs.GetOrAdd(server.Id, _ => new ProcessLogBuffer());
-        var managed = new ManagedProcess(server, launchSpec, process, logBuffer);
+        var managed = new ManagedProcess(server, launchSpec, process, logBuffer, _processTreeDiscovery);
         process.EnableRaisingEvents = true;
         process.Exited += (_, _) => _ = HandleExitAsync(managed);
         if (!_processes.TryAdd(server.Id, managed))
@@ -173,6 +176,7 @@ public sealed class ProcessSupervisor(
         {
             managed.MarkAdopted();
             managed.Job.Assign(process);
+            AttachPreExistingDescendantsToJob(managed);
             managed.SetState(ServerState.Running);
             logBuffer.Publish(new LogEntry(
                 DateTimeOffset.UtcNow,
@@ -338,7 +342,7 @@ public sealed class ProcessSupervisor(
         try
         {
             var processIds = OperatingSystem.IsWindows()
-                ? managed.Job.GetProcessIds()
+                ? _processTreeDiscovery.DescendantsOf(managed.Process.Id)
                 : [managed.Process.Id];
             if (processIds.Count == 0)
             {
@@ -382,12 +386,29 @@ public sealed class ProcessSupervisor(
             managed.Job.SetMemoryLimit(hardMemoryLimitBytes);
             managed.LastAppliedPriority = priority;
             managed.LastAppliedAffinity = cpuAffinityMask;
+            var uncoveredByJob = hardMemoryLimitBytes is null || !OperatingSystem.IsWindows()
+                ? []
+                : processIds.Except(managed.Job.GetProcessIds()).ToArray();
+            if (uncoveredByJob.Length > 0)
+            {
+                // Priority/affinity above were applied directly per-process and cover every
+                // discovered descendant regardless of Job membership. The hard memory limit
+                // is enforced by Windows at the Job level, so it only ever covers whichever
+                // descendants actually joined this server's Job Object -- typically every
+                // descendant of a process this Agent instance itself started, but possibly
+                // not every descendant of one it re-adopted (see AttachPreExistingDescendantsToJob).
+                logger.LogWarning(
+                    "Hard memory limit for server {ServerId} does not cover process(es) {ProcessIds}; they are outside this server's Job Object and were not restarted to force membership.",
+                    serverId,
+                    string.Join(',', uncoveredByJob));
+            }
+
             await auditLogStore.WriteAsync(
                 "ResourceGovernor",
                 "ProcessResourcesApplied",
                 serverId.ToString(),
                 true,
-                $"Priority={priority}; Affinity={cpuAffinityMask?.ToString() ?? "All"}; Processes={string.Join(',', processIds)}; HardMemoryLimit={hardMemoryLimitBytes?.ToString() ?? "Disabled"}",
+                $"Priority={priority}; Affinity={cpuAffinityMask?.ToString() ?? "All"}; Processes={string.Join(',', processIds)}; HardMemoryLimit={hardMemoryLimitBytes?.ToString() ?? "Disabled"}; UncoveredByMemoryLimit={(uncoveredByJob.Length > 0 ? string.Join(',', uncoveredByJob) : "None")}",
                 cancellationToken);
             return OperationResult.Ok();
         }
@@ -547,6 +568,49 @@ public sealed class ProcessSupervisor(
         return null;
     }
 
+    /// <summary>
+    /// Best-effort brings every currently-live descendant of a just-adopted root into its
+    /// Job Object, so resource governance (in particular the Job-enforced hard memory limit,
+    /// which -- unlike priority/affinity -- cannot be applied directly per-process) covers
+    /// them too. A descendant that already belongs to a different Job (Windows does not allow
+    /// silently moving a process between Jobs without nested-job support) is skipped and
+    /// logged rather than failing the whole adoption; process-tree discovery and telemetry
+    /// remain fully correct either way, since they no longer depend on Job membership.
+    /// </summary>
+    private void AttachPreExistingDescendantsToJob(ManagedProcess managed)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        foreach (var descendantId in _processTreeDiscovery.DescendantsOf(managed.Process.Id))
+        {
+            if (descendantId == managed.Process.Id)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var descendant = Process.GetProcessById(descendantId);
+                managed.Job.Assign(descendant);
+            }
+            catch (Exception exception) when (
+                exception is ArgumentException or
+                InvalidOperationException or
+                System.ComponentModel.Win32Exception or
+                NotSupportedException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "Could not bring pre-existing descendant process {ProcessId} of server {ServerId} into its Job Object; resource-limit enforcement will not cover it unless the game restarts.",
+                    descendantId,
+                    managed.Server.Id);
+            }
+        }
+    }
+
     private static bool ProcessPathMatches(Process process, string expectedPath) =>
         process.MainModule?.FileName is { } path &&
         Path.GetFullPath(path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase);
@@ -686,7 +750,8 @@ public sealed class ProcessSupervisor(
         GameServerDefinition server,
         ProcessLaunchSpec spec,
         Process process,
-        ProcessLogBuffer logs) : IDisposable
+        ProcessLogBuffer logs,
+        IProcessTreeDiscovery processTreeDiscovery) : IDisposable
     {
         private readonly object _metricsSync = new();
         private readonly Dictionary<int, TimeSpan> _lastProcessorTimes = [];
@@ -801,7 +866,7 @@ public sealed class ProcessSupervisor(
         private List<ProcessTreeMember> CaptureProcessTree()
         {
             var processIds = OperatingSystem.IsWindows()
-                ? Job.GetProcessIds()
+                ? processTreeDiscovery.DescendantsOf(Process.Id)
                 : [Process.Id];
             if (processIds.Count == 0 && !Process.HasExited)
             {
