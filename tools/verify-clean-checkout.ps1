@@ -91,12 +91,16 @@ try {
         Write-Host "`n== dotnet test -c $Configuration =="
         & $dotnet test .\1SalemServerManager.sln -c $Configuration --no-build --no-restore
         if ($LASTEXITCODE -ne 0) { throw "test failed with exit code $LASTEXITCODE." }
+
+        Write-Host "`n== dotnet format --verify-no-changes =="
+        & $dotnet format .\1SalemServerManager.sln --verify-no-changes --no-restore
+        if ($LASTEXITCODE -ne 0) { throw "formatting verification failed with exit code $LASTEXITCODE." }
     }
     finally {
         Pop-Location
     }
 
-    Write-Host "`nClean-checkout verification passed: restore, build, and the full test suite all " +
+    Write-Host "`nClean-checkout verification passed: restore, build, test, and formatting all " +
         'succeeded with no reliance on any local, git-ignored, or previously-built state.'
 }
 finally {

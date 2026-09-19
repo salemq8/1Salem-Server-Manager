@@ -11,10 +11,18 @@ namespace ServerManager.Infrastructure.Tests;
 
 public sealed class BackupServiceTests : IDisposable
 {
+    // Deliberately independent of the repository's own location (not under a "artifacts/"
+    // folder inside the checkout): BackupDestinationPolicy.Validate hard-rejects any
+    // destination under Path.GetTempPath(), and a checkout exported for clean-checkout
+    // verification (git archive into %TEMP%) would otherwise put this entire test root under
+    // Temp too, failing every test in this file for a reason that has nothing to do with the
+    // behavior under test. LocalApplicationData mirrors where BackupDestinationPolicy.
+    // GetDefaultRoot itself points production backups (CommonApplicationData), so it is
+    // guaranteed not to collide with any of the policy's own rejection rules.
     private readonly string _testRoot = Path.Combine(
-        FindRepositoryRoot(),
-        "artifacts",
-        "test-data",
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "1SalemServerManager.Tests",
+        "BackupServiceTests",
         Guid.NewGuid().ToString("N"));
     private string ServerRoot => Path.Combine(_testRoot, "server");
     private string BackupRoot => Path.Combine(_testRoot, "backups");
@@ -557,19 +565,6 @@ public sealed class BackupServiceTests : IDisposable
             25565,
             "1.21.8",
             DateTimeOffset.UtcNow);
-
-    private static string FindRepositoryRoot()
-    {
-        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (current is not null &&
-               !File.Exists(Path.Combine(current.FullName, "Directory.Build.props")))
-        {
-            current = current.Parent;
-        }
-
-        return current?.FullName ??
-               throw new InvalidOperationException("Repository root was not found.");
-    }
 
     private sealed class InMemoryGameStore(GameServerDefinition server) : IGameServerStore
     {

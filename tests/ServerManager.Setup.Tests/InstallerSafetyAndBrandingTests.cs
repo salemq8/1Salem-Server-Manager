@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ServerManager.Setup.Tests;
 
@@ -125,15 +126,15 @@ public sealed class InstallerSafetyAndBrandingTests : IDisposable
     {
         var root = FindRepositoryRoot();
         string? productIcon = null;
-        foreach (var executable in new[]
+        foreach (var (projectDirectory, executableName) in new[]
                  {
-                     @"src\ServerManager.Client\bin\Release\net8.0-windows\1Salem.ServerManager.exe",
-                     @"src\ServerManager.Agent\bin\Release\net8.0\1Salem.ServerManager.Agent.exe",
-                     @"src\ServerManager.Updater\bin\Release\net8.0-windows\1Salem.ServerManager.Updater.exe",
-                     @"tools\ServerManager.Setup\bin\Release\net8.0-windows\1Salem.ServerManager.Setup.exe"
+                     (@"src\ServerManager.Client", "1Salem.ServerManager.exe"),
+                     (@"src\ServerManager.Agent", "1Salem.ServerManager.Agent.exe"),
+                     (@"src\ServerManager.Updater", "1Salem.ServerManager.Updater.exe"),
+                     (@"tools\ServerManager.Setup", "1Salem.ServerManager.Setup.exe")
                  })
         {
-            var path = Path.Combine(root, executable);
+            var path = ResolveReleaseOutputPath(root, projectDirectory, executableName);
             Assert.True(File.Exists(path), path);
             var digest = IconDigest(path);
             productIcon ??= digest;
@@ -141,6 +142,34 @@ public sealed class InstallerSafetyAndBrandingTests : IDisposable
         }
 
         Assert.NotNull(productIcon);
+    }
+
+    // Resolves the actual Release output path from the project's own <TargetFramework>
+    // instead of a hard-coded TFM directory, so a future TargetFramework change cannot
+    // silently desynchronize this test from the real build output (as previously happened
+    // for ServerManager.Agent, which is net8.0-windows but was hard-coded here as net8.0).
+    private static string ResolveReleaseOutputPath(
+        string root,
+        string projectDirectoryRelative,
+        string outputFileName)
+    {
+        var projectDirectory = Path.Combine(root, projectDirectoryRelative);
+        var csprojFile = Directory.EnumerateFiles(projectDirectory, "*.csproj").Single();
+        var match = Regex.Match(
+            File.ReadAllText(csprojFile),
+            @"<TargetFramework>(?<tfm>[^<]+)</TargetFramework>");
+        if (!match.Success)
+        {
+            throw new InvalidOperationException(
+                $"Could not resolve <TargetFramework> from {csprojFile}.");
+        }
+
+        return Path.Combine(
+            projectDirectory,
+            "bin",
+            "Release",
+            match.Groups["tfm"].Value,
+            outputFileName);
     }
 
     [Fact]

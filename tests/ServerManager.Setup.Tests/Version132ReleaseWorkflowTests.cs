@@ -66,22 +66,18 @@ public sealed partial class Version132ReleaseWorkflowTests
     {
         var root = FindRepositoryRoot();
         var version = File.ReadAllText(Path.Combine(root, "VERSION")).Trim();
-        var files = new[]
+        var projects = new[]
         {
-            (@"src\ServerManager.Client\bin\Release\net8.0-windows\1Salem.ServerManager.exe",
-             @"src\ServerManager.Client\bin\Release\net8.0-windows\1Salem.ServerManager.dll"),
-            (@"src\ServerManager.Agent\bin\Release\net8.0-windows\1Salem.ServerManager.Agent.exe",
-             @"src\ServerManager.Agent\bin\Release\net8.0-windows\1Salem.ServerManager.Agent.dll"),
-            (@"src\ServerManager.Updater\bin\Release\net8.0-windows\1Salem.ServerManager.Updater.exe",
-             @"src\ServerManager.Updater\bin\Release\net8.0-windows\1Salem.ServerManager.Updater.dll"),
-            (@"src\ServerManager.Launcher\bin\Release\net8.0-windows\1Salem.ServerManager.Launcher.exe",
-             @"src\ServerManager.Launcher\bin\Release\net8.0-windows\1Salem.ServerManager.Launcher.dll"),
-            (@"tools\ServerManager.Setup\bin\Release\net8.0-windows\1Salem.ServerManager.Setup.exe",
-             @"tools\ServerManager.Setup\bin\Release\net8.0-windows\1Salem.ServerManager.Setup.dll")
+            (@"src\ServerManager.Client", "1Salem.ServerManager"),
+            (@"src\ServerManager.Agent", "1Salem.ServerManager.Agent"),
+            (@"src\ServerManager.Updater", "1Salem.ServerManager.Updater"),
+            (@"src\ServerManager.Launcher", "1Salem.ServerManager.Launcher"),
+            (@"tools\ServerManager.Setup", "1Salem.ServerManager.Setup")
         };
-        foreach (var (executableRelative, assemblyRelative) in files)
+        foreach (var (projectDirectoryRelative, baseFileName) in projects)
         {
-            var path = Path.Combine(root, executableRelative);
+            var outputDirectory = ResolveReleaseOutputDirectory(root, projectDirectoryRelative);
+            var path = Path.Combine(outputDirectory, $"{baseFileName}.exe");
             Assert.True(File.Exists(path), path);
             var info = FileVersionInfo.GetVersionInfo(path);
             Assert.Equal(version, info.ProductVersion);
@@ -89,8 +85,25 @@ public sealed partial class Version132ReleaseWorkflowTests
             Assert.Equal(
                 new Version($"{version}.0.0"),
                 System.Reflection.AssemblyName.GetAssemblyName(
-                    Path.Combine(root, assemblyRelative)).Version);
+                    Path.Combine(outputDirectory, $"{baseFileName}.dll")).Version);
         }
+    }
+
+    // Resolves the actual Release output directory from the project's own <TargetFramework>
+    // instead of a hard-coded TFM directory, so a future TargetFramework change cannot
+    // silently desynchronize this test from the real build output.
+    private static string ResolveReleaseOutputDirectory(string root, string projectDirectoryRelative)
+    {
+        var projectDirectory = Path.Combine(root, projectDirectoryRelative);
+        var csprojFile = Directory.EnumerateFiles(projectDirectory, "*.csproj").Single();
+        var match = TargetFrameworkPattern().Match(File.ReadAllText(csprojFile));
+        if (!match.Success)
+        {
+            throw new InvalidOperationException(
+                $"Could not resolve <TargetFramework> from {csprojFile}.");
+        }
+
+        return Path.Combine(projectDirectory, "bin", "Release", match.Groups["tfm"].Value);
     }
 
     [Fact]
@@ -163,16 +176,20 @@ public sealed partial class Version132ReleaseWorkflowTests
     public void StableLauncherAndShortcutIdentity_AreVersionIndependent()
     {
         var root = FindRepositoryRoot();
+        // Normalized to \n regardless of how this checkout happens to have materialized the
+        // file on disk: `git archive` (used by tools/verify-clean-checkout.ps1) re-applies
+        // core.autocrlf on export, which can produce \r\n here even where the working tree
+        // (and the git blob) has bare \n, and this assertion's needle spans a line break.
         var identity = File.ReadAllText(Path.Combine(
             root,
             "src",
             "ServerManager.Contracts",
-            "ProductIdentity.cs"));
+            "ProductIdentity.cs")).Replace("\r\n", "\n", StringComparison.Ordinal);
         var installer = File.ReadAllText(Path.Combine(
             root,
             "tools",
             "ServerManager.Setup",
-            "InstallerEngine.cs"));
+            "InstallerEngine.cs")).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         Assert.Contains(
             "StableLauncherRelativePath = @\"Client\\1Salem.ServerManager.exe\"",
@@ -233,4 +250,7 @@ public sealed partial class Version132ReleaseWorkflowTests
 
     [GeneratedRegex(@"(?<!\d)1\.3\.\d+(?!\d)")]
     private static partial Regex ActiveProductVersion();
+
+    [GeneratedRegex(@"<TargetFramework>(?<tfm>[^<]+)</TargetFramework>")]
+    private static partial Regex TargetFrameworkPattern();
 }
