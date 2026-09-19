@@ -41,7 +41,8 @@ public sealed class BackupServiceTests : IDisposable
             gameStore,
             backupStore,
             new StoppedProcessSupervisor(),
-            [new MinecraftServerProvider()]);
+            [new MinecraftServerProvider()],
+            new ServerOperationCoordinator());
 
         var created = await service.CreateAsync(
             new BackupRequest(
@@ -72,7 +73,8 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryGameStore(server),
             store,
             new StoppedProcessSupervisor(),
-            [new MinecraftServerProvider()]);
+            [new MinecraftServerProvider()],
+            new ServerOperationCoordinator());
         var created = await service.CreateAsync(
             new BackupRequest(server.Id, BackupRoot, false, true));
 
@@ -163,6 +165,31 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoreAsync_PreRestoreSafetyBackupFails_ReturnsFailInsteadOfThrowing()
+    {
+        // The pre-restore "Safety" backup and the Restoring-state transition must be inside
+        // RestoreAsync's own transactional try/catch, not before it: if creating that safety
+        // archive throws (here: its destination directory can't be created because a *file*
+        // already occupies that path), RestoreAsync must still return a clean
+        // OperationResult.Fail rather than letting the exception escape unhandled -- and must
+        // not have touched any tracked live file yet (the failure happens before the restore
+        // loop even starts).
+        var (service, _, backupId, archivePath, _) = await CreateThreeFileBackupAsync(
+            new StoppedProcessSupervisor());
+        var safetyDestination = Path.Combine(Path.GetDirectoryName(archivePath)!, "Safety");
+        await File.WriteAllTextAsync(safetyDestination, "blocking-file");
+
+        var restored = await service.RestoreAsync(backupId);
+
+        Assert.False(restored.Success);
+        Assert.Equal("RestoreFailed", restored.ErrorCode);
+        Assert.Equal("changed-a", await File.ReadAllTextAsync(Path.Combine(ServerRoot, "server.properties")));
+        Assert.Equal("changed-b", await File.ReadAllTextAsync(Path.Combine(ServerRoot, "whitelist.json")));
+        Assert.Equal("changed-c", await File.ReadAllTextAsync(Path.Combine(ServerRoot, "ops.json")));
+        AssertNoFailedRestoreArtifacts();
+    }
+
+    [Fact]
     public async Task RecoverInterruptedRestoresAsync_CompletesAJournaledPartialRestore()
     {
         var (service, server, backupId, _, paths) = await CreateThreeFileBackupAsync(
@@ -212,6 +239,7 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryBackupStore(),
             supervisor,
             [new MinecraftServerProvider()],
+            new ServerOperationCoordinator(),
             driveSpaceProbe: driveSpaceProbe);
         // SafeOffline is false here so backup *creation* never stops/restarts the server
         // regardless of the supervisor a given test passes in; only RestoreAsync's own
@@ -304,6 +332,7 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryBackupStore(),
             supervisor,
             [new FakePalworldProvider()],
+            new ServerOperationCoordinator(),
             restClient);
 
         var result = await service.CreateAsync(
@@ -329,6 +358,7 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryBackupStore(),
             supervisor,
             [new FakePalworldProvider()],
+            new ServerOperationCoordinator(),
             restClient);
 
         var result = await service.CreateAsync(
@@ -351,6 +381,7 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryBackupStore(),
             supervisor,
             [new FakePalworldProvider()],
+            new ServerOperationCoordinator(),
             palworldRestClient: null);
 
         var result = await service.CreateAsync(
@@ -374,6 +405,7 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryBackupStore(),
             supervisor,
             [new FakePalworldProvider()],
+            new ServerOperationCoordinator(),
             restClient);
 
         var result = await service.CreateAsync(
@@ -398,6 +430,7 @@ public sealed class BackupServiceTests : IDisposable
             new InMemoryBackupStore(),
             supervisor,
             [new FakePalworldProvider()],
+            new ServerOperationCoordinator(),
             restClient);
 
         var result = await service.CreateAsync(

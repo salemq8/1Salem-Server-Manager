@@ -17,22 +17,23 @@ public sealed class BackupService(
     IBackupStore backupStore,
     IProcessSupervisor processSupervisor,
     IEnumerable<IGameServerProvider> providers,
+    IServerOperationCoordinator coordinator,
     PalworldRestClient? palworldRestClient = null,
     IAuditLogStore? auditLogStore = null,
-    Func<string, DriveSpaceInfo>? driveSpaceProbe = null,
-    IServerOperationCoordinator? coordinator = null) : IBackupService
+    Func<string, DriveSpaceInfo>? driveSpaceProbe = null) : IBackupService
 {
     private readonly IReadOnlyDictionary<GameType, IGameServerProvider> _providers =
         providers.ToDictionary(provider => provider.Game);
     private readonly Func<string, DriveSpaceInfo> _driveSpaceProbe =
         driveSpaceProbe ?? DefaultDriveSpaceProbe;
 
-    // Falls back to a private, instance-scoped coordinator when none is supplied (e.g. in a
-    // test that doesn't care about cross-service coordination). In production, Program.cs must
-    // pass the same singleton instance it hands to GameServerOrchestrator, or Start/Stop/Restart
-    // and Backup/Restore for the same server will no longer serialize against each other.
-    private readonly IServerOperationCoordinator _coordinator =
-        coordinator ?? new ServerOperationCoordinator();
+    // Required, not defaulted: GameServerOrchestrator's coordinator parameter is required for
+    // the same reason (see GameServerOrchestrator.cs) -- Program.cs must pass the same
+    // singleton instance it hands to GameServerOrchestrator, or Start/Stop/Restart and
+    // Backup/Restore for the same server no longer serialize against each other. A silent
+    // per-instance fallback here would mask that wiring mistake instead of failing loudly at
+    // DI-resolution time.
+    private readonly IServerOperationCoordinator _coordinator = coordinator;
 
     public async Task<BackupResult> CreateAsync(
         BackupRequest request,
@@ -232,7 +233,14 @@ public sealed class BackupService(
         }
 
         var provider = GetProvider(server.Game);
-        var diskCheck = CheckAvailableDiskSpace(server.RootPath, verification.Manifest.TotalBytes);
+        var diskCheck = CheckAvailableDiskSpace(
+            server.RootPath,
+            // Budget for both the content being restored AND the pre-restore "Safety" backup
+            // archive created below (of the current live state, comparable in size to the
+            // backup being restored) -- a check that only budgeted for the restored content
+            // could still let the restore run out of disk space while writing that second
+            // archive.
+            verification.Manifest.TotalBytes * 2);
         if (!diskCheck.Success)
         {
             return diskCheck;
@@ -250,18 +258,6 @@ public sealed class BackupService(
 
             await provider.CleanupAfterStopAsync(server, cancellationToken);
         }
-
-        await gameServerStore.SetStateAsync(server.Id, ServerState.Restoring, cancellationToken);
-        await CreateArchiveAsync(
-            server,
-            new BackupRequest(
-                server.Id,
-                Path.Combine(
-                    Path.GetDirectoryName(backup.ArchivePath)!,
-                    "Safety"),
-                false,
-                false),
-            cancellationToken);
 
         var includedPaths = verification.Manifest.IncludedPaths
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -281,6 +277,24 @@ public sealed class BackupService(
         var processedPaths = new List<string>();
         try
         {
+            // Both the state transition and the pre-restore safety backup live inside the
+            // transactional boundary: if either throws (e.g. disk exhaustion, an I/O or
+            // permission error), the catch block below rolls back, records the failure, and
+            // returns OperationResult.Fail instead of letting the exception escape unhandled
+            // and leaving the server stuck in Restoring with no journal for
+            // RecoverInterruptedRestoresAsync to find.
+            await gameServerStore.SetStateAsync(server.Id, ServerState.Restoring, cancellationToken);
+            await CreateArchiveAsync(
+                server,
+                new BackupRequest(
+                    server.Id,
+                    Path.Combine(
+                        Path.GetDirectoryName(backup.ArchivePath)!,
+                        "Safety"),
+                    false,
+                    false),
+                cancellationToken);
+
             ExtractVerified(backup.ArchivePath, staging);
             VerifyStagedContent(staging, verification.Manifest);
             Directory.CreateDirectory(rollback);
@@ -765,47 +779,48 @@ public sealed class BackupService(
         bool restart,
         CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(rollback))
+        if (Directory.Exists(rollback))
         {
-            return;
+            // Only ever reverse paths recorded as processed. A path never reached before the
+            // failure still holds its original, untouched live content — reversing it here
+            // would destroy a file the failed restore never actually changed.
+            for (var index = processedPaths.Count - 1; index >= 0; index--)
+            {
+                var includedPath = processedPaths[index];
+                var current = SafePathPolicy.ResolveWithinRoot(server.RootPath, includedPath);
+                var previous = SafePathPolicy.ResolveWithinRoot(rollback, includedPath);
+
+                // The restored content placed here during the failed attempt is discarded
+                // outright rather than renamed aside: its pre-restore truth is already safely
+                // captured under `rollback` (or, if nothing existed here before, discarding it
+                // *is* the correct pre-restore state). Renaming it aside would leave stray
+                // `*.failed-restore-*` files behind, which is itself a deviation from "exact
+                // pre-restore state".
+                if (File.Exists(current))
+                {
+                    File.Delete(current);
+                }
+                else if (Directory.Exists(current))
+                {
+                    Directory.Delete(current, true);
+                }
+
+                if (File.Exists(previous))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(current)!);
+                    File.Move(previous, current, false);
+                }
+                else if (Directory.Exists(previous))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(current)!);
+                    Directory.Move(previous, current);
+                }
+            }
         }
 
-        // Only ever reverse paths recorded as processed. A path never reached before the
-        // failure still holds its original, untouched live content — reversing it here would
-        // destroy a file the failed restore never actually changed.
-        for (var index = processedPaths.Count - 1; index >= 0; index--)
-        {
-            var includedPath = processedPaths[index];
-            var current = SafePathPolicy.ResolveWithinRoot(server.RootPath, includedPath);
-            var previous = SafePathPolicy.ResolveWithinRoot(rollback, includedPath);
-
-            // The restored content placed here during the failed attempt is discarded
-            // outright rather than renamed aside: its pre-restore truth is already safely
-            // captured under `rollback` (or, if nothing existed here before, discarding it
-            // *is* the correct pre-restore state). Renaming it aside would leave stray
-            // `*.failed-restore-*` files behind, which is itself a deviation from "exact
-            // pre-restore state".
-            if (File.Exists(current))
-            {
-                File.Delete(current);
-            }
-            else if (Directory.Exists(current))
-            {
-                Directory.Delete(current, true);
-            }
-
-            if (File.Exists(previous))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(current)!);
-                File.Move(previous, current, false);
-            }
-            else if (Directory.Exists(previous))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(current)!);
-                Directory.Move(previous, current);
-            }
-        }
-
+        // Even when nothing was ever moved (e.g. the failure happened during the pre-restore
+        // safety backup, before any live path was touched -- rollback was never created), a
+        // server that was stopped for this attempt still needs to come back up.
         if (restart)
         {
             try
