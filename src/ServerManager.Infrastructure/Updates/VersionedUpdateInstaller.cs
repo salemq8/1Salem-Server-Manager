@@ -355,6 +355,7 @@ public sealed class VersionedUpdateInstaller
                     installRoot,
                     dataRoot,
                     rollbackRoot,
+                    workRoot,
                     switched,
                     options.ActivateAgent,
                     options.UpdateRegistry,
@@ -601,6 +602,7 @@ public sealed class VersionedUpdateInstaller
         string installRoot,
         string dataRoot,
         string rollbackRoot,
+        string workRoot,
         bool switched,
         bool restoreAgent,
         bool updateRegistry,
@@ -608,18 +610,28 @@ public sealed class VersionedUpdateInstaller
     {
         try
         {
+            // Restored via the same stage-then-atomic-swap primitive used by the forward
+            // install path (ReplaceDirectory), not a plain file-by-file copy over the live
+            // directory: RollBack runs on virtually any failure after the update begins
+            // mutating the install, so a crash during recovery is a realistic, easily-triggered
+            // scenario, and a non-atomic overwrite here could leave the live Client/Agent
+            // directory in exactly the half-old-half-new state this repair exists to prevent --
+            // just on the rollback side instead of the forward side. Restoring "Client" this
+            // way also atomically restores its nested live Updater subfolder as one unit.
             if (Directory.Exists(Path.Combine(rollbackRoot, "Client")))
             {
-                CopyDirectory(
+                ReplaceDirectory(
+                    Path.Combine(installRoot, "Client"),
                     Path.Combine(rollbackRoot, "Client"),
-                    Path.Combine(installRoot, "Client"));
+                    Path.Combine(workRoot, "rollback-old-client"));
             }
 
             if (restoreAgent && Directory.Exists(Path.Combine(rollbackRoot, "Agent")))
             {
-                CopyDirectory(
+                ReplaceDirectory(
+                    Path.Combine(installRoot, "Agent"),
                     Path.Combine(rollbackRoot, "Agent"),
-                    Path.Combine(installRoot, "Agent"));
+                    Path.Combine(workRoot, "rollback-old-agent"));
             }
 
             RestoreSnapshot(

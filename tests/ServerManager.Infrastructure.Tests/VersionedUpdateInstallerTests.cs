@@ -327,11 +327,28 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
         Assert.Equal(["stop", "start"], operations);
         Assert.Equal("client-old", await File.ReadAllTextAsync(
             Path.Combine(installRoot, "Client", "1Salem.ServerManager.exe")));
+        // Rollback restores the whole "Client" directory as a single atomic swap (the same
+        // ReplaceDirectory stage/verify/rename primitive the forward install path uses, not a
+        // file-by-file copy over the live directory), so the self-updater's own live Updater
+        // subfolder nested inside Client comes back correctly too, in the same operation.
+        Assert.Equal("updater-old", await File.ReadAllTextAsync(
+            Path.Combine(installRoot, "Client", "Updater", "1Salem.ServerManager.Updater.exe")));
         Assert.Equal("agent-old", await File.ReadAllTextAsync(
             Path.Combine(installRoot, "Agent", "1Salem.ServerManager.Agent.exe")));
         var manifestText = await File.ReadAllTextAsync(
             Path.Combine(installRoot, "current.json"));
         Assert.Contains("1.3.1", manifestText, StringComparison.Ordinal);
+        // No rollback staging/old-content temp directories are left behind after a successful
+        // rollback: neither under installRoot (ReplaceDirectory's own ".staged-*" siblings)...
+        Assert.Empty(Directory.EnumerateDirectories(installRoot, "*.staged-*", SearchOption.AllDirectories));
+        // ...nor under dataRoot's per-operation work directory (this operation's own
+        // workRoot, which holds "rollback-old-client"/"rollback-old-agent" until the whole
+        // ApplyAsync call's outer finally block deletes it).
+        var workParent = Path.Combine(dataRoot, "updates", "work");
+        Assert.Empty(
+            Directory.Exists(workParent)
+                ? Directory.EnumerateFileSystemEntries(workParent)
+                : []);
     }
 
     [Fact]
