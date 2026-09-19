@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace ServerManager.Infrastructure.Updates;
@@ -32,7 +33,7 @@ public static class DashboardProcessShutdown
                     $"PID {processId} is not the dashboard; update shutdown was refused.");
             }
 
-            var executable = process.MainModule?.FileName;
+            var executable = await ReadMainModuleFileNameAsync(process, cancellationToken);
             if (string.IsNullOrWhiteSpace(executable) ||
                 !IsAllowedDashboardPath(executable, installRoot, stableClientPath))
             {
@@ -53,6 +54,49 @@ public static class DashboardProcessShutdown
                     "The dashboard did not close in time; no application files were changed.");
             }
         }
+    }
+
+    /// <summary>
+    /// Process.MainModule can transiently report an empty FileName for a process that has only
+    /// just been created -- the Windows loader has not finished initializing the main module
+    /// yet, a documented race in the underlying Win32 API, not specific to this application. A
+    /// legitimately-matching dashboard process must never be refused shutdown just because it
+    /// happened to be inspected within a few milliseconds of starting, so this retries briefly
+    /// rather than accepting a single inconclusive (empty) read. It does NOT retry after a real,
+    /// non-empty path is obtained -- a definitive mismatch is still rejected immediately.
+    /// </summary>
+    private static async Task<string?> ReadMainModuleFileNameAsync(
+        Process process,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            try
+            {
+                process.Refresh();
+                var fileName = process.MainModule?.FileName;
+                if (!string.IsNullOrWhiteSpace(fileName))
+                {
+                    return fileName;
+                }
+            }
+            catch (Exception exception) when (
+                exception is InvalidOperationException or Win32Exception)
+            {
+                // The process may have exited, or its module list may be transiently
+                // inaccessible while it is still initializing; fall through to retry or
+                // exhaust attempts below.
+            }
+
+            if (process.HasExited)
+            {
+                return null;
+            }
+
+            await Task.Delay(25, cancellationToken);
+        }
+
+        return null;
     }
 
     private static bool IsAllowedDashboardPath(
