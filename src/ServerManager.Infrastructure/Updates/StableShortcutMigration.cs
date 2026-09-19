@@ -197,30 +197,47 @@ public static class StableShortcutMigration
                 null,
                 shortcut,
                 null) as string;
-            if (!IsVersionedClientTarget(installRoot, target))
+            var needsRetarget = IsVersionedClientTarget(installRoot, target);
+            // A shortcut can also already point directly at the stable launcher without ever
+            // needing a retarget -- e.g. one created by an older, pre-fixed-version-policy
+            // install that predates this AppUserModelID repair but already used the
+            // permanent-launcher design. Such a shortcut is otherwise invisible to this method,
+            // since IsVersionedClientTarget only recognizes the *old*, version-path-pointing
+            // shape it exists to fix -- so without this check, an existing production shortcut
+            // migrating straight from a pre-AUMID install would never get stamped at all.
+            var alreadyStableTarget = !needsRetarget &&
+                !string.IsNullOrWhiteSpace(target) &&
+                Path.GetFullPath(target).Equals(
+                    Path.GetFullPath(stableLauncher),
+                    StringComparison.OrdinalIgnoreCase);
+            if (!needsRetarget && !alreadyStableTarget)
             {
                 return false;
             }
 
-            SetProperty(shortcutType, shortcut, "TargetPath", stableLauncher);
-            SetProperty(
-                shortcutType,
-                shortcut,
-                "WorkingDirectory",
-                Path.GetDirectoryName(stableLauncher)!);
-            SetProperty(shortcutType, shortcut, "IconLocation", $"{stableLauncher},0");
-            shortcutType.InvokeMember(
-                "Save",
-                BindingFlags.InvokeMethod,
-                null,
-                shortcut,
-                null);
+            if (needsRetarget)
+            {
+                SetProperty(shortcutType, shortcut, "TargetPath", stableLauncher);
+                SetProperty(
+                    shortcutType,
+                    shortcut,
+                    "WorkingDirectory",
+                    Path.GetDirectoryName(stableLauncher)!);
+                SetProperty(shortcutType, shortcut, "IconLocation", $"{stableLauncher},0");
+                shortcutType.InvokeMember(
+                    "Save",
+                    BindingFlags.InvokeMethod,
+                    null,
+                    shortcut,
+                    null);
+            }
 
-            // This shortcut just had its target retargeted onto the Stable launcher (confirmed
-            // by IsVersionedClientTarget above), so it must carry the same fixed Stable
-            // AppUserModelID the running Client process sets on itself -- otherwise Windows
-            // falls back to a path-derived identity that changes across updates, and a taskbar
-            // icon pinned from this shortcut can fail to merge with the running app's button.
+            // Stamped whenever this shortcut targets (or was just retargeted onto) the stable
+            // launcher, not only when a retarget actually happened: it must carry the same fixed
+            // Stable AppUserModelID the running Client process sets on itself, or Windows falls
+            // back to a path-derived identity and a taskbar icon pinned from this shortcut can
+            // fail to merge with the running app's button. Idempotent -- safe to re-stamp a
+            // shortcut that already carries the correct value.
             ProductIdentity.StampShortcutAppUserModelId(shortcutPath, ProductIdentity.AppUserModelId);
             return true;
         }

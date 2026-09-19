@@ -307,6 +307,47 @@ public sealed class VersionedUpdateInstallerTests : IDisposable
     }
 
     [Fact]
+    public void ShortcutMigration_StampsAumidOnAShortcutAlreadyTargetingTheStableLauncher()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // Reproduces a real production scenario found on an actual installed 1.3.2 machine:
+        // its shortcuts already pointed directly at the permanent stable launcher (1.3.2
+        // already had that design) rather than a version-specific path, so
+        // IsVersionedClientTarget never recognizes them as needing a retarget -- meaning the
+        // AUMID stamp, which previously only ran after a successful retarget, would never be
+        // applied to this shortcut during an in-app update at all. This must still stamp it.
+        var installRoot = Path.Combine(_root, "already-stable-install");
+        var stableLauncher = Path.Combine(installRoot, "Client", "1Salem.ServerManager.exe");
+        var shortcutRoot = Path.Combine(_root, "already-stable-pinned");
+        var shortcutPath = Path.Combine(shortcutRoot, "1Salem.lnk");
+        Directory.CreateDirectory(Path.GetDirectoryName(stableLauncher)!);
+        Directory.CreateDirectory(shortcutRoot);
+        File.WriteAllText(stableLauncher, "stable launcher");
+        // Points at the stable launcher already -- no Versions\<v>\... segment at all.
+        CreateShortcut(shortcutPath, stableLauncher);
+        Assert.Null(WindowsShortcutManager.TryReadAppUserModelId(shortcutPath));
+
+        var result = StableShortcutMigration.RetargetInstalledShortcuts(
+            installRoot,
+            stableLauncher,
+            [shortcutRoot]);
+
+        Assert.Equal(1, result.Updated);
+        Assert.Empty(result.Failures);
+        Assert.Equal(
+            Path.GetFullPath(stableLauncher),
+            Path.GetFullPath(ReadShortcutTarget(shortcutPath)),
+            StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(
+            ProductIdentity.AppUserModelId,
+            WindowsShortcutManager.TryReadAppUserModelId(shortcutPath));
+    }
+
+    [Fact]
     public async Task FailedAgentActivation_RestoresClientAgentAndCurrentManifest()
     {
         var (installRoot, dataRoot) = CreateInstalledLayout("1.3.1");
