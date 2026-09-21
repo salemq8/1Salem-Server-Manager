@@ -1,0 +1,35 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerContentTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Deliberately a shell only. The Content Hub (mods, plugins, modpacks, providers) is a
+        later phase; nothing here invents catalogue entries, and the layout is the same card
+        grid that phase will fill, so it can expand without redesigning Server Detail.
+    -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180">
+            <TextBlock x:Name="Heading" Style="{StaticResource SectionTitleStyle}" />
+            <TextBlock x:Name="Subheading"
+                       Style="{StaticResource SecondaryTextStyle}"
+                       Margin="0,4,0,0" />
+
+            <Border Style="{StaticResource SectionCardStyle}"
+                    Margin="0,18,0,0"
+                    Padding="40,48">
+                <StackPanel HorizontalAlignment="Center" MaxWidth="520">
+                    <TextBlock x:Name="StateGlyph"
+                               Text="&#xE8F1;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="24"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,14"
+                               Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBlock x:Name="StateTitle" Style="{StaticResource StateTitleStyle}" />
+                    <TextBlock x:Name="StateMessage" Style="{StaticResource StateMessageStyle}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

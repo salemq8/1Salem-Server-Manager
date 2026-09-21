@@ -1,18 +1,20 @@
-using System.Windows;
 using System.ComponentModel;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using ServerManager.Client.Shell;
 using ServerManager.Contracts;
-using System.Windows.Threading;
-using System.Windows.Controls;
 
 namespace ServerManager.Client;
 
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly UiPreferencesStore _preferencesStore = new();
     private bool _allowClose;
-    private bool _navigationCollapsed;
-    private bool _changingMainNavigation;
+    private bool _syncingNavigation;
     private readonly DispatcherTimer _notificationTimer = new()
     {
         Interval = TimeSpan.FromSeconds(6)
@@ -23,21 +25,26 @@ public partial class MainWindow : Window
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         DataContext = viewModel;
         InitializeComponent();
-        MinecraftPage.Configure(GameType.Minecraft);
-        PalworldPage.Configure(GameType.Palworld);
-        HomeDashboard.CreateMinecraftRequested += (_, _) => OpenMinecraftInstaller();
-        HomeDashboard.CreatePalworldRequested += (_, _) => OpenPalworldInstaller();
-        HomeDashboard.ManageRequested += (_, request) =>
-            ShowServer(request.Game, request.TabIndex);
-        MinecraftPage.CreateRequested += (_, _) => OpenMinecraftInstaller();
-        PalworldPage.CreateRequested += (_, _) => OpenPalworldInstaller();
-        MinecraftPage.RemoteAccessRequested += (_, _) => ShowSection("RemoteAccess");
-        PalworldPage.RemoteAccessRequested += (_, _) => ShowSection("RemoteAccess");
-        ApplicationUpdatePage.ExitForUpdateRequested += (_, _) =>
+
+        HomePage.ServerOpenRequested += (_, serverId) => OpenServer(serverId);
+        HomePage.ServerStartRequested += (_, serverId) => OpenServer(serverId);
+        ServersPage.ServerOpenRequested += (_, serverId) => OpenServer(serverId);
+        ServersPage.ServerStartRequested += (_, serverId) => OpenServer(serverId);
+        BackupsPage.BackupRequested += (_, serverId) => OpenServer(serverId);
+        ServerDetailPage.BackRequested += (_, _) =>
         {
-            _allowClose = true;
-            System.Windows.Application.Current.Shutdown();
+            _viewModel.CloseServerDetail();
+            SyncNavigationSelection();
         };
+        SettingsPage.DiagnosticsRequested += async (_, _) => await ExportDiagnosticsAsync();
+        SettingsPage.PreferencesApplied += (_, preferences) =>
+        {
+            // Applying preferences rebuilds the destination items, which drops both
+            // ListBoxes' selection; without re-syncing, the sidebar loses its highlight.
+            _viewModel.ApplyUiPreferences(preferences);
+            SyncNavigationSelection();
+        };
+
         Loaded += OnLoaded;
         Closed += OnClosed;
         Closing += OnClosing;
@@ -49,28 +56,23 @@ public partial class MainWindow : Window
             _notificationTimer.Stop();
             NotificationToast.Visibility = Visibility.Collapsed;
         };
-        LoadInlineAppearance();
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e) =>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        ApplySidebarState(_viewModel.SidebarCollapsed, animate: false);
+        SyncNavigationSelection();
         await _viewModel.StartAsync();
+    }
 
     private void OnClosed(object? sender, EventArgs e)
     {
-        HomeDashboard.Dispose();
-        MinecraftPage.Dispose();
-        PalworldPage.Dispose();
-        RemoteAccessPage.Dispose();
-        ApplicationUpdatePage.Dispose();
-        NetworkDashboard.Dispose();
         _viewModel.Dispose();
         NotificationService.Published -= OnNotificationPublished;
         _notificationTimer.Stop();
     }
 
-    private void OnNotificationPublished(
-        object? sender,
-        AppNotification notification)
+    private void OnNotificationPublished(object? sender, AppNotification notification)
     {
         Dispatcher.Invoke(() =>
         {
@@ -93,13 +95,13 @@ public partial class MainWindow : Window
         });
     }
 
-    private void DismissNotification_Click(
-        object sender,
-        RoutedEventArgs e)
+    private void DismissNotification_Click(object sender, RoutedEventArgs e)
     {
         _notificationTimer.Stop();
         NotificationToast.Visibility = Visibility.Collapsed;
     }
+
+    // --- Public surface used by the tray icon ---
 
     public void ShowDashboard()
     {
@@ -111,32 +113,65 @@ public partial class MainWindow : Window
     public void ShowSection(string key)
     {
         ShowDashboard();
-        _viewModel.SelectedSection = _viewModel.Sections.First(section =>
-            section.Key.Equals(key, StringComparison.Ordinal));
+        _viewModel.SelectSection(key);
+        SyncNavigationSelection();
     }
 
     public void ShowServer(GameType game, int tabIndex = 0)
     {
-        ShowDashboard();
-        SelectGame(game);
-        (game == GameType.Minecraft ? MinecraftPage : PalworldPage)
-            .SelectTab(tabIndex);
+        // Individual games no longer have their own destination; they live inside Servers.
+        _ = game;
+        _ = tabIndex;
+        ShowSection("Servers");
     }
 
     public void OpenServerCreation(GameType game)
     {
-        ShowDashboard();
-        if (game == GameType.Minecraft)
-        {
-            OpenMinecraftInstaller();
-        }
-        else
-        {
-            OpenPalworldInstaller();
-        }
+        _ = game;
+        ShowSection("Servers");
     }
 
     public void PrepareForExit() => _allowClose = true;
+
+    /// <summary>
+    /// Writes a diagnostics bundle where the person chooses. The export itself redacts
+    /// secrets; this only picks the destination and reports the outcome.
+    /// </summary>
+    private async Task ExportDiagnosticsAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = $"1salem-diagnostics-{DateTime.Now:yyyyMMdd-HHmm}.zip",
+            Filter = "Zip archive (*.zip)|*.zip"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = await DiagnosticsService.ExportAsync(dialog.FileName);
+            NotificationService.Publish(
+                NotificationKind.Success,
+                LocalizationService.Get("Action.Diagnostics"),
+                path);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            NotificationService.Publish(
+                NotificationKind.Error,
+                LocalizationService.Get("Action.Diagnostics"),
+                exception.Message);
+        }
+    }
+
+    private void OpenServer(Guid serverId)
+    {
+        _viewModel.OpenServerDetail(serverId);
+        ServerDetailPage.Show(serverId);
+        SyncNavigationSelection();
+    }
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
@@ -157,276 +192,128 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ToggleNavigation_Click(object sender, RoutedEventArgs e) =>
-        SetNavigationCollapsed(!_navigationCollapsed);
+    // --- Navigation ---
 
-    private async void NavigationList_SelectionChanged(
+    // Selection is driven explicitly rather than by a TwoWay binding. The primary list cannot
+    // hold the pinned Settings entry, so a bound Selector would keep resetting itself and
+    // writing that reset back into the view model.
+    private void NavigationList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Selection fires while the XAML is still loading, before the pinned Settings list
+        // below has been created, so the field can legitimately still be null here.
+        if (_syncingNavigation || SettingsNavigationList is null)
+        {
+            return;
+        }
+
+        if (NavigationList.SelectedItem is not NavigationItem item)
+        {
+            return;
+        }
+
+        // Selecting a primary destination clears the pinned Settings entry below it.
+        _syncingNavigation = true;
+        SettingsNavigationList.SelectedItem = null;
+        _viewModel.SelectSection(item.Key);
+        _syncingNavigation = false;
+    }
+
+    private void SettingsNavigation_SelectionChanged(
         object sender,
         SelectionChangedEventArgs e)
     {
-        if (_changingMainNavigation ||
-            e.AddedItems.Count == 0 ||
-            e.RemovedItems.Count == 0)
+        if (_syncingNavigation || NavigationList is null ||
+            SettingsNavigationList.SelectedItem is null)
         {
             return;
         }
 
-        var previous = e.RemovedItems[0] as NavigationItem;
-        var requested = e.AddedItems[0] as NavigationItem;
-        if (previous is null || requested is null)
+        _syncingNavigation = true;
+        NavigationList.SelectedItem = null;
+        _viewModel.SelectSection("Settings");
+        _syncingNavigation = false;
+    }
+
+    /// <summary>Points the two lists at whatever the view model says is current.</summary>
+    private void SyncNavigationSelection()
+    {
+        _syncingNavigation = true;
+        if (_viewModel.IsSettingsSelected)
         {
+            NavigationList.SelectedItem = null;
+            SettingsNavigationList.SelectedIndex = 0;
+        }
+        else
+        {
+            SettingsNavigationList.SelectedItem = null;
+            NavigationList.SelectedItem = _viewModel.PrimarySections.FirstOrDefault(
+                item => item.Key.Equals(
+                    _viewModel.SelectedSection.Key,
+                    StringComparison.Ordinal));
+        }
+
+        _syncingNavigation = false;
+    }
+
+    private void ToggleNavigation_Click(object sender, RoutedEventArgs e)
+    {
+        var collapsed = !_viewModel.SidebarCollapsed;
+        _viewModel.SidebarCollapsed = collapsed;
+        ApplySidebarState(collapsed, animate: true);
+        PersistSidebarPreference(collapsed);
+    }
+
+    private void ApplySidebarState(bool collapsed, bool animate)
+    {
+        const double expandedWidth = 228;
+        const double collapsedWidth = 64;
+        var target = collapsed ? collapsedWidth : expandedWidth;
+
+        if (!animate)
+        {
+            NavigationColumn.BeginAnimation(WidthProperty, null);
+            NavigationColumn.Width = target;
             return;
         }
 
-        var page = previous.Key switch
+        var storyboard = (Storyboard)FindResource(
+            collapsed ? "CollapseSidebarStoryboard" : "ExpandSidebarStoryboard");
+        storyboard.Begin(this);
+    }
+
+    private void PersistSidebarPreference(bool collapsed)
+    {
+        try
         {
-            "Minecraft" => MinecraftPage,
-            "Palworld" => PalworldPage,
-            _ => null
-        };
-        if (page is null || !page.HasUnsavedChanges)
-        {
-            return;
+            var current = _preferencesStore.Load();
+            _preferencesStore.Save(current with { SidebarCollapsed = collapsed });
         }
-
-        _changingMainNavigation = true;
-        NavigationList.SelectedItem = previous;
-        _viewModel.SelectedSection = previous;
-        _changingMainNavigation = false;
-
-        if (!await page.ConfirmNavigationAwayAsync())
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
         {
-            return;
+            // A preference that cannot be written must never break navigation.
         }
-
-        _changingMainNavigation = true;
-        NavigationList.SelectedItem = requested;
-        _viewModel.SelectedSection = requested;
-        _changingMainNavigation = false;
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (e.WidthChanged && e.NewSize.Width < 1080 && !_navigationCollapsed)
+        // Collapse automatically on narrow windows, but never fight an explicit choice to
+        // expand. Acting on width alone re-collapsed the sidebar on the very next resize
+        // event after the person expanded it; only the crossing of the breakpoint counts.
+        if (!e.WidthChanged)
         {
-            SetNavigationCollapsed(true);
-        }
-    }
-
-    private void SetNavigationCollapsed(bool collapsed)
-    {
-        _navigationCollapsed = collapsed;
-        NavigationColumn.Width = collapsed
-            ? new GridLength(0)
-            : new GridLength(210);
-        NavigationPanel.Visibility =
-            collapsed ? Visibility.Collapsed : Visibility.Visible;
-        NavigationToggleButton.Content =
-            collapsed
-                ? LocalizationService.Get("Shell.ShowNavigation")
-                : LocalizationService.Get("Shell.HideNavigation");
-    }
-
-    private void OpenMinecraftInstaller_Click(object sender, RoutedEventArgs e)
-        => OpenMinecraftInstaller();
-
-    private void OpenMinecraftInstaller()
-    {
-        var wizard = new MinecraftInstallWindow
-        {
-            Owner = this
-        };
-        wizard.ServerCreated += async (_, _) =>
-        {
-            SelectGame(GameType.Minecraft);
-            await MinecraftPage.RefreshNowAsync();
-            await HomeDashboard.RefreshNowAsync();
-        };
-        wizard.ShowDialog();
-    }
-
-    private void OpenMinecraftManager_Click(object sender, RoutedEventArgs e) =>
-        OpenServerManager(GameType.Minecraft);
-
-    private void OpenPalworldInstaller_Click(object sender, RoutedEventArgs e)
-        => OpenPalworldInstaller();
-
-    private void OpenPalworldInstaller()
-    {
-        var wizard = new PalworldInstallWindow
-        {
-            Owner = this
-        };
-        wizard.ShowDialog();
-        _ = PalworldPage.RefreshNowAsync();
-        _ = HomeDashboard.RefreshNowAsync();
-    }
-
-    private void OpenPalworldManager_Click(object sender, RoutedEventArgs e) =>
-        OpenServerManager(GameType.Palworld);
-
-    private void OpenServerManager(GameType game)
-    {
-        SelectGame(game);
-    }
-
-    private void OpenBackupCenter_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new BackupCenterWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenResourceGovernor_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new ResourceGovernorWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenLanPairing_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new LanPairingWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenNetworkStatus_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new NetworkStatusWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenAdminTools_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new AdminToolsWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenAppearance_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new AppearanceWindow
-        {
-            Owner = this
-        };
-        window.PreferencesApplied += (_, preferences) =>
-            _viewModel.ApplyUiPreferences(preferences);
-        window.ShowDialog();
-    }
-
-    private void LoadInlineAppearance()
-    {
-        var preferences = new UiPreferencesStore().Load();
-        SelectByTag(SettingsLanguageBox, preferences.Language);
-        SelectByTag(SettingsThemeBox, preferences.Theme.ToString());
-    }
-
-    private void ApplyInlineAppearance_Click(
-        object sender,
-        RoutedEventArgs e)
-    {
-        var language = SelectedTag(SettingsLanguageBox);
-        if (!Enum.TryParse<AppTheme>(
-                SelectedTag(SettingsThemeBox),
-                out var theme))
-        {
-            theme = AppTheme.Dark;
+            return;
         }
 
-        var preferences = new UiPreferences(language, theme);
-        new UiPreferencesStore().Save(preferences);
-        LocalizationService.Apply(language);
-        ThemeService.Apply(theme);
-        _viewModel.ApplyUiPreferences(preferences);
-        SetNavigationCollapsed(_navigationCollapsed);
-        InlineAppearanceStatusText.Text =
-            LocalizationService.Get("Appearance.Applied");
-        NotificationService.Publish(
-            NotificationKind.Success,
-            LocalizationService.Get("Appearance.Title"),
-            InlineAppearanceStatusText.Text);
-    }
-
-    private static string SelectedTag(
-        System.Windows.Controls.Primitives.Selector selector) =>
-        (selector.SelectedItem as ComboBoxItem)?.Tag?.ToString() ??
-        string.Empty;
-
-    private static void SelectByTag(
-        System.Windows.Controls.Primitives.Selector selector,
-        string tag)
-    {
-        selector.SelectedItem = selector.Items
-            .OfType<ComboBoxItem>()
-            .FirstOrDefault(item =>
-                string.Equals(
-                    item.Tag?.ToString(),
-                    tag,
-                    StringComparison.OrdinalIgnoreCase));
-        if (selector.SelectedIndex < 0)
+        const double NarrowBreakpoint = 1080;
+        var wasNarrow = e.PreviousSize.Width < NarrowBreakpoint;
+        var isNarrow = e.NewSize.Width < NarrowBreakpoint;
+        if (wasNarrow == isNarrow || !isNarrow || _viewModel.SidebarCollapsed)
         {
-            selector.SelectedIndex = 0;
+            return;
         }
-    }
 
-    private void OpenDiagnostics_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new DiagnosticsWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenFileManager_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new FileManagerWindow
-        {
-            Owner = this
-        };
-        window.ShowDialog();
-    }
-
-    private void OpenMinecraftUpdates_Click(object sender, RoutedEventArgs e)
-    {
-        SelectGame(GameType.Minecraft);
-        MinecraftPage.SelectTab(6);
-    }
-
-    private void OpenPalworldUpdates_Click(object sender, RoutedEventArgs e)
-    {
-        SelectGame(GameType.Palworld);
-        PalworldPage.SelectTab(6);
-    }
-
-    private void OpenMinecraftConsole_Click(object sender, RoutedEventArgs e)
-    {
-        SelectGame(GameType.Minecraft);
-        MinecraftPage.SelectTab(1);
-    }
-
-    private void OpenPalworldConsole_Click(object sender, RoutedEventArgs e)
-    {
-        SelectGame(GameType.Palworld);
-        PalworldPage.SelectTab(1);
-    }
-
-    private void SelectGame(GameType game)
-    {
-        var key = game == GameType.Minecraft ? "Minecraft" : "Palworld";
-        _viewModel.SelectedSection = _viewModel.Sections.First(section =>
-            section.Key.Equals(key, StringComparison.Ordinal));
+        _viewModel.SidebarCollapsed = true;
+        ApplySidebarState(true, animate: true);
     }
 }

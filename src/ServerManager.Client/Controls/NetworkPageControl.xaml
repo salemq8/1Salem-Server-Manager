@@ -1,0 +1,140 @@
+<UserControl x:Class="ServerManager.Client.Controls.NetworkPageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180">
+
+            <controls:PageStateView x:Name="StateView"
+                                    Visibility="Collapsed"
+                                    RetryRequested="State_RetryRequested" />
+
+            <StackPanel x:Name="ContentRoot">
+                <!-- The whole answer in one card: can people outside reach this, and where -->
+                <Border Style="{StaticResource SectionCardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="HealthDot" Style="{StaticResource StatusDotStyle}" />
+                                    <TextBlock x:Name="HealthText"
+                                               Style="{StaticResource SectionTitleStyle}" />
+                                </StackPanel>
+                                <TextBlock x:Name="HealthDetail"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button x:Name="CopyAddressButton"
+                                    Grid.Column="1"
+                                    Style="{StaticResource PrimaryActionStyle}"
+                                    VerticalAlignment="Center"
+                                    Click="CopyAddress_Click" />
+                        </Grid>
+
+                        <Border Style="{StaticResource SettingRowStyle}" Margin="0,18,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="AddressLabel"
+                                           Style="{StaticResource MetricLabelStyle}"
+                                           Margin="0"
+                                           VerticalAlignment="Center"
+                                           MinWidth="150" />
+                                <TextBlock x:Name="AddressValue"
+                                           Grid.Column="1"
+                                           Style="{StaticResource BodyTextStyle}"
+                                           FlowDirection="LeftToRight"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource SettingRowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="DestinationLabel"
+                                           Style="{StaticResource MetricLabelStyle}"
+                                           Margin="0"
+                                           VerticalAlignment="Center"
+                                           MinWidth="150" />
+                                <TextBlock x:Name="DestinationValue"
+                                           Grid.Column="1"
+                                           Style="{StaticResource BodyTextStyle}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource SettingRowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="ProviderLabel"
+                                           Style="{StaticResource MetricLabelStyle}"
+                                           Margin="0"
+                                           VerticalAlignment="Center"
+                                           MinWidth="150" />
+                                <TextBlock x:Name="ProviderValue"
+                                           Grid.Column="1"
+                                           Style="{StaticResource BodyTextStyle}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Local network, for people playing on the same house network -->
+                <Border Style="{StaticResource SectionCardStyle}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="LocalHeading"
+                                   Style="{StaticResource MetricLabelStyle}"
+                                   Margin="0" />
+                        <TextBlock x:Name="LocalValue"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   FlowDirection="LeftToRight"
+                                   Margin="0,8,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                            <Button x:Name="PairDeviceButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Click="PairDevice_Click" />
+                            <Button x:Name="NetworkDetailsButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="8,0,0,0"
+                                    Click="NetworkDetails_Click" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Everything technical, off by default -->
+                <Border Style="{StaticResource SectionCardStyle}" Margin="0,12,0,0">
+                    <Expander x:Name="AdvancedSection"
+                              Style="{StaticResource AdvancedDisclosureStyle}"
+                              Margin="0">
+                        <TextBlock x:Name="AdvancedDetails"
+                                   Style="{StaticResource TechnicalValueStyle}"
+                                   FlowDirection="LeftToRight"
+                                   Margin="0,12,0,0" />
+                    </Expander>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

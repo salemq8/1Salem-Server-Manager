@@ -1,0 +1,140 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerOverviewTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180">
+
+            <!-- The numbers a person actually asks about -->
+            <Border Style="{StaticResource SectionCardStyle}">
+                <StackPanel>
+                    <TextBlock x:Name="AtAGlanceHeading"
+                               Style="{StaticResource SectionTitleStyle}" />
+                    <!-- Metrics sit together on the left at the same rhythm as the server
+                         cards. Spreading them across the full card width made five readings
+                         feel unrelated and left the row looking empty. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <StackPanel Margin="0,0,44,0">
+                            <TextBlock x:Name="PlayersValue" Style="{StaticResource MetricValueStyle}" />
+                            <TextBlock x:Name="PlayersLabel" Style="{StaticResource MetricLabelStyle}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,44,0">
+                            <TextBlock x:Name="UptimeValue" Style="{StaticResource MetricValueStyle}" />
+                            <TextBlock x:Name="UptimeLabel" Style="{StaticResource MetricLabelStyle}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,44,0">
+                            <TextBlock x:Name="CpuValue" Style="{StaticResource MetricValueStyle}" />
+                            <TextBlock x:Name="CpuLabel" Style="{StaticResource MetricLabelStyle}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,44,0">
+                            <TextBlock x:Name="MemoryValue" Style="{StaticResource MetricValueStyle}" />
+                            <TextBlock x:Name="MemoryLabel" Style="{StaticResource MetricLabelStyle}" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock x:Name="VersionValue" Style="{StaticResource MetricValueStyle}" />
+                            <TextBlock x:Name="VersionLabel" Style="{StaticResource MetricLabelStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Backups and reachability, in words -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,6,0">
+                    <StackPanel>
+                        <TextBlock x:Name="BackupsHeading"
+                                   Style="{StaticResource MetricLabelStyle}"
+                                   Margin="0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Ellipse x:Name="BackupDot" Style="{StaticResource StatusDotStyle}" />
+                            <TextBlock x:Name="BackupText" Style="{StaticResource BodyTextStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource SectionCardStyle}" Margin="6,0,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="RemoteHeading"
+                                   Style="{StaticResource MetricLabelStyle}"
+                                   Margin="0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Ellipse x:Name="RemoteDot" Style="{StaticResource StatusDotStyle}" />
+                            <TextBlock x:Name="RemoteText" Style="{StaticResource BodyTextStyle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="RemoteAddress"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   Margin="0,8,0,0"
+                                   FlowDirection="LeftToRight"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Who is online -->
+            <Border Style="{StaticResource SectionCardStyle}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="PlayersHeading"
+                               Style="{StaticResource SectionTitleStyle}" />
+                    <TextBlock x:Name="PlayersEmpty"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Margin="0,10,0,0" />
+                    <ItemsControl x:Name="PlayerList" Margin="0,10,0,0">
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource SettingRowStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}"
+                                                   Style="{StaticResource BodyTextStyle}"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Detail}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   FlowDirection="LeftToRight"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Everything technical lives here and nowhere else -->
+            <Border Style="{StaticResource SectionCardStyle}" Margin="0,12,0,0">
+                <Expander x:Name="AdvancedSection"
+                          Style="{StaticResource AdvancedDisclosureStyle}"
+                          Margin="0">
+                    <StackPanel Margin="0,12,0,0">
+                        <TextBlock x:Name="AdvancedBody"
+                                   Style="{StaticResource TechnicalValueStyle}"
+                                   FlowDirection="LeftToRight" />
+                        <TextBlock x:Name="AdvancedManagement"
+                                   Style="{StaticResource TechnicalValueStyle}"
+                                   FlowDirection="LeftToRight"
+                                   Margin="0,10,0,0" />
+                    </StackPanel>
+                </Expander>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

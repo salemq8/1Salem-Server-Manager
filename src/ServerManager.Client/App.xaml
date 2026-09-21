@@ -1,6 +1,7 @@
 <Application x:Class="ServerManager.Client.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:system="clr-namespace:System;assembly=System.Runtime">
     <Application.Resources>
         <SolidColorBrush x:Key="WindowBrush" Color="#08131F" />
         <SolidColorBrush x:Key="PanelBrush" Color="#0E1C2B" />
@@ -20,6 +21,52 @@
         <SolidColorBrush x:Key="TabBrush" Color="#16283A" />
         <SolidColorBrush x:Key="TabDisabledBrush" Color="#202F40" />
         <SolidColorBrush x:Key="DangerSurfaceBrush" Color="#351D27" />
+
+        <!--
+            Design system tokens (Version 1.5 Build 6 UI).
+            Semantic names only: pages and components must never inline a colour. Every brush
+            here is also present in ThemeService's dark and light tables, which recolours them
+            in place at runtime, so a new token added here has to be added there too or it will
+            not follow the theme.
+        -->
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#08131F" />
+        <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#101F2E" />
+        <SolidColorBrush x:Key="SurfaceOverlayBrush" Color="#16283A" />
+        <SolidColorBrush x:Key="SurfaceSunkenBrush" Color="#050D16" />
+        <SolidColorBrush x:Key="SidebarBrush" Color="#0A1622" />
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F1F6FA" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9FB0C2" />
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#6C8099" />
+        <SolidColorBrush x:Key="BorderSubtleBrush" Color="#1E3448" />
+        <SolidColorBrush x:Key="BorderStrongBrush" Color="#2C4459" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#123B3E" />
+        <SolidColorBrush x:Key="SuccessSoftBrush" Color="#12312A" />
+        <SolidColorBrush x:Key="WarningSoftBrush" Color="#33290F" />
+        <SolidColorBrush x:Key="DangerSoftBrush" Color="#351D27" />
+
+        <!-- Spacing scale: 4 / 8 / 12 / 16 / 24 / 32. Use these, not ad-hoc margins. -->
+        <Thickness x:Key="SpaceXs">4</Thickness>
+        <Thickness x:Key="SpaceSm">8</Thickness>
+        <Thickness x:Key="SpaceMd">12</Thickness>
+        <Thickness x:Key="SpaceLg">16</Thickness>
+        <Thickness x:Key="SpaceXl">24</Thickness>
+        <Thickness x:Key="Space2Xl">32</Thickness>
+        <Thickness x:Key="PagePadding">32,24,32,24</Thickness>
+        <Thickness x:Key="CardPadding">20</Thickness>
+
+        <!-- Type scale. Hierarchy comes from size and colour, not from bolding everything. -->
+        <system:Double x:Key="FontSizePageTitle">26</system:Double>
+        <system:Double x:Key="FontSizeSectionTitle">16</system:Double>
+        <system:Double x:Key="FontSizeBody">13</system:Double>
+        <system:Double x:Key="FontSizeSecondary">12</system:Double>
+        <system:Double x:Key="FontSizeMetric">22</system:Double>
+        <system:Double x:Key="FontSizeCaption">11</system:Double>
+        <system:Double x:Key="CornerRadiusCard">10</system:Double>
+
+        <CornerRadius x:Key="RadiusSm">6</CornerRadius>
+        <CornerRadius x:Key="RadiusMd">10</CornerRadius>
+        <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <Style TargetType="Window">
             <Setter Property="Icon" Value="/Assets/1SalemServerManager.ico" />
@@ -544,6 +591,462 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!--
+            ===================================================================
+            Build 6 component system.
+            Pages compose these; they do not restyle controls locally and never
+            inline a colour. Anything technical (PID, ports, process tree) is
+            expected to sit inside an AdvancedDisclosureStyle block.
+            ===================================================================
+        -->
+
+        <!-- Typography -->
+        <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizePageTitle}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="PageSubtitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSecondary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSectionTitle}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="BodyTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SecondaryTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSecondary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="CaptionTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <!-- Metric values are numeric/technical and always read left to right. Under an RTL
+             layout the bidi algorithm otherwise reorders them: "0 / 32" renders as "32 / 0"
+             and "296 MB" as "MB 296". Unicode isolates do not fix this because WPF's bidi
+             implementation predates them and ignores U+2066..U+2069, so the direction is
+             pinned at the layout level instead, which WPF does honour. -->
+        <Style x:Key="MetricValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeMetric}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="FlowDirection" Value="LeftToRight" />
+        </Style>
+        <Style x:Key="MetricLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- Surfaces -->
+        <Style x:Key="SectionCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="{StaticResource CardPadding}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+        <Style x:Key="InteractiveCardStyle" TargetType="Border" BasedOn="{StaticResource SectionCardStyle}">
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A whole card that is a real control. A Border with MouseLeftButtonUp cannot be
+             reached by Tab or activated with Enter/Space; this keeps the identical card chrome
+             while making the card keyboard-operable and visible to a screen reader. -->
+        <Style x:Key="CardButtonStyle" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="{StaticResource CardPadding}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="CardBorder"
+                                Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource SurfaceOverlayBrush}" />
+                                <Setter TargetName="CardBorder"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource BorderStrongBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="CardBorder"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource FocusBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Status badge: a pill whose colour is set by the consumer from a status token. -->
+        <Style x:Key="StatusBadgeStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+        </Style>
+        <Style x:Key="StatusBadgeTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        </Style>
+        <Style x:Key="StatusDotStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="7" />
+            <Setter Property="Height" Value="7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,7,0" />
+        </Style>
+
+        <!-- Buttons: exactly one primary per view; everything else is quiet. -->
+        <!-- An explicitly keyed style does not pick up the implicit Button style, so without
+             BasedOn this would fall back to raw system chrome and read as disabled. -->
+        <Style x:Key="PrimaryActionStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="18,9" />
+            <Setter Property="MinWidth" Value="104" />
+        </Style>
+        <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="MinWidth" Value="30" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <!-- Constant border thickness so the focus ring cannot shift the
+                             glyph, and a real ring: an icon-only button with the default
+                             adorner suppressed is otherwise invisible when focused. -->
+                        <Border x:Name="IconBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="IconBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource SurfaceOverlayBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="IconBorder"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource FocusBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Sidebar navigation item -->
+        <Style x:Key="NavigationListStyle" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <!-- Without this the container has no name and UIA falls back to the
+                             item's ToString(), so a screen reader reads the whole record:
+                             "NavigationItem { Key = Home, Title = Home, Description = ... }". -->
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <!-- The template draws its own focus ring; the default adorner is a
+                             hard white rectangle that looks broken over a soft accent fill. -->
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <!-- Border thickness is constant so focus never nudges
+                                         the label by a pixel. -->
+                                    <Border x:Name="ItemBorder"
+                                            Background="Transparent"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusSm}"
+                                            Padding="9,8"
+                                            SnapsToDevicePixels="True">
+                                        <ContentPresenter VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ItemBorder"
+                                                    Property="Background"
+                                                    Value="{DynamicResource SurfaceOverlayBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="ItemBorder"
+                                                    Property="Background"
+                                                    Value="{DynamicResource AccentSoftBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                            <Setter TargetName="ItemBorder"
+                                                    Property="BorderBrush"
+                                                    Value="{DynamicResource FocusBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tab bar used inside a server, not a WPF TabControl chrome -->
+        <Style x:Key="TabBarButtonStyle" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+            <!-- Same focus contract as the sidebar: the template draws its own ring, so the
+                 default adorner is suppressed and the border thickness never changes. -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="TabBorder"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Padding="13,7"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="TabBorder"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource FocusBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource SurfaceOverlayBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="TabBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource AccentSoftBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Settings row -->
+        <Style x:Key="SettingRowStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="0,14" />
+        </Style>
+
+        <!-- Progressive disclosure: technical detail lives behind this. -->
+        <!-- Progressive disclosure. The default Expander chrome is a Win32 circle toggle that
+             looks like a defect on a dark surface, so the whole control is templated: a quiet
+             text row with a chevron that turns, and nothing else competing for attention. -->
+        <Style x:Key="AdvancedDisclosureStyle" TargetType="Expander">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSecondary}" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <StackPanel>
+                            <!-- Content/ContentTemplate must be forwarded from the Expander's
+                                 Header, otherwise the row is a bare chevron with no label. -->
+                            <ToggleButton x:Name="HeaderToggle"
+                                          Cursor="Hand"
+                                          Focusable="True"
+                                          HorizontalContentAlignment="Left"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          AutomationProperties.Name="{Binding Header,
+                                                                              RelativeSource={RelativeSource TemplatedParent}}"
+                                          IsChecked="{Binding IsExpanded,
+                                                              RelativeSource={RelativeSource TemplatedParent},
+                                                              Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="HeaderBorder"
+                                                Background="Transparent"
+                                                CornerRadius="{StaticResource RadiusSm}"
+                                                Padding="2,4">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="Chevron"
+                                                           Text="&#xE70D;"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="10"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,8,0"
+                                                           RenderTransformOrigin="0.5,0.5"
+                                                           Foreground="{DynamicResource TextTertiaryBrush}">
+                                                    <TextBlock.RenderTransform>
+                                                        <RotateTransform x:Name="ChevronRotation" Angle="0" />
+                                                    </TextBlock.RenderTransform>
+                                                </TextBlock>
+                                                <ContentPresenter VerticalAlignment="Center"
+                                                                  TextBlock.Foreground="{TemplateBinding Foreground}"
+                                                                  TextBlock.FontSize="{TemplateBinding FontSize}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="ChevronRotation"
+                                                                Storyboard.TargetProperty="Angle"
+                                                                To="180"
+                                                                Duration="0:0:0.15">
+                                                                <DoubleAnimation.EasingFunction>
+                                                                    <CubicEase EasingMode="EaseOut" />
+                                                                </DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetName="ChevronRotation"
+                                                                Storyboard.TargetProperty="Angle"
+                                                                To="0"
+                                                                Duration="0:0:0.15">
+                                                                <DoubleAnimation.EasingFunction>
+                                                                    <CubicEase EasingMode="EaseOut" />
+                                                                </DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Chevron"
+                                                        Property="Foreground"
+                                                        Value="{DynamicResource TextPrimaryBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ExpanderContent" Visibility="Collapsed" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpanderContent"
+                                        Property="Visibility"
+                                        Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="TechnicalValueStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas, Cascadia Mono, monospace" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSecondary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- Empty / loading / error states -->
+        <Style x:Key="StateTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSectionTitle}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="StateMessageStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSecondary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="MaxWidth" Value="380" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="SkeletonBlockStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Opacity" Value="0.6" />
         </Style>
     </Application.Resources>
 </Application>

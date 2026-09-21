@@ -1,0 +1,176 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServersPageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180">
+
+            <!-- Adding a server is the one thing this page offers besides opening one -->
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="ListHeading"
+                           Style="{StaticResource SectionTitleStyle}"
+                           VerticalAlignment="Center" />
+                <Button x:Name="AddServerButton"
+                        Grid.Column="1"
+                        Style="{StaticResource PrimaryActionStyle}"
+                        Click="AddServer_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="AddServerMenu">
+                            <MenuItem x:Name="MenuAddPalworld" Click="AddPalworld_Click" />
+                            <MenuItem x:Name="MenuAddMinecraft" Click="AddMinecraft_Click" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+            </Grid>
+
+            <controls:PageStateView x:Name="StateView"
+                                    Visibility="Collapsed"
+                                    RetryRequested="State_RetryRequested" />
+
+            <ItemsControl x:Name="ServerList">
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource SectionCardStyle}"
+                                Margin="0,0,0,12"
+                                AutomationProperties.Name="{Binding Name}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Style="{StaticResource SectionTitleStyle}"
+                                                       VerticalAlignment="Center" />
+                                            <Border Style="{StaticResource StatusBadgeStyle}"
+                                                    Margin="12,0,0,0"
+                                                    Background="{Binding StatusTone,
+                                                                         Converter={StaticResource StatusToneConverter},
+                                                                         ConverterParameter=Soft}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                             Fill="{Binding StatusTone,
+                                                                            Converter={StaticResource StatusToneConverter}}" />
+                                                    <TextBlock Text="{Binding StatusLabel}"
+                                                               Style="{StaticResource StatusBadgeTextStyle}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding GameName}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   Margin="0,4,0,0" />
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                            <StackPanel Margin="0,0,36,0">
+                                                <TextBlock Text="{Binding Players}"
+                                                           Style="{StaticResource MetricValueStyle}" />
+                                                <TextBlock Text="{Binding DataContext.PlayersLabel,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           Style="{StaticResource MetricLabelStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,0,36,0">
+                                                <TextBlock Text="{Binding Uptime}"
+                                                           Style="{StaticResource MetricValueStyle}" />
+                                                <TextBlock Text="{Binding DataContext.UptimeLabel,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           Style="{StaticResource MetricLabelStyle}" />
+                                            </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Memory}"
+                                                           Style="{StaticResource MetricValueStyle}" />
+                                                <TextBlock Text="{Binding DataContext.MemoryLabel,
+                                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                           Style="{StaticResource MetricLabelStyle}" />
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Backup health and reachability, in words. Home
+                                             shows these, so a card here that omitted them
+                                             looked like a different, poorer card. -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                            <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                     Fill="{Binding BackupTone,
+                                                                    Converter={StaticResource StatusToneConverter}}" />
+                                            <TextBlock Text="{Binding BackupLabel}"
+                                                       Style="{StaticResource SecondaryTextStyle}"
+                                                       Margin="0,0,20,0" />
+                                            <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                     Fill="{Binding RemoteAccessTone,
+                                                                    Converter={StaticResource StatusToneConverter}}" />
+                                            <TextBlock Text="{Binding RemoteAccessLabel}"
+                                                       Style="{StaticResource SecondaryTextStyle}" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Orientation="Horizontal">
+                                        <Button Content="{Binding PrimaryAction}"
+                                                Style="{StaticResource PrimaryActionStyle}"
+                                                Click="PrimaryAction_Click" />
+                                        <Button Style="{StaticResource IconButtonStyle}"
+                                                Margin="8,0,0,0"
+                                                Content="&#xE712;"
+                                                FontFamily="Segoe MDL2 Assets"
+                                                Click="MoreActions_Click"
+                                                ToolTip="{Binding DataContext.MoreActionsLabel,
+                                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                AutomationProperties.Name="{Binding DataContext.MoreActionsLabel,
+                                                                                    RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Progressive disclosure: everything technical lives here -->
+                                <Expander Style="{StaticResource AdvancedDisclosureStyle}"
+                                          Header="{Binding DataContext.AdvancedLabel,
+                                                           RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                    <StackPanel Margin="0,10,0,0">
+                                        <TextBlock Style="{StaticResource TechnicalValueStyle}">
+                                            <Run Text="{Binding DataContext.RootProcessLabel, Mode=OneWay,
+                                                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <Run Text="{Binding ProcessId, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource TechnicalValueStyle}">
+                                            <Run Text="{Binding DataContext.GameProcessLabel, Mode=OneWay,
+                                                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <Run Text="{Binding GameProcessId, Mode=OneWay}" />
+                                            <Run Text="{Binding GameExecutableName, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource TechnicalValueStyle}">
+                                            <Run Text="{Binding DataContext.ChildProcessesLabel, Mode=OneWay,
+                                                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <Run Text="{Binding ChildProcessCount, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource TechnicalValueStyle}">
+                                            <Run Text="{Binding DataContext.PortLabel, Mode=OneWay,
+                                                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <Run Text="{Binding Port, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

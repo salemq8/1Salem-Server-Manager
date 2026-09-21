@@ -1,37 +1,24 @@
+using ServerManager.Client.Shell;
+
 namespace ServerManager.Client.Tests;
 
 public sealed class Version130UiTests
 {
+    // Build 6 replaced the twelve technical sections with five task-shaped destinations, so
+    // the original list of twelve is asserted against MainViewModel.DestinationKeys instead
+    // of grepping the source for string literals. The behavioural intent is unchanged: the
+    // navigation is focused on real destinations and the window carries no marketing copy.
     [Fact]
     public void MainNavigation_IsFocusedAndRemovesMarketingSubtitle()
     {
-        var viewModel = ReadSource(
-            "src",
-            "ServerManager.Client",
-            "Shell",
-            "MainViewModel.cs");
         var window = ReadSource(
             "src",
             "ServerManager.Client",
             "MainWindow.xaml");
-        foreach (var name in new[]
-                 {
-                     "Home",
-                     "Minecraft",
-                     "Palworld",
-                     "RemoteAccess",
-                     "Backups",
-                     "Updates",
-                     "Resources",
-                     "Network",
-                     "Files",
-                     "Logs",
-                     "Settings",
-                     "About"
-                 })
-        {
-            Assert.Contains($"\"{name}\"", viewModel, StringComparison.Ordinal);
-        }
+
+        Assert.Equal(
+            ["Home", "Servers", "Backups", "Network", "Settings"],
+            MainViewModel.DestinationKeys);
 
         Assert.DoesNotContain(
             "Complete native game-server dashboard",

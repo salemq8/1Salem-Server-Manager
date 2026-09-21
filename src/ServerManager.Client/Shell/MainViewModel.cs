@@ -12,40 +12,57 @@ namespace ServerManager.Client.Shell;
 
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
+    /// <summary>
+    /// The top-level destinations, in sidebar order. Build 6 deliberately collapsed the old
+    /// twelve technical sections into five task-shaped ones: the individual games live inside
+    /// Servers, remote access became Network, and Updates/Resources/Files/Logs/About moved
+    /// behind a server, Settings, or Advanced rather than occupying the sidebar.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DestinationKeys =
+    [
+        "Home",
+        "Servers",
+        "Backups",
+        "Network",
+        "Settings"
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string> DestinationGlyphs =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Home"] = "",
+            ["Servers"] = "",
+            ["Backups"] = "",
+            ["Network"] = "",
+            ["Settings"] = ""
+        };
+
     private readonly InstalledVersionReport _installedVersions =
         InstalledVersionDetector.Detect();
     private readonly NamedPipeAgentClient _agentClient = new();
+    private readonly Controls.DashboardFeed _feed = Controls.DashboardFeed.Shared;
     private readonly DispatcherTimer _timer;
     private readonly CancellationTokenSource _lifetime = new();
     private NavigationItem _selectedSection;
     private System.Windows.FlowDirection _flowDirection;
-    private string _connectionLabel = "Agent unavailable";
+    // Before the first poll returns, nothing is known: claiming the connection has failed is
+    // as wrong as claiming it succeeded, and "Agent" is internal vocabulary besides.
+    private string _connectionLabel = LocalizationService.Get("Shell.Connecting");
     private string _agentMachineName = "—";
     private string _agentVersion = "—";
     private string _databaseLabel = "Unknown";
     private string _lastError = string.Empty;
     private bool _agentConnected;
+    private bool _serverDetailOpen;
+    private bool _sidebarCollapsed;
     private int _refreshing;
 
     public MainViewModel(ClientLaunchMode launchMode)
     {
         IsAdministrator = launchMode == ClientLaunchMode.Administrator;
         _flowDirection = LayoutDirectionService.ForCulture(CultureInfo.CurrentUICulture);
-        Sections =
-        [
-            CreateNavigationItem("Home"),
-            CreateNavigationItem("Minecraft"),
-            CreateNavigationItem("Palworld"),
-            CreateNavigationItem("RemoteAccess"),
-            CreateNavigationItem("Backups"),
-            CreateNavigationItem("Updates"),
-            CreateNavigationItem("Resources"),
-            CreateNavigationItem("Network"),
-            CreateNavigationItem("Files"),
-            CreateNavigationItem("Logs"),
-            CreateNavigationItem("Settings"),
-            CreateNavigationItem("About")
-        ];
+        Sections = [.. DestinationKeys.Select(CreateNavigationItem)];
+        PrimarySections = [.. Sections.Where(IsPrimaryDestination)];
         _selectedSection = Sections[0];
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         _timer = new DispatcherTimer(DispatcherPriority.Background)
@@ -53,11 +70,34 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Interval = TimeSpan.FromSeconds(2)
         };
         _timer.Tick += OnTimerTick;
+        _feed.PropertyChanged += OnFeedChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<NavigationItem> Sections { get; }
+
+    /// <summary>
+    /// The destinations shown in the upper sidebar list. Settings is deliberately excluded so
+    /// it can sit pinned at the bottom, which is why it is exposed separately below.
+    /// </summary>
+    public ObservableCollection<NavigationItem> PrimarySections { get; }
+
+    public NavigationItem SettingsSection =>
+        Sections.First(item => item.Key.Equals("Settings", StringComparison.Ordinal));
+
+    public void SelectSection(string key)
+    {
+        var match = Sections.FirstOrDefault(item =>
+            item.Key.Equals(key, StringComparison.Ordinal));
+        if (match is not null)
+        {
+            SelectedSection = match;
+        }
+    }
+
+    private static bool IsPrimaryDestination(NavigationItem item) =>
+        !item.Key.Equals("Settings", StringComparison.Ordinal);
 
     public AsyncRelayCommand RefreshCommand { get; }
 
@@ -97,72 +137,122 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _selectedSection;
         set
         {
-            if (EqualityComparer<NavigationItem>.Default.Equals(_selectedSection, value))
+            // The primary list cannot represent Settings, so when Settings is chosen that
+            // ListBox clears its own selection and its TwoWay binding writes null back here.
+            // "No destination" is not a state this shell has; accepting it would make every
+            // Is*Selected getter throw, and WPF would silently keep the last good visibility,
+            // leaving two pages drawn on top of each other.
+            if (value is null ||
+                EqualityComparer<NavigationItem>.Default.Equals(_selectedSection, value))
             {
                 return;
             }
 
             _selectedSection = value;
+
+            // Leaving Servers closes the detail view, so returning to Servers always lands
+            // on the list rather than whatever server happened to be open before.
+            if (!value.Key.Equals("Servers", StringComparison.Ordinal))
+            {
+                _serverDetailOpen = false;
+            }
+
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedSection)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHomeSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMinecraftSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPalworldSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsRemoteAccessSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsBackupsSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsUpdatesSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsResourcesSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsNetworkSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSettingsSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAboutSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFilesSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLogsSelected)));
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHubSelected)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PageTitle)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PageSubtitle)));
+            foreach (var key in DestinationKeys)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs($"Is{key}Selected"));
+            }
+
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsServerDetailOpen)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsServerListVisible)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsServerDetailVisible)));
         }
     }
 
-    public bool IsHomeSelected =>
-        SelectedSection.Key.Equals("Home", StringComparison.Ordinal);
+    public bool IsHomeSelected => IsSelected("Home");
 
-    public bool IsMinecraftSelected =>
-        SelectedSection.Key.Equals("Minecraft", StringComparison.Ordinal);
+    public bool IsServersSelected => IsSelected("Servers");
 
-    public bool IsPalworldSelected =>
-        SelectedSection.Key.Equals("Palworld", StringComparison.Ordinal);
+    public bool IsBackupsSelected => IsSelected("Backups");
 
-    public bool IsRemoteAccessSelected =>
-        SelectedSection.Key.Equals("RemoteAccess", StringComparison.Ordinal);
+    public bool IsNetworkSelected => IsSelected("Network");
 
-    public bool IsBackupsSelected =>
-        SelectedSection.Key.Equals("Backups", StringComparison.Ordinal);
+    public bool IsSettingsSelected => IsSelected("Settings");
 
-    public bool IsUpdatesSelected =>
-        SelectedSection.Key.Equals("Updates", StringComparison.Ordinal);
+    /// <summary>
+    /// Server Detail is a view *inside* Servers, not a sixth destination: the sidebar keeps
+    /// Servers highlighted while it is open, so the five-destination structure is unchanged.
+    /// </summary>
+    public bool IsServerDetailOpen
+    {
+        get => _serverDetailOpen;
+        private set
+        {
+            if (!SetField(ref _serverDetailOpen, value))
+            {
+                return;
+            }
 
-    public bool IsResourcesSelected =>
-        SelectedSection.Key.Equals("Resources", StringComparison.Ordinal);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsServerListVisible)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsServerDetailVisible)));
+        }
+    }
 
-    public bool IsNetworkSelected =>
-        SelectedSection.Key.Equals("Network", StringComparison.Ordinal);
+    public Guid OpenServerId { get; private set; }
 
-    public bool IsSettingsSelected =>
-        SelectedSection.Key.Equals("Settings", StringComparison.Ordinal);
+    public bool IsServerListVisible => IsServersSelected && !IsServerDetailOpen;
 
-    public bool IsAboutSelected =>
-        SelectedSection.Key.Equals("About", StringComparison.Ordinal);
+    public bool IsServerDetailVisible => IsServersSelected && IsServerDetailOpen;
 
-    public bool IsFilesSelected =>
-        SelectedSection.Key.Equals("Files", StringComparison.Ordinal);
+    public void OpenServerDetail(Guid serverId)
+    {
+        OpenServerId = serverId;
+        SelectSection("Servers");
+        IsServerDetailOpen = true;
+    }
 
-    public bool IsLogsSelected =>
-        SelectedSection.Key.Equals("Logs", StringComparison.Ordinal);
+    public void CloseServerDetail() => IsServerDetailOpen = false;
 
-    public bool IsHubSelected =>
-        IsBackupsSelected ||
-        IsResourcesSelected ||
-        IsFilesSelected ||
-        IsLogsSelected ||
-        IsSettingsSelected ||
-        IsAboutSelected;
+    /// <summary>The current destination's own title, shown once in the top bar.</summary>
+    public string PageTitle => SelectedSection.Title;
+
+    public string PageSubtitle => SelectedSection.Description;
+
+    public bool SidebarCollapsed
+    {
+        get => _sidebarCollapsed;
+        set
+        {
+            if (!SetField(ref _sidebarCollapsed, value))
+            {
+                return;
+            }
+
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SidebarLabelsVisible)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SidebarToggleTooltip)));
+        }
+    }
+
+    public bool SidebarLabelsVisible => !SidebarCollapsed;
+
+    public string SidebarToggleTooltip => LocalizationService.Get(
+        SidebarCollapsed ? "Shell.ExpandSidebar" : "Shell.CollapseSidebar");
+
+    public string RefreshTooltip => LocalizationService.Get("Shell.Refresh");
+
+    /// <summary>
+    /// The header badge answers one question: can this app show and control the servers right
+    /// now? Reaching the status pipe is not enough — if the data channel is down every page is
+    /// empty, and a green badge over an error message reads as a lie. Before the first poll
+    /// comes back there is nothing to contradict, so the pipe alone decides.
+    /// </summary>
+    public bool IsAgentConnected =>
+        _agentConnected && (!_feed.HasAttempted || _feed.IsConnected);
+
+    private bool IsSelected(string key) =>
+        SelectedSection.Key.Equals(key, StringComparison.Ordinal);
 
     public string ConnectionLabel
     {
@@ -206,30 +296,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         var selectedKey = SelectedSection.Key;
         FlowDirection = LayoutDirectionService.ForCulture(
             CultureInfo.GetCultureInfo(preferences.Language));
-        var refreshed = new[]
-        {
-            "Home",
-            "Minecraft",
-            "Palworld",
-            "RemoteAccess",
-            "Backups",
-            "Updates",
-            "Resources",
-            "Network",
-            "Files",
-            "Logs",
-            "Settings",
-            "About"
-        }.Select(CreateNavigationItem).ToArray();
+        SidebarCollapsed = preferences.SidebarCollapsed;
+        var refreshed = DestinationKeys.Select(CreateNavigationItem).ToArray();
         Sections.Clear();
         foreach (var item in refreshed)
         {
             Sections.Add(item);
         }
 
+        PrimarySections.Clear();
+        foreach (var item in refreshed.Where(IsPrimaryDestination))
+        {
+            PrimarySections.Add(item);
+        }
+
         SelectedSection = Sections.FirstOrDefault(item =>
                 item.Key.Equals(selectedKey, StringComparison.Ordinal))
             ?? Sections[0];
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SettingsSection)));
         ConnectionLabel = LocalizationService.Get(
             _agentConnected ? "Shell.Connected" : "Shell.AgentUnavailable");
         PropertyChanged?.Invoke(
@@ -241,6 +325,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _timer.Stop();
         _timer.Tick -= OnTimerTick;
+        _feed.PropertyChanged -= OnFeedChanged;
         _lifetime.Cancel();
         _lifetime.Dispose();
     }
@@ -259,7 +344,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var status = await _agentClient.GetStatusAsync(_lifetime.Token);
             _agentConnected = true;
-            ConnectionLabel = LocalizationService.Get("Shell.Connected");
+            UpdateConnectionPresentation();
             AgentMachineName = status.MachineName;
             AgentVersion = status.Version;
             DatabaseLabel = status.DatabaseReady ? "Ready" : "Starting";
@@ -272,9 +357,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             exception is IOException or TimeoutException or UnauthorizedAccessException or OperationCanceledException)
         {
             _agentConnected = false;
-            ConnectionLabel = LocalizationService.Get("Shell.AgentUnavailable");
-            DatabaseLabel = "Unavailable";
-            LastError = "The local Agent is not reachable. Start the Agent service, then retry.";
+            UpdateConnectionPresentation();
+            DatabaseLabel = LocalizationService.Get("Status.Unavailable");
+            LastError = LocalizationService.Get("Error.ServiceHint");
         }
         finally
         {
@@ -282,22 +367,40 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    private void OnFeedChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Controls.DashboardFeed.IsConnected)
+            or nameof(Controls.DashboardFeed.HasAttempted))
+        {
+            UpdateConnectionPresentation();
+        }
+    }
+
+    private void UpdateConnectionPresentation()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAgentConnected)));
+        ConnectionLabel = LocalizationService.Get(
+            IsAgentConnected ? "Shell.Connected" : "Shell.AgentUnavailable");
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        return true;
     }
 
     private static NavigationItem CreateNavigationItem(string key) =>
         new(
             key,
             LocalizationService.Get(key),
-            LocalizationService.Get($"{key}.Description"));
+            LocalizationService.Get($"{key}.Description"),
+            DestinationGlyphs.TryGetValue(key, out var glyph) ? glyph : string.Empty);
 
     private static string BuildLabel(string? version, int? revision) =>
         version is null

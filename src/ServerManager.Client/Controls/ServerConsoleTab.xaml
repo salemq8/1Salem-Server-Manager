@@ -1,0 +1,88 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerConsoleTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="32,24,32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Simple state only: connected or not. No transport detail. -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse x:Name="ConnectionDot" Style="{StaticResource StatusDotStyle}" />
+                <TextBlock x:Name="ConnectionText" Style="{StaticResource BodyTextStyle}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <CheckBox x:Name="FollowToggle"
+                          VerticalAlignment="Center"
+                          Margin="0,0,14,0"
+                          IsChecked="True" />
+                <Button x:Name="CopyButton"
+                        Style="{StaticResource QuietButtonStyle}"
+                        Click="Copy_Click" />
+                <Button x:Name="ExportButton"
+                        Style="{StaticResource QuietButtonStyle}"
+                        Margin="8,0,0,0"
+                        Click="Export_Click" />
+                <Button x:Name="ClearButton"
+                        Style="{StaticResource QuietButtonStyle}"
+                        Margin="8,0,0,0"
+                        Click="Clear_Click" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Output: monospaced, selectable, LTR because it is machine text -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource SurfaceSunkenBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource RadiusMd}">
+            <ScrollViewer x:Name="OutputScroller"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Auto"
+                          Padding="16,12">
+                <TextBox x:Name="OutputBox"
+                         IsReadOnly="True"
+                         IsReadOnlyCaretVisible="True"
+                         BorderThickness="0"
+                         VerticalAlignment="Top"
+                         Background="Transparent"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         FontFamily="Consolas, Cascadia Mono, monospace"
+                         FontSize="{StaticResource FontSizeSecondary}"
+                         TextWrapping="NoWrap"
+                         FlowDirection="LeftToRight"
+                         VerticalScrollBarVisibility="Disabled"
+                         HorizontalScrollBarVisibility="Disabled" />
+            </ScrollViewer>
+        </Border>
+
+        <!-- Command line -->
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="CommandBox"
+                     FontFamily="Consolas, Cascadia Mono, monospace"
+                     FlowDirection="LeftToRight"
+                     VerticalContentAlignment="Center"
+                     MinHeight="34"
+                     KeyDown="CommandBox_KeyDown" />
+            <Button x:Name="SendButton"
+                    Grid.Column="1"
+                    Style="{StaticResource PrimaryActionStyle}"
+                    Margin="8,0,0,0"
+                    Click="Send_Click" />
+        </Grid>
+    </Grid>
+</UserControl>

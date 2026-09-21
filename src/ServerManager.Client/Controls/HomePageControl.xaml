@@ -1,0 +1,220 @@
+<UserControl x:Class="ServerManager.Client.Controls.HomePageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180" HorizontalAlignment="Stretch">
+
+            <!-- One sentence that answers "is everything okay?" -->
+            <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="38"
+                            Height="38"
+                            CornerRadius="{StaticResource RadiusSm}"
+                            VerticalAlignment="Center"
+                            Background="{Binding HealthTone,
+                                                 Converter={StaticResource StatusToneConverter},
+                                                 ConverterParameter=Soft}">
+                        <TextBlock x:Name="HealthGlyph"
+                                   Text="&#xE73E;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding HealthTone,
+                                                        Converter={StaticResource StatusToneConverter}}" />
+                    </Border>
+                    <StackPanel Grid.Column="1"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Center">
+                        <TextBlock x:Name="HealthHeadline"
+                                   Style="{StaticResource SectionTitleStyle}" />
+                        <TextBlock x:Name="HealthDetail"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   Margin="0,3,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- The recovery action lives with the message, so there is one of each -->
+                    <Button x:Name="RetryButton"
+                            Grid.Column="2"
+                            Style="{StaticResource PrimaryActionStyle}"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed"
+                            Click="Retry_Click" />
+                </Grid>
+            </Border>
+
+            <!-- Servers are the main focus of Home -->
+            <TextBlock x:Name="ServersHeadingText"
+                       Text="{Binding ServersHeading}"
+                       Style="{StaticResource SectionTitleStyle}"
+                       Margin="2,0,0,12" />
+
+            <!-- Loading and empty use the shared component; the unreachable case is handled by
+                 the banner above, which already carries the message and the retry. -->
+            <controls:PageStateView x:Name="StateView" Visibility="Collapsed" />
+
+            <ItemsControl x:Name="ServerCards">
+                <!-- The generated container is what UIA reports as the DataItem. Unnamed, it
+                     falls back to the view-model's ToString(), so a screen reader announces
+                     "ServerManager.Client.Controls.ServerCardViewModel". -->
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- A Border with a mouse handler is invisible to the keyboard, so the
+                             card is a real focusable control with the card chrome as its
+                             template. Space/Enter now open the server like a click does. -->
+                        <Button Style="{StaticResource CardButtonStyle}"
+                                Margin="0,0,0,12"
+                                Click="ServerCard_Click"
+                                AutomationProperties.Name="{Binding Name}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel>
+                                    <!-- Identity -->
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}"
+                                                   Style="{StaticResource SectionTitleStyle}"
+                                                   VerticalAlignment="Center" />
+                                        <Border Style="{StaticResource StatusBadgeStyle}"
+                                                Margin="12,0,0,0"
+                                                Background="{Binding StatusTone,
+                                                                     Converter={StaticResource StatusToneConverter},
+                                                                     ConverterParameter=Soft}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                         Fill="{Binding StatusTone,
+                                                                        Converter={StaticResource StatusToneConverter}}" />
+                                                <TextBlock Text="{Binding StatusLabel}"
+                                                           Style="{StaticResource StatusBadgeTextStyle}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding GameName}"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               Margin="0,4,0,0" />
+
+                                    <!-- Everyday numbers only -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                        <StackPanel Margin="0,0,36,0">
+                                            <TextBlock Text="{Binding Players}"
+                                                       Style="{StaticResource MetricValueStyle}" />
+                                            <TextBlock Text="{Binding DataContext.PlayersLabel,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       Style="{StaticResource MetricLabelStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,36,0">
+                                            <TextBlock Text="{Binding Uptime}"
+                                                       Style="{StaticResource MetricValueStyle}" />
+                                            <TextBlock Text="{Binding DataContext.UptimeLabel,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       Style="{StaticResource MetricLabelStyle}" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Memory}"
+                                                       Style="{StaticResource MetricValueStyle}" />
+                                            <TextBlock Text="{Binding DataContext.MemoryLabel,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                       Style="{StaticResource MetricLabelStyle}" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Backup health, in words -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                        <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                 Fill="{Binding BackupTone,
+                                                                Converter={StaticResource StatusToneConverter}}" />
+                                        <TextBlock Text="{Binding BackupLabel}"
+                                                   Style="{StaticResource SecondaryTextStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Exactly one primary action -->
+                                <StackPanel Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            Orientation="Horizontal">
+                                    <Button Content="{Binding PrimaryAction}"
+                                            Style="{StaticResource PrimaryActionStyle}"
+                                            Tag="{Binding ServerId}"
+                                            Click="PrimaryAction_Click" />
+                                    <Button Style="{StaticResource IconButtonStyle}"
+                                            Margin="8,0,0,0"
+                                            Content="&#xE712;"
+                                            FontFamily="Segoe MDL2 Assets"
+                                            Tag="{Binding ServerId}"
+                                            Click="MoreActions_Click"
+                                            ToolTip="{Binding DataContext.MoreActionsLabel,
+                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            AutomationProperties.Name="{Binding DataContext.MoreActionsLabel,
+                                                                                RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Secondary summaries, deliberately smaller than the servers above -->
+            <Grid x:Name="SecondarySummaries" Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,6,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding RemoteAccessHeading}"
+                                   Style="{StaticResource MetricLabelStyle}"
+                                   Margin="0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Ellipse x:Name="RemoteAccessDot"
+                                     Style="{StaticResource StatusDotStyle}" />
+                            <TextBlock x:Name="RemoteAccessStatus"
+                                       Style="{StaticResource BodyTextStyle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="RemoteAccessAddress"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource SectionCardStyle}" Margin="6,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding BackupsHeading}"
+                                   Style="{StaticResource MetricLabelStyle}"
+                                   Margin="0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Ellipse x:Name="BackupsDot"
+                                     Style="{StaticResource StatusDotStyle}" />
+                            <TextBlock x:Name="BackupsStatus"
+                                       Style="{StaticResource BodyTextStyle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="BackupsDetail"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

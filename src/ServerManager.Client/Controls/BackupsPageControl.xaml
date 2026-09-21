@@ -1,0 +1,178 @@
+<UserControl x:Class="ServerManager.Client.Controls.BackupsPageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180">
+
+            <controls:PageStateView x:Name="StateView"
+                                    Visibility="Collapsed"
+                                    RetryRequested="State_RetryRequested" />
+
+            <StackPanel x:Name="ContentRoot">
+                <!-- One honest sentence about the whole fleet, plus storage used -->
+                <Border Style="{StaticResource SectionCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="HealthDot" Style="{StaticResource StatusDotStyle}" />
+                                <TextBlock x:Name="HealthText"
+                                           Style="{StaticResource SectionTitleStyle}" />
+                            </StackPanel>
+                            <TextBlock x:Name="HealthDetail"
+                                       Style="{StaticResource SecondaryTextStyle}"
+                                       Margin="0,6,0,0"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <Button x:Name="CreateBackupButton"
+                                    Style="{StaticResource PrimaryActionStyle}"
+                                    Click="CreateBackup_Click" />
+                            <Button x:Name="MoreButton"
+                                    Style="{StaticResource IconButtonStyle}"
+                                    Margin="8,0,0,0"
+                                    Content="&#xE712;"
+                                    FontFamily="Segoe MDL2 Assets"
+                                    Click="More_Click">
+                                <Button.ContextMenu>
+                                    <ContextMenu x:Name="MoreMenu">
+                                        <MenuItem x:Name="MenuOpenLocation" Click="OpenLocation_Click" />
+                                        <MenuItem x:Name="MenuVerifyAll" Click="VerifyNewest_Click" />
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Per-server protection, so one healthy server never hides an overdue one -->
+                <TextBlock x:Name="ByServerHeading"
+                           Style="{StaticResource SectionTitleStyle}"
+                           Margin="2,20,0,12" />
+                <ItemsControl x:Name="ServerHealthList">
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding ServerName}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding ServerName}"
+                                                       Style="{StaticResource BodyTextStyle}"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center" />
+                                            <Border Style="{StaticResource StatusBadgeStyle}"
+                                                    Margin="12,0,0,0"
+                                                    Background="{Binding Tone,
+                                                                         Converter={StaticResource StatusToneConverter},
+                                                                         ConverterParameter=Soft}">
+                                                <TextBlock Text="{Binding HealthLabel}"
+                                                           Style="{StaticResource StatusBadgeTextStyle}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Detail}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   Margin="0,6,0,0" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Content="{Binding OpenLabel}"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            VerticalAlignment="Center"
+                                            Tag="{Binding ServerId}"
+                                            Click="OpenServer_Click" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Every backup, newest first, across all servers -->
+                <TextBlock x:Name="RecentHeading"
+                           Style="{StaticResource SectionTitleStyle}"
+                           Margin="2,20,0,12" />
+                <TextBlock x:Name="RecentEmpty"
+                           Style="{StaticResource SecondaryTextStyle}"
+                           Visibility="Collapsed"
+                           Margin="2,0,0,0" />
+                <ItemsControl x:Name="RecentList">
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding ServerName}"
+                                                       Style="{StaticResource BodyTextStyle}"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center" />
+                                            <Border Style="{StaticResource StatusBadgeStyle}"
+                                                    Margin="12,0,0,0"
+                                                    Background="{Binding Tone,
+                                                                         Converter={StaticResource StatusToneConverter},
+                                                                         ConverterParameter=Soft}">
+                                                <TextBlock Text="{Binding StatusLabel}"
+                                                           Style="{StaticResource StatusBadgeTextStyle}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Detail}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   Margin="0,6,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                                        <Button Content="{Binding RestoreLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                IsEnabled="{Binding CanRestore}"
+                                                Tag="{Binding Id}"
+                                                Click="Restore_Click" />
+                                        <Button Content="{Binding VerifyLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Margin="8,0,0,0"
+                                                Tag="{Binding Id}"
+                                                Click="Verify_Click" />
+                                        <Button Content="{Binding DeleteLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Margin="8,0,0,0"
+                                                IsEnabled="{Binding CanDelete}"
+                                                Tag="{Binding Id}"
+                                                Click="Delete_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

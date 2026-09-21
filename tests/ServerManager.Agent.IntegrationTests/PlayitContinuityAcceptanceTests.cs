@@ -127,7 +127,49 @@ public sealed class PlayitContinuityAcceptanceTests : IDisposable
         var process = Process.Start(start) ??
             throw new InvalidOperationException("Disposable process did not start.");
         _disposableProcesses.Add(process);
+        WaitUntilDiscoverable(process);
         return process;
+    }
+
+    /// <summary>
+    /// Windows reports an empty MainModule for a process whose loader has not finished
+    /// initialising, so a test that adopts immediately after Process.Start races it. The
+    /// production discovery path already retries around this; the test waits for the same
+    /// readiness explicitly instead of assuming the process is visible straight away, which
+    /// is what made this test fail intermittently under load. Test harness only — no
+    /// production behaviour is involved.
+    /// </summary>
+    private static void WaitUntilDiscoverable(Process process)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (process.HasExited)
+            {
+                throw new InvalidOperationException(
+                    "Disposable process exited before it could be adopted.");
+            }
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(process.MainModule?.FileName))
+                {
+                    return;
+                }
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Still initialising; fall through to the bounded retry below.
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            Thread.Sleep(25);
+        }
+
+        throw new InvalidOperationException(
+            "Disposable process never became discoverable within 15s.");
     }
 
     public void Dispose()

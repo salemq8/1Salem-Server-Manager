@@ -1,0 +1,130 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerBackupsTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="{StaticResource PagePadding}">
+        <StackPanel MaxWidth="1180">
+
+            <!-- Health + the one primary action -->
+            <Border Style="{StaticResource SectionCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock x:Name="SummaryHeading"
+                                   Style="{StaticResource SectionTitleStyle}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Ellipse x:Name="SummaryDot" Style="{StaticResource StatusDotStyle}" />
+                            <TextBlock x:Name="SummaryText" Style="{StaticResource BodyTextStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="CreateBackupButton"
+                                Style="{StaticResource PrimaryActionStyle}"
+                                Click="CreateBackup_Click" />
+                        <Button x:Name="OpenLocationButton"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Margin="8,0,0,0"
+                                Click="OpenLocation_Click" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock x:Name="HistoryHeading"
+                       Style="{StaticResource SectionTitleStyle}"
+                       Margin="2,20,0,12" />
+
+            <TextBlock x:Name="EmptyText"
+                       Style="{StaticResource StateMessageStyle}"
+                       HorizontalAlignment="Left"
+                       Visibility="Collapsed" />
+
+            <ItemsControl x:Name="BackupList">
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Title}"
+                                                   Style="{StaticResource BodyTextStyle}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <Border Style="{StaticResource StatusBadgeStyle}"
+                                                Margin="12,0,0,0"
+                                                Background="{Binding Tone,
+                                                                     Converter={StaticResource StatusToneConverter},
+                                                                     ConverterParameter=Soft}">
+                                            <TextBlock Text="{Binding StatusLabel}"
+                                                       Style="{StaticResource StatusBadgeTextStyle}" />
+                                        </Border>
+                                        <Border Style="{StaticResource StatusBadgeStyle}"
+                                                Margin="8,0,0,0"
+                                                Visibility="{Binding ProtectedVisibility}">
+                                            <TextBlock Text="{Binding ProtectedLabel}"
+                                                       Style="{StaticResource StatusBadgeTextStyle}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Detail}"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               Margin="0,6,0,0" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Button Content="{Binding RestoreLabel}"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            IsEnabled="{Binding CanRestore}"
+                                            Tag="{Binding Id}"
+                                            Click="Restore_Click" />
+                                    <Button Content="{Binding VerifyLabel}"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Margin="8,0,0,0"
+                                            Tag="{Binding Id}"
+                                            Click="Verify_Click" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- The proven save/backup tools and config restore points, embedded unchanged so
+                 their safety behaviour is preserved exactly. They sit behind a disclosure
+                 below the history: they carry their own heavier layout, and the clean list is
+                 what a person came here for. -->
+            <Border Style="{StaticResource SectionCardStyle}" Margin="0,8,0,0">
+                <Expander x:Name="ToolsExpander"
+                          Style="{StaticResource AdvancedDisclosureStyle}"
+                          Margin="0">
+                    <StackPanel Margin="0,12,0,0">
+                        <Border x:Name="SaveToolsCard" Visibility="Collapsed">
+                            <controls:PalworldSaveBackupControl x:Name="SaveTools" />
+                        </Border>
+                        <Border x:Name="RestorePointsCard" Margin="0,8,0,0">
+                            <controls:ConfigurationRestorePointsControl x:Name="RestorePoints" />
+                        </Border>
+                    </StackPanel>
+                </Expander>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

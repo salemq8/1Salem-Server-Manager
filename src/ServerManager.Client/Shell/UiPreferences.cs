@@ -14,9 +14,17 @@ public enum AppTheme
     FollowWindows = 2
 }
 
-public sealed record UiPreferences(string Language, AppTheme Theme)
+/// <summary>
+/// Persisted UI preferences. <paramref name="SidebarCollapsed"/> is optional so an older
+/// preferences file written before Build 6 still deserializes, defaulting to the expanded
+/// sidebar rather than silently collapsing it.
+/// </summary>
+public sealed record UiPreferences(
+    string Language,
+    AppTheme Theme,
+    bool SidebarCollapsed = false)
 {
-    public static UiPreferences Default { get; } = new("en-US", AppTheme.Dark);
+    public static UiPreferences Default { get; } = new("en-US", AppTheme.Dark, false);
 }
 
 public sealed class UiPreferencesStore
@@ -86,7 +94,27 @@ public static class ThemeService
             ["SelectionBrush"] = "#087F7B",
             ["TabBrush"] = "#16283A",
             ["TabDisabledBrush"] = "#202F40",
-            ["DangerSurfaceBrush"] = "#351D27"
+            ["DangerSurfaceBrush"] = "#351D27",
+
+            // Build 6 design-system tokens. Every semantic token the new UI binds to must
+            // appear in both tables, otherwise it keeps its App.xaml literal and stops
+            // following the theme.
+            ["SurfaceBrush"] = "#08131F",
+            ["SurfaceRaisedBrush"] = "#101F2E",
+            ["SurfaceOverlayBrush"] = "#16283A",
+            ["SurfaceSunkenBrush"] = "#050D16",
+            ["SidebarBrush"] = "#0A1622",
+            ["TextPrimaryBrush"] = "#F1F6FA",
+            ["TextSecondaryBrush"] = "#9FB0C2",
+            // Measured 4.12:1 on SurfaceRaised at #6C8099, under the 4.5:1 AA floor. This
+            // carries the public address players have to read, so it is now 5.1:1.
+            ["TextTertiaryBrush"] = "#7D91A8",
+            ["BorderSubtleBrush"] = "#1E3448",
+            ["BorderStrongBrush"] = "#2C4459",
+            ["AccentSoftBrush"] = "#123B3E",
+            ["SuccessSoftBrush"] = "#12312A",
+            ["WarningSoftBrush"] = "#33290F",
+            ["DangerSoftBrush"] = "#351D27"
         };
 
     private static readonly IReadOnlyDictionary<string, string> LightColors =
@@ -109,13 +137,52 @@ public static class ThemeService
             ["SelectionBrush"] = "#087F7B",
             ["TabBrush"] = "#E5EAF1",
             ["TabDisabledBrush"] = "#DCE2EA",
-            ["DangerSurfaceBrush"] = "#FBEAEC"
+            ["DangerSurfaceBrush"] = "#FBEAEC",
+
+            ["SurfaceBrush"] = "#F4F6F9",
+            ["SurfaceRaisedBrush"] = "#FFFFFF",
+            ["SurfaceOverlayBrush"] = "#EDF2F7",
+            ["SurfaceSunkenBrush"] = "#E8EDF3",
+            ["SidebarBrush"] = "#FFFFFF",
+            ["TextPrimaryBrush"] = "#16202D",
+            ["TextSecondaryBrush"] = "#526173",
+            // 4.30:1 on white at #6D7C8D, also under AA; darkened to 5.35:1.
+            ["TextTertiaryBrush"] = "#5F6E7F",
+            ["BorderSubtleBrush"] = "#D8E0E9",
+            ["BorderStrongBrush"] = "#B9C5D3",
+            ["AccentSoftBrush"] = "#DCF0EF",
+            ["SuccessSoftBrush"] = "#DFF1E7",
+            ["WarningSoftBrush"] = "#FBEFD8",
+            ["DangerSoftBrush"] = "#FBEAEC"
         };
 
     private static AppTheme _requestedTheme = AppTheme.Dark;
     private static bool _listeningForWindowsChanges;
 
+    /// <summary>
+    /// Raised after the palette changes. Brushes declared in XAML are frozen, so applying a
+    /// theme <i>replaces</i> the resource rather than recolouring it. DynamicResource consumers
+    /// follow that automatically, but anything that resolved a brush in code — a converter, or
+    /// a page assigning Fill directly — is still holding the previous theme's object and must
+    /// re-resolve here.
+    /// </summary>
+    public static event EventHandler? ThemeChanged;
+
     public static void Apply(AppTheme theme)
+    {
+        // The event fires on every path: the requested theme has changed even when there is
+        // no Application to recolour, and listeners should not have to care which case ran.
+        try
+        {
+            ApplyCore(theme);
+        }
+        finally
+        {
+            ThemeChanged?.Invoke(null, EventArgs.Empty);
+        }
+    }
+
+    private static void ApplyCore(AppTheme theme)
     {
         _requestedTheme = theme;
         EnsureWindowsThemeListener();
@@ -239,7 +306,9 @@ public static class LocalizationService
             ["FoundationDescription"] = "Local process control, verified backups, game installers, and resource safeguards are available from their sections.",
             ["Footer"] = "Server status refreshes automatically",
             ["Home"] = "Home",
-            ["Home.Description"] = "Agent status and server overview.",
+            ["Home.Description"] = "Everything at a glance.",
+            ["Servers"] = "Servers",
+            ["Servers.Description"] = "Start, stop, and manage your game servers.",
             ["Minecraft"] = "Minecraft",
             ["Minecraft.Description"] = "Vanilla Minecraft server management.",
             ["Palworld"] = "Palworld",
@@ -252,10 +321,8 @@ public static class LocalizationService
             ["Updates.Description"] = "Installed versions and update status.",
             ["Resources"] = "Resources",
             ["Resources.Description"] = "CPU, memory, and priority profiles.",
-            ["System"] = "System",
-            ["System.Description"] = "Performance, network, files, logs, and diagnostics.",
             ["Network"] = "Network",
-            ["Network.Description"] = "Local addresses, ports, and firewall status.",
+            ["Network.Description"] = "Remote access and how players reach you.",
             ["Files"] = "Files",
             ["Files.Description"] = "Files inside registered server roots.",
             ["Logs"] = "Logs",
@@ -264,6 +331,198 @@ public static class LocalizationService
             ["Settings.Description"] = "Application, startup, language, and theme.",
             ["About"] = "About",
             ["About.Description"] = "Version, diagnostics, and release information.",
+            // Build 6 shell and page strings.
+            ["Shell.CollapseSidebar"] = "Collapse sidebar",
+            ["Shell.ExpandSidebar"] = "Expand sidebar",
+            ["Shell.Refresh"] = "Refresh",
+            ["Status.Running"] = "Running",
+            ["Status.Stopped"] = "Stopped",
+            ["Status.Starting"] = "Starting",
+            ["Status.Stopping"] = "Stopping",
+            ["Status.Online"] = "Online",
+            ["Status.Offline"] = "Offline",
+            ["Status.NeedsAttention"] = "Needs attention",
+            ["Status.Checking"] = "Checking…",
+            ["Status.Unavailable"] = "Unavailable",
+            ["Home.AllGood"] = "Everything looks good",
+            ["Home.NeedsAttention"] = "Something needs your attention",
+            ["Home.Connecting"] = "Connecting to the local service…",
+            ["Home.Unreachable"] = "1Salem can't reach its background service",
+            ["Home.BackupOverdue"] = "Your backups are out of date",
+            ["RemoteAccess.Reachable"] = "Reachable from the internet",
+            ["RemoteAccess.Unreachable"] = "Not reachable from the internet",
+            ["RemoteAccess.NotSetUp"] = "Local network only",
+            ["Home.Servers"] = "Servers",
+            ["Home.RemoteAccess"] = "Remote access",
+            ["Home.Backups"] = "Backups",
+            ["Metric.Players"] = "Players",
+            ["Metric.Uptime"] = "Uptime",
+            ["Metric.Memory"] = "Memory",
+            ["Metric.Cpu"] = "CPU",
+            ["Action.Start"] = "Start",
+            ["Action.Stop"] = "Stop",
+            ["Action.Restart"] = "Restart",
+            ["Action.Open"] = "Open",
+            ["Action.Manage"] = "Manage",
+            ["Action.Retry"] = "Retry",
+            ["Action.ViewDetails"] = "View details",
+            ["Action.CreateBackup"] = "Create Backup",
+            ["Advanced.Title"] = "Advanced details",
+            ["Empty.NoServers"] = "No servers yet",
+            ["Empty.NoServersMessage"] = "Add a Minecraft or Palworld server to get started.",
+            ["Empty.AddServer"] = "Add Server",
+            ["Error.ServiceUnavailable"] = "1Salem can't reach its background service.",
+            ["Error.ServiceHint"] = "Your servers keep running. 1Salem just can't show or control them right now.",
+            ["Error.StatusUnavailable"] = "Server status is temporarily unavailable.",
+            ["Error.Retry"] = "Try Again",
+            ["Backup.None"] = "No backups yet",
+            ["Backup.Today"] = "Backed up today",
+            ["Backup.DaysAgo"] = "Last backup {0} days ago",
+            ["Backup.Unknown"] = "Backup status unknown",
+            ["Backups.AcrossServers"] = "Across {0} servers",
+            ["Home.Detail.Running"] = "{0} of {1} running",
+            ["Home.Detail.NoneRunning"] = "{0} configured, none running",
+            ["Home.Detail.Players"] = "{0} of {1} running, {2} players online",
+            ["Home.Detail.PlayersUnknown"] = "{0} of {1} running, player count unavailable",
+            ["Home.Stale"] = "Showing the last known state from {0}.",
+            ["Network.PublicAddress"] = "Public address",
+            ["Network.LocalPort"] = "Local port {0}",
+            ["Action.Copy"] = "Copy",
+            ["Action.MoreActions"] = "More actions",
+            ["Settings.Version"] = "Version",
+            ["Settings.Category.General"] = "General",
+            ["Settings.Category.Appearance"] = "Appearance",
+            ["Settings.Category.Backups"] = "Backups",
+            ["Settings.Category.Network"] = "Network",
+            ["Settings.Category.Updates"] = "Updates",
+            ["Settings.Category.Advanced"] = "Advanced",
+            ["Settings.Category.About"] = "About",
+            ["Settings.NextStage"] = "This section is part of the next stage of the interface update.",
+            ["ServerTab.Overview"] = "Overview",
+            ["ServerTab.Console"] = "Console",
+            ["ServerTab.Backups"] = "Backups",
+            ["ServerTab.Content"] = "Content",
+            ["ServerTab.Settings"] = "Settings",
+            ["ServerDetail.AtAGlance"] = "At a glance",
+            ["ServerDetail.WhoIsOnline"] = "Who's online",
+            ["ServerDetail.NobodyOnline"] = "Nobody is online right now.",
+            ["ServerDetail.PlayersUnknown"] = "This server isn't reporting who is online.",
+            ["ServerDetail.PlayerListUnavailable"] = "Player names aren't available for this server.",
+            ["ServerDetail.Operator"] = "Operator",
+            ["Metric.Version"] = "Version",
+            ["Action.Back"] = "Back to servers",
+            ["Action.CopyAddress"] = "Copy Address",
+            ["Action.OpenFolder"] = "Open Folder",
+            ["Action.OpenLocation"] = "Open Location",
+            ["Action.Diagnostics"] = "Diagnostics",
+            ["Action.ForceStop"] = "Force Stop",
+            ["Action.Export"] = "Export",
+            ["Action.Restore"] = "Restore",
+            ["Action.Verify"] = "Verify",
+            ["Action.Save"] = "Save",
+            ["Action.Done"] = "Done",
+            ["Action.CheckUpdates"] = "Check for Updates",
+            ["Action.CopyDiagnostics"] = "Copy Diagnostics",
+            ["Action.Configure"] = "Configure…",
+            ["Action.ResourceGovernor"] = "Resource Governor…",
+            ["ServerSettings.Files"] = "Server files",
+            ["ServerSettings.LegacyIntro"] = "These controls are unchanged while this part of the interface is rebuilt.",
+            ["Confirm.ForceStop"] = "Force stop can lose unsaved world data. Stop the server anyway?",
+            ["Confirm.Restore"] = "Restoring replaces the current world with this backup. Continue?",
+            ["Confirm.Command"] = "Send the command '{0}'? It can disconnect players or stop the server.",
+            ["Console.Connected"] = "Connected",
+            ["Console.Disconnected"] = "Not connected",
+            ["Console.Send"] = "Send",
+            ["Console.Follow"] = "Follow output",
+            ["Console.ClearDisplay"] = "Clear",
+            ["Console.ClearDisplayHint"] = "Clears what is shown here. Server logs are not deleted.",
+            ["Console.CommandLabel"] = "Command to send to the server",
+            ["Console.OutputLabel"] = "Server output",
+            ["Backups.History"] = "Backup history",
+            ["Backups.Tools"] = "Save tools and restore points",
+            ["Backups.ByServer"] = "Protection by server",
+            ["Backups.Recent"] = "All backups",
+            ["Backups.VerifyNewest"] = "Verify newest backup",
+            ["Backups.AllProtected"] = "All {0} servers have a recent backup.",
+            ["Backups.NeedAttention"] = "{0} of {1} servers need a backup. {2} are up to date.",
+            ["BackupHealth.Healthy"] = "Backups are healthy",
+            ["BackupHealth.DueSoon"] = "A backup is due soon",
+            ["BackupHealth.Overdue"] = "Backups are overdue",
+            ["BackupHealth.Failed"] = "A backup failed",
+            ["BackupHealth.Unknown"] = "Backup state unknown",
+            ["Action.Delete"] = "Delete",
+            ["Confirm.RestoreServer"] = "Restoring replaces the current world on '{0}' with this backup. Continue?",
+            ["Confirm.DeleteBackup"] = "Permanently delete the backup '{1}' for '{0}'? This cannot be undone.",
+            ["Network.Destination"] = "Goes to",
+            ["Network.Provider"] = "Provided by",
+            ["Network.ProviderPlayit"] = "Playit",
+            ["Network.ProviderNone"] = "Not set up",
+            ["Network.LocalNetwork"] = "On your own network",
+            ["Network.ReachableDetail"] = "Share the public address below and people can join from anywhere.",
+            ["Network.UnreachableDetail"] = "This server is set up for internet play, but nobody can reach it right now.",
+            ["Network.LocalOnlyDetail"] = "Only people on your own network can join. No internet address is set up.",
+            ["Network.Verified"] = "verified",
+            ["Network.Unverified"] = "not verified",
+            ["Network.Adapter"] = "Network adapter",
+            ["Network.PairDevice"] = "Pair a Device",
+            ["Network.Details"] = "Network Details",
+            ["Settings.GeneralDescription"] = "How the app behaves while you use it.",
+            ["Settings.MinimiseToTray"] = "Keep running in the notification area when the window is closed",
+            ["Settings.MinimiseToTrayNote"] = "Your servers keep running either way. Closing the window never stops them.",
+            ["Settings.BackupsPolicy"] = "Backup schedules and retention belong to each server, so they live with that server. The Backups page shows which servers need attention.",
+            ["Settings.BackupsPolicyAction"] = "Go to Backups",
+            ["Settings.NetworkPolicy"] = "Remote access is configured per server. The Network page shows the address to share and whether people can reach you.",
+            ["Settings.NetworkPolicyAction"] = "Go to Network",
+            ["Settings.VersionValue"] = "Version {0}",
+            ["Settings.BuildValue"] = "Build {0}",
+            ["Settings.UpToDate"] = "1Salem is up to date.",
+            ["Settings.UpdateAvailable"] = "Version {0} is available.",
+            ["Settings.AdvancedIntro"] = "Troubleshooting tools. You don't need any of this for normal use.",
+            ["Settings.OpenDataFolder"] = "Open Data Folder",
+            ["Settings.OpenLogs"] = "Open Logs",
+            ["Settings.CopyServiceInfo"] = "Copy Details",
+            ["Settings.ServiceInformation"] = "Background service",
+            ["Settings.Copyright"] = "1Salem Server Manager",
+            ["Backups.None"] = "No backups have been taken for this server yet.",
+            ["Backups.Files"] = "{0} files",
+            ["Backups.Protected"] = "Protected",
+            ["Backups.Status.Completed"] = "Complete",
+            ["Backups.Status.Failed"] = "Failed",
+            ["Backups.Status.Corrupt"] = "Damaged",
+            ["Backups.Status.Pending"] = "Pending",
+            ["Content.Subtitle"] = "Add-ons for this server.",
+            ["Content.MinecraftSubtitle"] = "Mods, plugins and modpacks for this Minecraft server.",
+            ["Content.PalworldSubtitle"] = "Add-ons for this Palworld server.",
+            ["Content.ComingTitle"] = "Nothing to install yet",
+            ["Content.ComingMessage"] = "Browsing and installing add-ons arrives in a later update. This server keeps running exactly as it is.",
+            ["ServerSettings.General"] = "General",
+            ["ServerSettings.Game"] = "Game",
+            ["ServerSettings.Network"] = "Network",
+            ["ServerSettings.Resources"] = "Resources",
+            ["ServerSettings.Advanced"] = "Advanced",
+            ["ServerSettings.AutoStart"] = "Start this server when the computer starts",
+            ["ServerSettings.AutoRestart"] = "Restart automatically if it stops unexpectedly",
+            ["ServerSettings.Updates"] = "Server updates",
+            ["ServerSettings.UpdatesUnknown"] = "Update status not checked yet.",
+            ["ServerSettings.UpToDate"] = "This server is up to date.",
+            ["ServerSettings.UpdateAvailable"] = "Version {0} is available.",
+            ["ServerSettings.GameBody"] = "World and gameplay options for this server.",
+            ["ServerSettings.NetworkBody"] = "How players reach this server, and the address to share with them.",
+            ["ServerSettings.ResourcesBody"] = "How much memory and processor time this server may use.",
+            ["ServerSettings.AdvancedIntro"] = "Technical information for troubleshooting. You don't need any of this for normal use.",
+            ["Advanced.Threads"] = "Threads",
+            ["Advanced.Management"] = "Local management",
+            ["Advanced.RestPort"] = "Management port",
+            ["Advanced.Connected"] = "connected",
+            ["Advanced.Disconnected"] = "not connected",
+            ["Advanced.PortOpen"] = "open",
+            ["Advanced.PortClosed"] = "closed",
+            ["Error.ActionFailed"] = "That didn't work",
+            ["Error.FolderUnavailable"] = "This server's folder could not be found.",
+            ["Advanced.RootProcess"] = "Root process",
+            ["Advanced.GameProcess"] = "Game process",
+            ["Advanced.ChildProcesses"] = "Child processes",
+            ["Advanced.Port"] = "Port",
             ["Appearance.Title"] = "Language and Theme",
             ["Appearance.Description"] = "Changes apply immediately and are saved for the next launch.",
             ["Appearance.Language"] = "Language",
@@ -282,8 +541,9 @@ public static class LocalizationService
             ["Shell.AdministratorTools"] = "Administrator Tools",
             ["Shell.AdministratorMode"] = "Administrator mode",
             ["Shell.NormalMode"] = "Normal mode",
-            ["Shell.Connected"] = "Connected locally",
-            ["Shell.AgentUnavailable"] = "Agent unavailable",
+            ["Shell.Connected"] = "Connected",
+            ["Shell.AgentUnavailable"] = "Not connected",
+            ["Shell.Connecting"] = "Connecting…",
             ["Shell.Footer"] = "Server status refreshes automatically",
             ["Shell.Dismiss"] = "Dismiss",
             ["Palworld.Overview.Title"] = "Live server overview",
@@ -363,7 +623,9 @@ public static class LocalizationService
             ["FoundationDescription"] = "تتوفر إدارة العمليات والنسخ الاحتياطية الموثقة وتثبيت الألعاب وحماية الموارد من أقسامها.",
             ["Footer"] = "اتصال محلي آمن | واجهة محلية | عمليات تحافظ على البيانات",
             ["Home"] = "الرئيسية",
-            ["Home.Description"] = "حالة الوكيل ونظرة عامة على الخوادم.",
+            ["Home.Description"] = "كل شيء في لمحة.",
+            ["Servers"] = "الخوادم",
+            ["Servers.Description"] = "تشغيل وإيقاف وإدارة خوادم الألعاب.",
             ["Minecraft"] = "ماينكرافت",
             ["Minecraft.Description"] = "إدارة خادم ماينكرافت الأصلي.",
             ["Palworld"] = "بال وورلد",
@@ -377,7 +639,7 @@ public static class LocalizationService
             ["Resources"] = "الموارد",
             ["Resources.Description"] = "ملفات تعريف المعالج والذاكرة والأولوية.",
             ["Network"] = "الشبكة",
-            ["Network.Description"] = "العناوين والمنافذ وحالة جدار الحماية.",
+            ["Network.Description"] = "الوصول عن بُعد وكيفية اتصال اللاعبين بك.",
             ["Files"] = "الملفات",
             ["Files.Description"] = "الملفات داخل مجلدات الخوادم المسجلة.",
             ["Logs"] = "السجلات",
@@ -386,6 +648,197 @@ public static class LocalizationService
             ["Settings.Description"] = "التطبيق وبدء التشغيل واللغة والمظهر.",
             ["About"] = "حول",
             ["About.Description"] = "الإصدار والتشخيصات ومعلومات الإصدار.",
+            ["Shell.CollapseSidebar"] = "طي الشريط الجانبي",
+            ["Shell.ExpandSidebar"] = "توسيع الشريط الجانبي",
+            ["Shell.Refresh"] = "تحديث",
+            ["Status.Running"] = "قيد التشغيل",
+            ["Status.Stopped"] = "متوقف",
+            ["Status.Starting"] = "جارٍ التشغيل",
+            ["Status.Stopping"] = "جارٍ الإيقاف",
+            ["Status.Online"] = "متصل",
+            ["Status.Offline"] = "غير متصل",
+            ["Status.NeedsAttention"] = "يحتاج إلى انتباه",
+            ["Status.Checking"] = "جارٍ الفحص…",
+            ["Status.Unavailable"] = "غير متاح",
+            ["Home.AllGood"] = "كل شيء يبدو على ما يرام",
+            ["Home.NeedsAttention"] = "هناك ما يحتاج إلى انتباهك",
+            ["Home.Connecting"] = "جارٍ الاتصال بالخدمة المحلية…",
+            ["Home.Unreachable"] = "تعذّر على 1Salem الوصول إلى خدمته الخلفية",
+            ["Home.BackupOverdue"] = "نسخك الاحتياطية قديمة",
+            ["RemoteAccess.Reachable"] = "يمكن الوصول إليه من الإنترنت",
+            ["RemoteAccess.Unreachable"] = "لا يمكن الوصول إليه من الإنترنت",
+            ["RemoteAccess.NotSetUp"] = "الشبكة المحلية فقط",
+            ["Home.Servers"] = "الخوادم",
+            ["Home.RemoteAccess"] = "الوصول عن بُعد",
+            ["Home.Backups"] = "النسخ الاحتياطية",
+            ["Metric.Players"] = "اللاعبون",
+            ["Metric.Uptime"] = "مدة التشغيل",
+            ["Metric.Memory"] = "الذاكرة",
+            ["Metric.Cpu"] = "المعالج",
+            ["Action.Start"] = "تشغيل",
+            ["Action.Stop"] = "إيقاف",
+            ["Action.Restart"] = "إعادة تشغيل",
+            ["Action.Open"] = "فتح",
+            ["Action.Manage"] = "إدارة",
+            ["Action.Retry"] = "إعادة المحاولة",
+            ["Action.ViewDetails"] = "عرض التفاصيل",
+            ["Action.CreateBackup"] = "إنشاء نسخة احتياطية",
+            ["Advanced.Title"] = "تفاصيل متقدمة",
+            ["Empty.NoServers"] = "لا توجد خوادم بعد",
+            ["Empty.NoServersMessage"] = "أضف خادم ماينكرافت أو بال وورلد للبدء.",
+            ["Empty.AddServer"] = "إضافة خادم",
+            ["Error.ServiceUnavailable"] = "تعذّر على 1Salem الوصول إلى خدمته الخلفية.",
+            ["Error.ServiceHint"] = "خوادمك ما زالت تعمل. لكن لا يستطيع 1Salem عرضها أو التحكم بها الآن.",
+            ["Error.StatusUnavailable"] = "حالة الخادم غير متاحة مؤقتًا.",
+            ["Error.Retry"] = "إعادة المحاولة",
+            ["Backup.None"] = "لا توجد نسخ احتياطية بعد",
+            ["Backup.Today"] = "تم النسخ الاحتياطي اليوم",
+            ["Backup.DaysAgo"] = "آخر نسخة احتياطية قبل {0} يومًا",
+            ["Backup.Unknown"] = "حالة النسخ الاحتياطي غير معروفة",
+            ["Backups.AcrossServers"] = "عبر {0} خوادم",
+            ["Home.Detail.Running"] = "{0} من {1} قيد التشغيل",
+            ["Home.Detail.NoneRunning"] = "{0} مُهيأة، ولا يعمل أي منها",
+            ["Home.Detail.Players"] = "{0} من {1} قيد التشغيل، و{2} لاعبًا متصلًا",
+            ["Home.Detail.PlayersUnknown"] = "{0} من {1} قيد التشغيل، وعدد اللاعبين غير متاح",
+            ["Home.Stale"] = "يتم عرض آخر حالة معروفة منذ {0}.",
+            ["Network.PublicAddress"] = "العنوان العام",
+            ["Network.LocalPort"] = "المنفذ المحلي {0}",
+            ["Action.Copy"] = "نسخ",
+            ["Action.MoreActions"] = "إجراءات أخرى",
+            ["Settings.Version"] = "الإصدار",
+            ["Settings.Category.General"] = "عام",
+            ["Settings.Category.Appearance"] = "المظهر",
+            ["Settings.Category.Backups"] = "النسخ الاحتياطية",
+            ["Settings.Category.Network"] = "الشبكة",
+            ["Settings.Category.Updates"] = "التحديثات",
+            ["Settings.Category.Advanced"] = "متقدم",
+            ["Settings.Category.About"] = "حول",
+            ["Settings.NextStage"] = "هذا القسم جزء من المرحلة التالية من تحديث الواجهة.",
+            ["ServerTab.Overview"] = "نظرة عامة",
+            ["ServerTab.Console"] = "وحدة التحكم",
+            ["ServerTab.Backups"] = "النسخ الاحتياطية",
+            ["ServerTab.Content"] = "المحتوى",
+            ["ServerTab.Settings"] = "الإعدادات",
+            ["ServerDetail.AtAGlance"] = "نظرة سريعة",
+            ["ServerDetail.WhoIsOnline"] = "من المتصل الآن",
+            ["ServerDetail.NobodyOnline"] = "لا يوجد أحد متصل الآن.",
+            ["ServerDetail.PlayersUnknown"] = "هذا الخادم لا يُبلغ عن المتصلين.",
+            ["ServerDetail.PlayerListUnavailable"] = "أسماء اللاعبين غير متاحة لهذا الخادم.",
+            ["ServerDetail.Operator"] = "مشرف",
+            ["Metric.Version"] = "الإصدار",
+            ["Action.Back"] = "العودة إلى الخوادم",
+            ["Action.CopyAddress"] = "نسخ العنوان",
+            ["Action.OpenFolder"] = "فتح المجلد",
+            ["Action.OpenLocation"] = "فتح الموقع",
+            ["Action.Diagnostics"] = "التشخيصات",
+            ["Action.ForceStop"] = "إيقاف قسري",
+            ["Action.Export"] = "تصدير",
+            ["Action.Restore"] = "استعادة",
+            ["Action.Verify"] = "تحقق",
+            ["Action.Save"] = "حفظ",
+            ["Action.Done"] = "تم",
+            ["Action.CheckUpdates"] = "التحقق من التحديثات",
+            ["Action.CopyDiagnostics"] = "نسخ التشخيصات",
+            ["Action.Configure"] = "تهيئة…",
+            ["Action.ResourceGovernor"] = "منظّم الموارد…",
+            ["ServerSettings.Files"] = "ملفات الخادم",
+            ["ServerSettings.LegacyIntro"] = "هذه العناصر لم تتغيّر بينما تُعاد بناء هذا الجزء من الواجهة.",
+            ["Confirm.ForceStop"] = "قد يؤدي الإيقاف القسري إلى فقدان بيانات عالم غير محفوظة. هل تريد الإيقاف على أي حال؟",
+            ["Confirm.Restore"] = "الاستعادة ستستبدل العالم الحالي بهذه النسخة الاحتياطية. هل تريد المتابعة؟",
+            ["Confirm.Command"] = "هل تريد إرسال الأمر '{0}'؟ قد يقطع اتصال اللاعبين أو يوقف الخادم.",
+            ["Console.Connected"] = "متصل",
+            ["Console.Disconnected"] = "غير متصل",
+            ["Console.Send"] = "إرسال",
+            ["Console.Follow"] = "متابعة المخرجات",
+            ["Console.ClearDisplay"] = "مسح",
+            ["Console.ClearDisplayHint"] = "يمسح ما يظهر هنا فقط. لا تُحذف سجلات الخادم.",
+            ["Console.CommandLabel"] = "الأمر المراد إرساله إلى الخادم",
+            ["Console.OutputLabel"] = "مخرجات الخادم",
+            ["Backups.History"] = "سجل النسخ الاحتياطية",
+            ["Backups.Tools"] = "أدوات الحفظ ونقاط الاستعادة",
+            ["Backups.ByServer"] = "الحماية حسب الخادم",
+            ["Backups.Recent"] = "كل النسخ الاحتياطية",
+            ["Backups.VerifyNewest"] = "التحقق من أحدث نسخة",
+            ["Backups.AllProtected"] = "جميع الخوادم الـ {0} لديها نسخة احتياطية حديثة.",
+            ["Backups.NeedAttention"] = "{0} من {1} خوادم تحتاج إلى نسخة احتياطية. {2} محدَّثة.",
+            ["BackupHealth.Healthy"] = "النسخ الاحتياطية سليمة",
+            ["BackupHealth.DueSoon"] = "حان موعد نسخة احتياطية قريبًا",
+            ["BackupHealth.Overdue"] = "النسخ الاحتياطية متأخرة",
+            ["BackupHealth.Failed"] = "فشلت نسخة احتياطية",
+            ["BackupHealth.Unknown"] = "حالة النسخ الاحتياطي غير معروفة",
+            ["Action.Delete"] = "حذف",
+            ["Confirm.RestoreServer"] = "الاستعادة ستستبدل العالم الحالي على '{0}' بهذه النسخة الاحتياطية. هل تريد المتابعة؟",
+            ["Confirm.DeleteBackup"] = "هل تريد حذف النسخة الاحتياطية '{1}' للخادم '{0}' نهائيًا؟ لا يمكن التراجع عن هذا.",
+            ["Network.Destination"] = "يوجّه إلى",
+            ["Network.Provider"] = "مُقدَّم بواسطة",
+            ["Network.ProviderPlayit"] = "Playit",
+            ["Network.ProviderNone"] = "غير مُهيأ",
+            ["Network.LocalNetwork"] = "على شبكتك المحلية",
+            ["Network.ReachableDetail"] = "شارك العنوان العام أدناه ليتمكن الآخرون من الانضمام من أي مكان.",
+            ["Network.UnreachableDetail"] = "هذا الخادم مُهيأ للعب عبر الإنترنت، لكن لا أحد يستطيع الوصول إليه الآن.",
+            ["Network.LocalOnlyDetail"] = "يمكن الانضمام فقط لمن هم على شبكتك المحلية. لا يوجد عنوان إنترنت مُهيأ.",
+            ["Network.Verified"] = "مُتحقق منه",
+            ["Network.Unverified"] = "غير مُتحقق منه",
+            ["Network.Adapter"] = "محوّل الشبكة",
+            ["Network.PairDevice"] = "إقران جهاز",
+            ["Network.Details"] = "تفاصيل الشبكة",
+            ["Settings.GeneralDescription"] = "كيفية تصرّف التطبيق أثناء استخدامك له.",
+            ["Settings.MinimiseToTray"] = "الاستمرار في العمل في منطقة الإشعارات عند إغلاق النافذة",
+            ["Settings.MinimiseToTrayNote"] = "خوادمك تستمر في العمل في كلتا الحالتين. إغلاق النافذة لا يوقفها أبدًا.",
+            ["Settings.BackupsPolicy"] = "جداول النسخ الاحتياطي ومدد الاحتفاظ تخص كل خادم، لذا توجد مع ذلك الخادم. صفحة النسخ الاحتياطية تعرض الخوادم التي تحتاج انتباهك.",
+            ["Settings.BackupsPolicyAction"] = "الانتقال إلى النسخ الاحتياطية",
+            ["Settings.NetworkPolicy"] = "يُهيَّأ الوصول عن بُعد لكل خادم. صفحة الشبكة تعرض العنوان الذي تشاركه وما إذا كان بإمكان الآخرين الوصول إليك.",
+            ["Settings.NetworkPolicyAction"] = "الانتقال إلى الشبكة",
+            ["Settings.VersionValue"] = "الإصدار {0}",
+            ["Settings.BuildValue"] = "البناء {0}",
+            ["Settings.UpToDate"] = "1Salem محدَّث.",
+            ["Settings.UpdateAvailable"] = "الإصدار {0} متاح.",
+            ["Settings.AdvancedIntro"] = "أدوات استكشاف الأخطاء. لا تحتاج إلى أي منها للاستخدام العادي.",
+            ["Settings.OpenDataFolder"] = "فتح مجلد البيانات",
+            ["Settings.OpenLogs"] = "فتح السجلات",
+            ["Settings.CopyServiceInfo"] = "نسخ التفاصيل",
+            ["Settings.ServiceInformation"] = "الخدمة الخلفية",
+            ["Settings.Copyright"] = "1Salem Server Manager",
+            ["Backups.None"] = "لم يتم إنشاء أي نسخة احتياطية لهذا الخادم بعد.",
+            ["Backups.Files"] = "{0} ملفًا",
+            ["Backups.Protected"] = "محمية",
+            ["Backups.Status.Completed"] = "مكتملة",
+            ["Backups.Status.Failed"] = "فشلت",
+            ["Backups.Status.Corrupt"] = "تالفة",
+            ["Backups.Status.Pending"] = "قيد الانتظار",
+            ["Content.Subtitle"] = "الإضافات الخاصة بهذا الخادم.",
+            ["Content.MinecraftSubtitle"] = "التعديلات والإضافات وحزم التعديلات لخادم ماينكرافت هذا.",
+            ["Content.PalworldSubtitle"] = "الإضافات الخاصة بخادم بال وورلد هذا.",
+            ["Content.ComingTitle"] = "لا يوجد ما يمكن تثبيته بعد",
+            ["Content.ComingMessage"] = "تصفّح الإضافات وتثبيتها سيأتي في تحديث لاحق. سيستمر هذا الخادم في العمل كما هو تمامًا.",
+            ["ServerSettings.General"] = "عام",
+            ["ServerSettings.Game"] = "اللعبة",
+            ["ServerSettings.Network"] = "الشبكة",
+            ["ServerSettings.Resources"] = "الموارد",
+            ["ServerSettings.Advanced"] = "متقدم",
+            ["ServerSettings.AutoStart"] = "تشغيل هذا الخادم عند بدء تشغيل الجهاز",
+            ["ServerSettings.AutoRestart"] = "إعادة التشغيل تلقائيًا إذا توقف بشكل غير متوقع",
+            ["ServerSettings.Updates"] = "تحديثات الخادم",
+            ["ServerSettings.UpdatesUnknown"] = "لم يتم التحقق من حالة التحديث بعد.",
+            ["ServerSettings.UpToDate"] = "هذا الخادم محدَّث.",
+            ["ServerSettings.UpdateAvailable"] = "الإصدار {0} متاح.",
+            ["ServerSettings.GameBody"] = "خيارات العالم وطريقة اللعب لهذا الخادم.",
+            ["ServerSettings.NetworkBody"] = "كيف يصل اللاعبون إلى هذا الخادم، والعنوان الذي تشاركه معهم.",
+            ["ServerSettings.ResourcesBody"] = "مقدار الذاكرة ووقت المعالج المسموح لهذا الخادم باستخدامه.",
+            ["ServerSettings.AdvancedIntro"] = "معلومات تقنية لاستكشاف الأخطاء. لا تحتاج إلى أي منها للاستخدام العادي.",
+            ["Advanced.Threads"] = "مؤشرات الترابط",
+            ["Advanced.Management"] = "الإدارة المحلية",
+            ["Advanced.RestPort"] = "منفذ الإدارة",
+            ["Advanced.Connected"] = "متصل",
+            ["Advanced.Disconnected"] = "غير متصل",
+            ["Advanced.PortOpen"] = "مفتوح",
+            ["Advanced.PortClosed"] = "مغلق",
+            ["Error.ActionFailed"] = "لم ينجح ذلك",
+            ["Error.FolderUnavailable"] = "تعذّر العثور على مجلد هذا الخادم.",
+            ["Advanced.RootProcess"] = "العملية الجذر",
+            ["Advanced.GameProcess"] = "عملية اللعبة",
+            ["Advanced.ChildProcesses"] = "العمليات الفرعية",
+            ["Advanced.Port"] = "المنفذ",
             ["Appearance.Title"] = "اللغة والمظهر",
             ["Appearance.Description"] = "تُطبَّق التغييرات فورًا وتُحفظ للتشغيل التالي.",
             ["Appearance.Language"] = "اللغة",
@@ -404,8 +857,9 @@ public static class LocalizationService
             ["Shell.AdministratorTools"] = "أدوات المسؤول",
             ["Shell.AdministratorMode"] = "وضع المسؤول",
             ["Shell.NormalMode"] = "الوضع العادي",
-            ["Shell.Connected"] = "متصل محليًا",
-            ["Shell.AgentUnavailable"] = "الوكيل غير متاح",
+            ["Shell.Connected"] = "متصل",
+            ["Shell.AgentUnavailable"] = "غير متصل",
+            ["Shell.Connecting"] = "جارٍ الاتصال…",
             ["Shell.Footer"] = "يتم تحديث حالة الخادم تلقائيًا",
             ["Shell.Dismiss"] = "إغلاق",
             ["Palworld.Overview.Title"] = "نظرة عامة مباشرة على الخادم",
@@ -471,25 +925,33 @@ public static class LocalizationService
             ["Palworld.Overview.Activity.Failed"] = "فشل"
         };
 
-    public static string Get(string key)
-    {
-        var isRightToLeft =
-            CultureInfo.CurrentUICulture.TextInfo.IsRightToLeft;
-        if (isRightToLeft && key == "System")
-        {
-            return "النظام";
-        }
+    /// <summary>
+    /// Raised after the language changes. Views that resolve their text in code rather than
+    /// through a DynamicResource must re-read it here; without this they keep whatever
+    /// language they happened to be built in, including the Settings page the switch was
+    /// made on.
+    /// </summary>
+    public static event EventHandler? LanguageChanged;
 
-        if (isRightToLeft && key == "System.Description")
-        {
-            return "الأداء والشبكة والملفات والسجلات والتشخيصات.";
-        }
+    public static string Get(string key) => Table.TryGetValue(key, out var value) ? value : key;
 
-        var values = isRightToLeft
-            ? Arabic
-            : English;
-        return values.TryGetValue(key, out var value) ? value : key;
-    }
+    /// <summary>
+    /// Whether the current language actually defines this key. <see cref="Get"/> echoes the
+    /// key back when it is missing, which is indistinguishable from a legitimate value for
+    /// entries such as "Minecraft", so callers that need certainty ask here.
+    /// </summary>
+    public static bool HasKey(string key) => Table.ContainsKey(key);
+
+    private static IReadOnlyDictionary<string, string> Table =>
+        CultureInfo.CurrentUICulture.TextInfo.IsRightToLeft ? Arabic : English;
+
+    /// <summary>
+    /// Formats a localized template. Sentences are built from a single template with
+    /// placeholders rather than concatenated fragments, because fragment order is not
+    /// preserved across languages.
+    /// </summary>
+    public static string Format(string key, params object?[] arguments) =>
+        string.Format(CultureInfo.CurrentUICulture, Get(key), arguments);
 
     public static void Apply(string language)
     {
@@ -497,14 +959,14 @@ public static class LocalizationService
         CultureInfo.CurrentUICulture = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
         var application = System.Windows.Application.Current;
-        if (application is null)
+        if (application is not null)
         {
-            return;
+            foreach (var key in English.Keys)
+            {
+                application.Resources[key] = Get(key);
+            }
         }
 
-        foreach (var key in English.Keys)
-        {
-            application.Resources[key] = Get(key);
-        }
+        LanguageChanged?.Invoke(null, EventArgs.Empty);
     }
 }

@@ -3,372 +3,292 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:ServerManager.Client.Controls"
         Title="1Salem Server Manager"
-        Width="1240"
-        Height="680"
-        MinWidth="1000"
-        MinHeight="600"
+        Height="780"
+        Width="1280"
+        MinHeight="620"
+        MinWidth="960"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource WindowBrush}"
+        Background="{DynamicResource SurfaceBrush}"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True"
         FlowDirection="{Binding FlowDirection}">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="68" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="34" />
-        </Grid.RowDefinitions>
+    <Window.Resources>
+        <!-- Sidebar width is animated rather than bound so collapsing stays smooth. -->
+        <Storyboard x:Key="CollapseSidebarStoryboard">
+            <DoubleAnimation Storyboard.TargetName="NavigationColumn"
+                             Storyboard.TargetProperty="Width"
+                             To="64"
+                             Duration="0:0:0.18">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+        <Storyboard x:Key="ExpandSidebarStoryboard">
+            <DoubleAnimation Storyboard.TargetName="NavigationColumn"
+                             Storyboard.TargetProperty="Width"
+                             To="228"
+                             Duration="0:0:0.18">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
 
-        <Border Background="{DynamicResource PanelBrush}"
-                BorderBrush="#2A3342"
-                BorderThickness="0,0,0,1">
-            <Grid Margin="24,0">
-                <Button x:Name="NavigationToggleButton"
-                        Content="{DynamicResource Shell.Navigation}"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Center"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        Click="ToggleNavigation_Click"
-                        AutomationProperties.Name="Show or hide main navigation" />
-                <StackPanel VerticalAlignment="Center"
-                            Margin="145,0,0,0">
-                    <TextBlock Text="{DynamicResource AppTitle}"
-                               FontSize="24"
-                               FontWeight="Bold" />
-                    <TextBlock Text="{Binding ConnectionLabel}"
-                               FontSize="12"
-                               Foreground="{DynamicResource MutedTextBrush}" />
-                </StackPanel>
-                <StackPanel HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Orientation="Horizontal">
-                    <Button Content="{DynamicResource Shell.AdministratorTools}"
-                            Click="OpenAdminTools_Click"
-                            Margin="0,0,10,0"
-                            Visibility="{Binding IsAdministrator, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                    <Border Padding="12,6"
-                            CornerRadius="14"
-                            Background="{DynamicResource PanelAltBrush}">
-                        <TextBlock Text="{Binding LaunchModeLabel}"
-                                   VerticalAlignment="Center"
+        <!-- One template drives both the expanded and collapsed sidebar item. The tooltip and
+             accessible name are always present: collapsed, the glyph is the only thing left,
+             and an unlabelled icon is unusable with a screen reader and guesswork with a
+             mouse. -->
+        <DataTemplate x:Key="NavigationItemTemplate">
+            <Grid ToolTip="{Binding Title}"
+                  AutomationProperties.Name="{Binding Title}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Glyph}"
+                           FontFamily="Segoe MDL2 Assets"
+                           FontSize="15"
+                           Width="22"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Title}"
+                           Margin="10,0,0,0"
+                           FontSize="{StaticResource FontSizeBody}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Visibility="{Binding DataContext.SidebarLabelsVisible,
+                                                RelativeSource={RelativeSource AncestorType=Window},
+                                                Converter={StaticResource BooleanToVisibilityConverter}}" />
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="NavigationColumnDefinition" Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================ SIDEBAR ============================ -->
+        <Border x:Name="NavigationColumn"
+                Width="228"
+                Background="{DynamicResource SidebarBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="12,16,12,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Brand + collapse toggle -->
+                <Grid Margin="0,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <!-- The collapsed rail is 64px wide: the badge and the toggle cannot both
+                         fit, so the badge steps aside and the toggle takes the centre. -->
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="4,0,0,0"
+                                Visibility="{Binding SidebarLabelsVisible,
+                                                     Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Border Width="26"
+                                Height="26"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Background="{DynamicResource AccentBrush}">
+                            <TextBlock Text="1S"
+                                       FontSize="11"
+                                       FontWeight="Bold"
+                                       Foreground="#031719"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock x:Name="AppTitle"
+                                   Text="1Salem"
+                                   Margin="10,0,0,0"
+                                   FontSize="15"
                                    FontWeight="SemiBold"
-                                   Foreground="{DynamicResource AccentBrush}" />
-                    </Border>
-                </StackPanel>
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Visibility="{Binding SidebarLabelsVisible,
+                                                        Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </StackPanel>
+                    <Button x:Name="NavigationToggleButton"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="2"
+                            Click="ToggleNavigation_Click"
+                            Content="&#xE700;"
+                            FontFamily="Segoe MDL2 Assets"
+                            ToolTip="{Binding SidebarToggleTooltip}"
+                            AutomationProperties.Name="{Binding SidebarToggleTooltip}">
+                        <Button.Style>
+                            <Style TargetType="Button"
+                                   BasedOn="{StaticResource IconButtonStyle}">
+                                <Setter Property="HorizontalAlignment" Value="Right" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SidebarCollapsed}" Value="True">
+                                        <Setter Property="HorizontalAlignment" Value="Center" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+
+                <!-- Primary destinations -->
+                <ListBox x:Name="NavigationList"
+                         Grid.Row="1"
+                         Style="{StaticResource NavigationListStyle}"
+                         ItemsSource="{Binding PrimarySections}"
+                         ItemTemplate="{StaticResource NavigationItemTemplate}"
+                         SelectionChanged="NavigationList_SelectionChanged" />
+
+                <!-- Settings pinned to the bottom -->
+                <ListBox x:Name="SettingsNavigationList"
+                         Grid.Row="2"
+                         Style="{StaticResource NavigationListStyle}"
+                         ItemTemplate="{StaticResource NavigationItemTemplate}"
+                         SelectionChanged="SettingsNavigation_SelectionChanged">
+                    <ListBox.ItemsSource>
+                        <Binding Path="SettingsSection">
+                            <Binding.Converter>
+                                <controls:SingleItemConverter />
+                            </Binding.Converter>
+                        </Binding>
+                    </ListBox.ItemsSource>
+                </ListBox>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="NavigationColumn" Width="210" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Border x:Name="NavigationPanel"
-                    Background="{DynamicResource PanelBrush}"
-                    BorderBrush="#2A3342"
-                    BorderThickness="0,0,1,0">
-                <ListBox x:Name="NavigationList"
-                         ItemsSource="{Binding Sections}"
-                         SelectedItem="{Binding SelectedSection}"
-                         SelectionChanged="NavigationList_SelectionChanged"
-                         DisplayMemberPath="Title"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Foreground="{DynamicResource TextBrush}"
-                         Margin="12,18"
-                         FontSize="14">
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Padding" Value="14,10" />
-                            <Setter Property="Margin" Value="0,2" />
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            <Setter Property="Cursor" Value="Hand" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="ItemBorder"
-                                                Background="Transparent"
-                                                CornerRadius="6"
-                                                Padding="{TemplateBinding Padding}">
-                                            <ContentPresenter />
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter TargetName="ItemBorder"
-                                                        Property="Background"
-                                                        Value="{DynamicResource PanelAltBrush}" />
-                                                <Setter Property="Foreground"
-                                                        Value="{DynamicResource AccentBrush}" />
-                                            </Trigger>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="ItemBorder"
-                                                        Property="Background"
-                                                        Value="#1D2531" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                </ListBox>
+        <!-- ============================ MAIN ============================ -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Top bar: title, context, connectivity. Deliberately quiet. -->
+            <Border Padding="32,18,32,14"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PageTitle}"
+                                   Style="{StaticResource PageTitleStyle}" />
+                        <TextBlock Text="{Binding PageSubtitle}"
+                                   Style="{StaticResource PageSubtitleStyle}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Border Style="{StaticResource StatusBadgeStyle}"
+                                Background="{DynamicResource SurfaceRaisedBrush}"
+                                Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse>
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse"
+                                               BasedOn="{StaticResource StatusDotStyle}">
+                                            <Setter Property="Fill"
+                                                    Value="{DynamicResource DangerBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAgentConnected}"
+                                                             Value="True">
+                                                    <Setter Property="Fill"
+                                                            Value="{DynamicResource SuccessBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock x:Name="ConnectionLabel"
+                                           Text="{Binding ConnectionLabel}"
+                                           Style="{StaticResource StatusBadgeTextStyle}" />
+                            </StackPanel>
+                        </Border>
+                        <Button Style="{StaticResource IconButtonStyle}"
+                                Command="{Binding RefreshCommand}"
+                                Content="&#xE72C;"
+                                FontFamily="Segoe MDL2 Assets"
+                                ToolTip="{Binding RefreshTooltip}"
+                                AutomationProperties.Name="{Binding RefreshTooltip}" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <Grid Grid.Column="1">
-                <controls:HomeDashboardControl
-                    x:Name="HomeDashboard"
-                    Visibility="{Binding IsHomeSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <controls:GameServerPageControl
-                    x:Name="MinecraftPage"
-                    Visibility="{Binding IsMinecraftSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <controls:GameServerPageControl
-                    x:Name="PalworldPage"
-                    Visibility="{Binding IsPalworldSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <controls:RemoteAccessControl
-                    x:Name="RemoteAccessPage"
-                    Visibility="{Binding IsRemoteAccessSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <controls:ApplicationUpdateControl
-                    x:Name="ApplicationUpdatePage"
-                    Visibility="{Binding IsUpdatesSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <controls:NetworkDashboardControl
-                    x:Name="NetworkDashboard"
-                    Visibility="{Binding IsNetworkSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <!-- Page content. An opaque background here means a page that does not paint its
+                 own never reveals the one stacked behind it. -->
+            <Grid Grid.Row="1" Background="{DynamicResource SurfaceBrush}">
+                <!-- Page visibility is bound through the Window's DataContext on purpose: a
+                     page is free to set its own DataContext for its internal bindings, and an
+                     unqualified binding here would silently resolve against that instead and
+                     leave the page permanently visible. -->
+                <controls:HomePageControl
+                    x:Name="HomePage"
+                    Visibility="{Binding DataContext.IsHomeSelected,
+                                         RelativeSource={RelativeSource AncestorType=Window},
+                                         Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              Visibility="{Binding IsHubSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <Grid Margin="30,24,30,30">
-                        <StackPanel Visibility="{Binding IsBackupsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="Backups" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="Verified backups, schedules, retention, and safe restore."
-                                       Margin="0,5,0,18"
-                                       Foreground="{DynamicResource MutedTextBrush}" />
-                            <Border Style="{StaticResource ServerCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Text="Backup Center"
-                                               FontSize="21"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="Create, verify, and restore registered Minecraft and Palworld backups. Restore always creates a safety backup first."
-                                               Margin="0,6,0,15"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource MutedTextBrush}" />
-                                    <Button Content="Open Backup Center"
-                                            HorizontalAlignment="Left"
-                                            Click="OpenBackupCenter_Click" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
+                <controls:ServersPageControl
+                    x:Name="ServersPage"
+                    Visibility="{Binding DataContext.IsServerListVisible,
+                                         RelativeSource={RelativeSource AncestorType=Window},
+                                         Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                        <StackPanel Visibility="{Binding IsUpdatesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="Updates" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="Check installed versions and run backup-first managed updates."
-                                       Margin="0,5,0,18"
-                                       Foreground="{DynamicResource MutedTextBrush}" />
-                            <UniformGrid Columns="2">
-                                <Border Style="{StaticResource ServerCardStyle}">
-                                    <StackPanel>
-                                        <TextBlock Text="Minecraft Updates" FontSize="21" FontWeight="SemiBold" />
-                                        <TextBlock Text="Open the Minecraft Updates tab for installed/latest status and backup-first update."
-                                                   Margin="0,6,0,15"
-                                                   TextWrapping="Wrap" />
-                                        <Button Content="Open Minecraft Updates"
-                                                HorizontalAlignment="Left"
-                                                Click="OpenMinecraftUpdates_Click" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource ServerCardStyle}">
-                                    <StackPanel>
-                                        <TextBlock Text="Palworld Updates" FontSize="21" FontWeight="SemiBold" />
-                                        <TextBlock Text="Open the Palworld Updates tab for Steam build detection and managed update."
-                                                   Margin="0,6,0,15"
-                                                   TextWrapping="Wrap" />
-                                        <Button Content="Open Palworld Updates"
-                                                HorizontalAlignment="Left"
-                                                Click="OpenPalworldUpdates_Click" />
-                                    </StackPanel>
-                                </Border>
-                            </UniformGrid>
-                        </StackPanel>
+                <!-- Server Detail lives inside Servers, so the sidebar stays on Servers. -->
+                <controls:ServerDetailPageControl
+                    x:Name="ServerDetailPage"
+                    Visibility="{Binding DataContext.IsServerDetailVisible,
+                                         RelativeSource={RelativeSource AncestorType=Window},
+                                         Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                        <StackPanel Visibility="{Binding IsResourcesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="Resources" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="Performance policy, network diagnostics, safe files, logs, and Agent tools."
-                                       Margin="0,5,0,18"
-                                       Foreground="{DynamicResource MutedTextBrush}" />
-                            <Border Style="{StaticResource ServerCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Text="Resource Governor"
-                                               FontSize="21"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="Realtime priority is blocked. Per-server CPU, memory, PID, uptime, priority, and affinity are shown on each game Resources tab."
-                                               Margin="0,6,0,15"
-                                               TextWrapping="Wrap" />
-                                    <WrapPanel>
-                                        <Button Content="Performance Policy"
-                                                Click="OpenResourceGovernor_Click" />
-                                        <Button Content="Network Status"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Click="OpenNetworkStatus_Click" />
-                                        <Button Content="Safe Files"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Click="OpenFileManager_Click" />
-                                        <Button Content="Diagnostics"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Click="OpenDiagnostics_Click" />
-                                    </WrapPanel>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
+                <controls:BackupsPageControl
+                    x:Name="BackupsPage"
+                    Visibility="{Binding DataContext.IsBackupsSelected,
+                                         RelativeSource={RelativeSource AncestorType=Window},
+                                         Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                        <StackPanel Visibility="{Binding IsFilesSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="Files" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="Root-confined managed file access."
-                                       Margin="0,5,0,18"
-                                       Foreground="{DynamicResource MutedTextBrush}" />
-                            <Border Style="{StaticResource ServerCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Text="Safe File Manager"
-                                               FontSize="21"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="Browse registered roots, edit supported text files with safety copies, and block path traversal and reparse points."
-                                               Margin="0,6,0,15"
-                                               TextWrapping="Wrap" />
-                                    <Button Content="Open Safe File Manager"
-                                            HorizontalAlignment="Left"
-                                            Click="OpenFileManager_Click" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
+                <controls:NetworkPageControl
+                    x:Name="NetworkPage"
+                    Visibility="{Binding DataContext.IsNetworkSelected,
+                                         RelativeSource={RelativeSource AncestorType=Window},
+                                         Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                        <StackPanel Visibility="{Binding IsLogsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="Logs" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="Live bounded console output with search, pause, copy, clear-view, export, and command history."
-                                       Margin="0,5,0,18"
-                                       Foreground="{DynamicResource MutedTextBrush}" />
-                            <WrapPanel>
-                                <Button Content="Open Minecraft Console"
-                                        Click="OpenMinecraftConsole_Click" />
-                                <Button Content="Open Palworld Logs"
-                                        Margin="8,0,0,0"
-                                        Click="OpenPalworldConsole_Click" />
-                                <Button Content="Export Diagnostics"
-                                        Margin="8,0,0,0"
-                                        Click="OpenDiagnostics_Click" />
-                            </WrapPanel>
-                        </StackPanel>
-
-                        <StackPanel Visibility="{Binding IsSettingsSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="{DynamicResource Settings}" FontSize="30" FontWeight="Bold" />
-                            <TextBlock Text="{DynamicResource Appearance.ScopeDescription}"
-                                       Margin="0,5,0,18"
-                                       Foreground="{DynamicResource MutedTextBrush}" />
-                            <Border Style="{StaticResource ServerCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Text="{DynamicResource Appearance.Title}"
-                                               FontSize="21"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="{DynamicResource Appearance.Description}"
-                                               Margin="0,5,0,14"
-                                               Foreground="{DynamicResource MutedTextBrush}"
-                                               TextWrapping="Wrap" />
-                                    <UniformGrid Columns="2">
-                                        <StackPanel Margin="0,0,12,10">
-                                            <TextBlock Text="{DynamicResource Appearance.Language}" />
-                                            <ComboBox x:Name="SettingsLanguageBox">
-                                                <ComboBoxItem Content="{DynamicResource Appearance.English}" Tag="en-US" />
-                                                <ComboBoxItem Content="{DynamicResource Appearance.Arabic}" Tag="ar-SA" />
-                                            </ComboBox>
-                                        </StackPanel>
-                                        <StackPanel Margin="0,0,12,10">
-                                            <TextBlock Text="{DynamicResource Appearance.Theme}" />
-                                            <ComboBox x:Name="SettingsThemeBox">
-                                                <ComboBoxItem Content="{DynamicResource Appearance.Dark}" Tag="Dark" />
-                                                <ComboBoxItem Content="{DynamicResource Appearance.Light}" Tag="Light" />
-                                                <ComboBoxItem Content="{DynamicResource Appearance.FollowWindows}" Tag="FollowWindows" />
-                                            </ComboBox>
-                                        </StackPanel>
-                                    </UniformGrid>
-                                    <Button Content="{DynamicResource Appearance.Apply}"
-                                            HorizontalAlignment="Left"
-                                            Click="ApplyInlineAppearance_Click" />
-                                    <TextBlock x:Name="InlineAppearanceStatusText"
-                                               Margin="0,5,0,0"
-                                               Foreground="{DynamicResource MutedTextBrush}" />
-                                </StackPanel>
-                            </Border>
-                            <WrapPanel>
-                                <Button Content="{DynamicResource Shell.AdministratorTools}"
-                                        Click="OpenAdminTools_Click" />
-                            </WrapPanel>
-                        </StackPanel>
-
-                        <StackPanel Visibility="{Binding IsAboutSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="About" FontSize="30" FontWeight="Bold" />
-                            <Border Style="{StaticResource ServerCardStyle}" Margin="0,18,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Image Source="/Assets/1SalemServerManager-Icon.png"
-                                           Width="112"
-                                           Height="112"
-                                           Stretch="Uniform"
-                                           Margin="0,0,20,0" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="1Salem Server Manager"
-                                                   FontSize="24"
-                                                   FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding ProductVersion}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="{DynamicResource AccentBrush}" />
-                                        <TextBlock Text="{Binding InstalledClientVersion, StringFormat=Client: {0}}"
-                                                   Margin="0,8,0,0" />
-                                        <TextBlock Text="{Binding InstalledAgentVersion, StringFormat=Agent: {0}}" />
-                                        <TextBlock Text="{Binding InstalledUpdaterVersion, StringFormat=Updater: {0}}" />
-                                        <TextBlock Text="{Binding InstalledUpdateState}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="{DynamicResource AccentBrush}" />
-                                        <TextBlock Text="{Binding InstalledVersionHistory}"
-                                                   MaxWidth="620"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource MutedTextBrush}" />
-                                        <TextBlock Text="Official falcon and server identity"
-                                                   Margin="0,5,0,14"
-                                                   Foreground="{DynamicResource MutedTextBrush}" />
-                                        <Button Content="Diagnostics"
-                                                HorizontalAlignment="Left"
-                                                Click="OpenDiagnostics_Click" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </ScrollViewer>
+                <controls:SettingsPageControl
+                    x:Name="SettingsPage"
+                    Visibility="{Binding DataContext.IsSettingsSelected,
+                                         RelativeSource={RelativeSource AncestorType=Window},
+                                         Converter={StaticResource BooleanToVisibilityConverter}}" />
             </Grid>
         </Grid>
 
-        <Border Grid.Row="2"
-                Background="{DynamicResource PanelBrush}"
-                BorderBrush="#2A3342"
-                BorderThickness="0,1,0,0">
-            <Grid Margin="20,0">
-                <TextBlock Text="{Binding ConnectionLabel}"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource MutedTextBrush}" />
-                <TextBlock HorizontalAlignment="Right"
-                           VerticalAlignment="Center"
-                            Text="{DynamicResource Shell.Footer}"
-                           Foreground="{DynamicResource MutedTextBrush}" />
-            </Grid>
-        </Border>
-
+        <!-- Notification toast overlays everything -->
         <Border x:Name="NotificationToast"
-                Grid.RowSpan="3"
-                Width="390"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top"
-                Margin="18"
-                Padding="16"
-                CornerRadius="9"
-                BorderThickness="1"
-                Background="{DynamicResource PanelAltBrush}"
-                BorderBrush="{DynamicResource AccentBrush}"
+                Grid.ColumnSpan="2"
+                Panel.ZIndex="1000"
                 Visibility="Collapsed"
-                Panel.ZIndex="1000">
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Right"
+                Margin="0,0,32,28"
+                MaxWidth="420"
+                Background="{DynamicResource SurfaceRaisedBrush}"
+                BorderBrush="{DynamicResource BorderStrongBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource RadiusMd}"
+                Padding="16,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -376,17 +296,21 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock x:Name="NotificationTitle"
-                               FontWeight="Bold"
-                               FontSize="16" />
+                               Style="{StaticResource SectionTitleStyle}"
+                               FontSize="{StaticResource FontSizeBody}" />
                     <TextBlock x:Name="NotificationMessage"
-                               Margin="0,5,0,0"
-                               TextWrapping="Wrap" />
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Margin="0,4,0,0" />
                 </StackPanel>
                 <Button Grid.Column="1"
-                        Content="{DynamicResource Shell.Dismiss}"
-                        Style="{StaticResource SecondaryButtonStyle}"
+                        Style="{StaticResource IconButtonStyle}"
+                        VerticalAlignment="Top"
                         Margin="12,0,0,0"
-                        Click="DismissNotification_Click" />
+                        Click="DismissNotification_Click"
+                        Content="&#xE711;"
+                        FontFamily="Segoe MDL2 Assets"
+                        ToolTip="{DynamicResource Shell.Dismiss}"
+                        AutomationProperties.Name="{DynamicResource Shell.Dismiss}" />
             </Grid>
         </Border>
     </Grid>

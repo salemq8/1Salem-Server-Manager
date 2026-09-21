@@ -1,0 +1,53 @@
+<UserControl x:Class="ServerManager.Client.Controls.PageStateView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <!-- Loading: the shape of the content that is coming, not a spinner -->
+        <StackPanel x:Name="SkeletonState" Visibility="Collapsed">
+            <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,12">
+                <StackPanel>
+                    <Border Style="{StaticResource SkeletonBlockStyle}"
+                            Width="180"
+                            HorizontalAlignment="Left" />
+                    <Border Style="{StaticResource SkeletonBlockStyle}"
+                            Width="320"
+                            HorizontalAlignment="Left"
+                            Margin="0,12,0,0" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource SectionCardStyle}">
+                <StackPanel>
+                    <Border Style="{StaticResource SkeletonBlockStyle}"
+                            Width="180"
+                            HorizontalAlignment="Left" />
+                    <Border Style="{StaticResource SkeletonBlockStyle}"
+                            Width="320"
+                            HorizontalAlignment="Left"
+                            Margin="0,12,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- Empty and error share one shape: icon, one line, one explanation, one action -->
+        <Border x:Name="MessageState"
+                Style="{StaticResource SectionCardStyle}"
+                Visibility="Collapsed"
+                Padding="40,44">
+            <StackPanel HorizontalAlignment="Center" MaxWidth="500">
+                <TextBlock x:Name="StateGlyph"
+                           FontFamily="Segoe MDL2 Assets"
+                           FontSize="24"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,14" />
+                <TextBlock x:Name="StateTitle" Style="{StaticResource StateTitleStyle}" />
+                <TextBlock x:Name="StateMessage" Style="{StaticResource StateMessageStyle}" />
+                <Button x:Name="StateAction"
+                        Style="{StaticResource PrimaryActionStyle}"
+                        HorizontalAlignment="Center"
+                        Margin="0,20,0,0"
+                        Visibility="Collapsed"
+                        Click="Action_Click" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

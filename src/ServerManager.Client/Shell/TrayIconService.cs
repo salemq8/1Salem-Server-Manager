@@ -45,9 +45,11 @@ public sealed class TrayIconService : IDisposable
         AddResourceMode("Balanced", "balanced");
         AddResourceMode("Minecraft Priority", "minecraft");
         AddResourceMode("Palworld Priority", "palworld");
+        // "Resources" is no longer a destination; resource governance now lives inside a
+        // server. Pointing at the deleted key made this item silently do nothing.
         var custom = _resourceMenu.DropDownItems.Add("Custom");
         custom.Click += (_, _) => _window.Dispatcher.Invoke(
-            () => _window.ShowSection("Resources"));
+            () => _window.ShowSection("Servers"));
         _menu.Items.Add(_resourceMenu);
 
         _agentStatus = new Forms.ToolStripMenuItem("Agent status: checking")

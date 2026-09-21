@@ -1,3 +1,5 @@
+using ServerManager.Client.Shell;
+
 namespace ServerManager.Client.Tests;
 
 public sealed class Version130StabilizationTests
@@ -22,41 +24,23 @@ public sealed class Version130StabilizationTests
         Assert.Contains("LoadingButtonStyle", app, StringComparison.Ordinal);
     }
 
+    // The twelve CreateNavigationItem("X") source greps became assertions about the
+    // destinations the shell actually builds, which survives renaming the factory method and
+    // covers what the original could not: that each destination is really constructed. The
+    // responsive-toggle half of the test is unchanged.
     [Fact]
     public void Navigation_ContainsAllRequiredDestinationsAndResponsiveToggle()
     {
-        var viewModel = ReadSource(
-            "src",
-            "ServerManager.Client",
-            "Shell",
-            "MainViewModel.cs");
         var window = ReadSource(
             "src",
             "ServerManager.Client",
             "MainWindow.xaml");
 
-        string[] required =
-        [
-            "Home",
-            "Minecraft",
-            "Palworld",
-            "RemoteAccess",
-            "Backups",
-            "Updates",
-            "Resources",
-            "Network",
-            "Files",
-            "Logs",
-            "Settings",
-            "About"
-        ];
-        foreach (var destination in required)
-        {
-            Assert.Contains(
-                $"CreateNavigationItem(\"{destination}\")",
-                viewModel,
-                StringComparison.Ordinal);
-        }
+        using var viewModel = new MainViewModel(ClientLaunchMode.Normal);
+
+        Assert.Equal(
+            ["Home", "Servers", "Backups", "Network", "Settings"],
+            viewModel.Sections.Select(section => section.Key));
 
         Assert.Contains("NavigationToggleButton", window, StringComparison.Ordinal);
         Assert.Contains("NavigationColumn", window, StringComparison.Ordinal);

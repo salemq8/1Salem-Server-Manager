@@ -1,0 +1,178 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerDetailPageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
+    <UserControl.Resources>
+        <controls:StatusToneConverter x:Key="StatusToneConverter" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ===================== HEADER ===================== -->
+        <Border Grid.Row="0"
+                Padding="32,18,32,0"
+                Background="{DynamicResource SurfaceBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Back to the server list -->
+                <Button x:Name="BackButton"
+                        Style="{StaticResource IconButtonStyle}"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Top"
+                        Content="&#xE72B;"
+                        FontFamily="Segoe MDL2 Assets"
+                        Click="Back_Click" />
+
+                <!-- Game mark -->
+                <Border Grid.Column="1"
+                        Width="42"
+                        Height="42"
+                        Margin="0,0,14,0"
+                        VerticalAlignment="Top"
+                        CornerRadius="{StaticResource RadiusSm}"
+                        Background="{DynamicResource SurfaceOverlayBrush}">
+                    <TextBlock x:Name="GameGlyph"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="18"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                </Border>
+
+                <!-- Identity + the three numbers that matter at a glance -->
+                <StackPanel Grid.Column="2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="ServerName"
+                                   Style="{StaticResource PageTitleStyle}"
+                                   FontSize="{StaticResource FontSizeSectionTitle}"
+                                   VerticalAlignment="Center" />
+                        <Border x:Name="StatusBadge"
+                                Style="{StaticResource StatusBadgeStyle}"
+                                Margin="12,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="StatusDot" Style="{StaticResource StatusDotStyle}" />
+                                <TextBlock x:Name="StatusText"
+                                           Style="{StaticResource StatusBadgeTextStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <!-- Built from label/value pairs rather than one concatenated sentence:
+                         a value like "311 MB" embedded in Arabic prose is reordered by the
+                         bidi algorithm and renders as "MB 311". Each value pins its own
+                         direction instead. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                        <TextBlock x:Name="HeaderPlayersLabel" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock x:Name="HeaderPlayersValue"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   FlowDirection="LeftToRight"
+                                   Margin="5,0,0,0" />
+                        <TextBlock Text="&#x00B7;"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   Margin="10,0,10,0" />
+                        <TextBlock x:Name="HeaderUptimeLabel" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock x:Name="HeaderUptimeValue"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   FlowDirection="LeftToRight"
+                                   Margin="5,0,0,0" />
+                        <TextBlock Text="&#x00B7;"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   Margin="10,0,10,0" />
+                        <TextBlock x:Name="HeaderMemoryLabel" Style="{StaticResource SecondaryTextStyle}" />
+                        <TextBlock x:Name="HeaderMemoryValue"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   FlowDirection="LeftToRight"
+                                   Margin="5,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- One primary action; everything else behind the overflow -->
+                <StackPanel Grid.Column="3"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Top">
+                    <Button x:Name="PrimaryActionButton"
+                            Style="{StaticResource PrimaryActionStyle}"
+                            Click="PrimaryAction_Click" />
+                    <Button x:Name="SecondaryActionButton"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Margin="8,0,0,0"
+                            Click="SecondaryAction_Click" />
+                    <Button x:Name="OverflowButton"
+                            Style="{StaticResource IconButtonStyle}"
+                            Margin="8,0,0,0"
+                            Content="&#xE712;"
+                            FontFamily="Segoe MDL2 Assets"
+                            Click="Overflow_Click">
+                        <Button.ContextMenu>
+                            <ContextMenu x:Name="OverflowMenu">
+                                <MenuItem x:Name="MenuCreateBackup" Click="MenuCreateBackup_Click" />
+                                <MenuItem x:Name="MenuCopyAddress" Click="MenuCopyAddress_Click" />
+                                <MenuItem x:Name="MenuOpenFolder" Click="MenuOpenFolder_Click" />
+                                <Separator />
+                                <MenuItem x:Name="MenuDiagnostics" Click="MenuDiagnostics_Click" />
+                                <MenuItem x:Name="MenuForceStop" Click="MenuForceStop_Click" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===================== TAB BAR ===================== -->
+        <Border Grid.Row="1"
+                Padding="32,14,32,0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1">
+            <StackPanel x:Name="TabBar"
+                        Orientation="Horizontal"
+                        KeyboardNavigation.TabNavigation="Local">
+                <RadioButton x:Name="TabOverview"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ServerDetailTabs"
+                             IsChecked="True"
+                             Checked="Tab_Checked"
+                             Tag="Overview" />
+                <RadioButton x:Name="TabConsole"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ServerDetailTabs"
+                             Checked="Tab_Checked"
+                             Tag="Console" />
+                <RadioButton x:Name="TabBackups"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ServerDetailTabs"
+                             Checked="Tab_Checked"
+                             Tag="Backups" />
+                <RadioButton x:Name="TabContent"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ServerDetailTabs"
+                             Checked="Tab_Checked"
+                             Tag="Content" />
+                <RadioButton x:Name="TabSettings"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ServerDetailTabs"
+                             Checked="Tab_Checked"
+                             Tag="Settings" />
+            </StackPanel>
+        </Border>
+
+        <!-- ===================== TAB CONTENT ===================== -->
+        <Grid Grid.Row="2" Background="{DynamicResource SurfaceBrush}">
+            <controls:ServerOverviewTab x:Name="OverviewTab" />
+            <controls:ServerConsoleTab x:Name="ConsoleTab" Visibility="Collapsed" />
+            <controls:ServerBackupsTab x:Name="BackupsTab" Visibility="Collapsed" />
+            <controls:ServerContentTab x:Name="ContentTab" Visibility="Collapsed" />
+            <controls:ServerSettingsTab x:Name="SettingsTab" Visibility="Collapsed" />
+        </Grid>
+    </Grid>
+</UserControl>
