@@ -1,24 +1,250 @@
-<UserControl x:Class="ServerManager.Client.Controls.ServerContentTab"
+﻿<UserControl x:Class="ServerManager.Client.Controls.ServerContentTab"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ServerManager.Client.Controls">
     <!--
-        Deliberately a shell only. The Content Hub (mods, plugins, modpacks, providers) is a
-        later phase; nothing here invents catalogue entries, and the layout is the same card
-        grid that phase will fill, so it can expand without redesigning Server Detail.
+        The Content Hub for one server: Discover, Installed and Updates. Everything listed
+        here comes from an external provider; the app hosts nothing and says so on each card.
     -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled"
-                  Padding="{StaticResource PagePadding}">
-        <StackPanel MaxWidth="1180">
+    <UserControl.Resources>
+        <controls:ContentIconConverter x:Key="ContentIconConverter" />
+    </UserControl.Resources>
+
+    <Grid Margin="{StaticResource PagePadding}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Heading -->
+        <StackPanel Grid.Row="0">
             <TextBlock x:Name="Heading" Style="{StaticResource SectionTitleStyle}" />
             <TextBlock x:Name="Subheading"
                        Style="{StaticResource SecondaryTextStyle}"
-                       Margin="0,4,0,0" />
+                       Margin="0,4,0,0"
+                       TextWrapping="Wrap" />
+        </StackPanel>
 
-            <Border Style="{StaticResource SectionCardStyle}"
-                    Margin="0,18,0,0"
-                    Padding="40,48">
-                <StackPanel HorizontalAlignment="Center" MaxWidth="520">
+        <!-- Sub-navigation and filters -->
+        <StackPanel x:Name="ControlsPanel" Grid.Row="1" Margin="0,16,0,0">
+            <StackPanel Orientation="Horizontal" KeyboardNavigation.TabNavigation="Local">
+                <RadioButton x:Name="TabDiscover"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ContentTabs"
+                             IsChecked="True"
+                             Checked="SubTab_Checked" />
+                <RadioButton x:Name="TabInstalled"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ContentTabs"
+                             Checked="SubTab_Checked" />
+                <RadioButton x:Name="TabUpdates"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ContentTabs"
+                             Checked="SubTab_Checked" />
+            </StackPanel>
+
+            <Grid x:Name="FilterRow" Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0">
+                    <TextBox x:Name="SearchBox"
+                             MinWidth="220"
+                             Padding="10,7"
+                             VerticalContentAlignment="Center"
+                             TextChanged="SearchBox_TextChanged" />
+                    <!-- A hint rather than a floating label; it disappears on the first key. -->
+                    <TextBlock x:Name="SearchHint"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Margin="12,0,12,0"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
+                </Grid>
+                <ComboBox x:Name="SortBox"
+                          Grid.Column="1"
+                          Margin="10,0,0,0"
+                          MinWidth="150"
+                          SelectedIndex="0"
+                          SelectionChanged="Filter_Changed" />
+                <ComboBox x:Name="ProviderBox"
+                          Grid.Column="2"
+                          Margin="10,0,0,0"
+                          MinWidth="140"
+                          SelectedIndex="0"
+                          SelectionChanged="Filter_Changed" />
+                <CheckBox x:Name="CompatibleOnlyBox"
+                          Grid.Column="3"
+                          Margin="14,0,0,0"
+                          VerticalAlignment="Center"
+                          IsChecked="True"
+                          Click="Filter_Changed" />
+            </Grid>
+        </StackPanel>
+
+        <!-- Lists and states -->
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <!-- Discover -->
+            <ScrollViewer x:Name="DiscoverScroller"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="DiscoverList"
+                              AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,10" Padding="16">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0"
+                                            Width="48"
+                                            Height="48"
+                                            CornerRadius="{StaticResource RadiusSm}"
+                                            Background="{DynamicResource SurfaceSunkenBrush}"
+                                            VerticalAlignment="Top">
+                                        <Grid>
+                                            <TextBlock Text="&#xE8F1;"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="18"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextTertiaryBrush}" />
+                                            <Image Source="{Binding IconUrl, Converter={StaticResource ContentIconConverter}}"
+                                                   Stretch="UniformToFill"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                        </Grid>
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" Margin="14,0,14,0">
+                                        <TextBlock Text="{Binding Name}"
+                                                   Style="{StaticResource CardValueStyle}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Summary}"
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   TextWrapping="Wrap"
+                                                   MaxHeight="40"
+                                                   Margin="0,3,0,0" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                            <TextBlock Text="{Binding AuthorLine}"
+                                                       Style="{StaticResource CaptionTextStyle}" />
+                                            <TextBlock Text="{Binding CompatibilityLine}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       Margin="12,0,0,0" />
+                                            <TextBlock Text="{Binding DownloadsLine}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       Margin="12,0,0,0" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding SourceLine}"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   Margin="0,3,0,0" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <Button Content="{Binding ActionLabel}"
+                                                Style="{StaticResource PrimaryActionStyle}"
+                                                MinWidth="104"
+                                                IsEnabled="{Binding CanInstall}"
+                                                AutomationProperties.Name="{Binding AutomationName}"
+                                                Click="Install_Click" />
+                                        <Button Content="{Binding DetailsLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Margin="0,6,0,0"
+                                                Click="Details_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Installed and Updates share one template -->
+            <ScrollViewer x:Name="InstalledScroller"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="InstalledList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource SectionCardStyle}" Margin="0,0,0,10" Padding="16">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                        <TextBlock Text="{Binding DisplayName}"
+                                                   Style="{StaticResource CardValueStyle}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <TextBlock Text="{Binding VersionLine}"
+                                                       Style="{StaticResource CaptionTextStyle}" />
+                                            <TextBlock Text="{Binding SourceLine}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       Margin="12,0,0,0" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <Border Style="{StaticResource StatusBadgeStyle}">
+                                                <TextBlock Text="{Binding StatusLabel}"
+                                                           Style="{StaticResource StatusBadgeTextStyle}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding UpdateLine}"
+                                                       Style="{StaticResource CaptionTextStyle}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="10,0,0,0" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                                        <Button Content="{Binding ViewProjectLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Visibility="{Binding CanViewProject,
+                                                    Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                Click="ViewProject_Click" />
+                                        <Button Content="{Binding UpdateLabel}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Margin="8,0,0,0"
+                                                IsEnabled="{Binding CanUpdate}"
+                                                AutomationProperties.Name="{Binding UpdateAutomationName}"
+                                                Click="Update_Click" />
+                                        <Button Content="{Binding RollbackLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Margin="8,0,0,0"
+                                                Visibility="{Binding CanRollback,
+                                                    Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                Click="Rollback_Click" />
+                                        <Button Content="{Binding UninstallLabel}"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Margin="8,0,0,0"
+                                                IsEnabled="{Binding CanUninstall}"
+                                                AutomationProperties.Name="{Binding UninstallAutomationName}"
+                                                Click="Uninstall_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Loading, empty, error and unsupported all share this panel -->
+            <Border x:Name="StatePanel"
+                    Style="{StaticResource SectionCardStyle}"
+                    Padding="40,48"
+                    VerticalAlignment="Top"
+                    Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center" MaxWidth="560">
                     <TextBlock x:Name="StateGlyph"
                                Text="&#xE8F1;"
                                FontFamily="Segoe MDL2 Assets"
@@ -28,8 +254,33 @@
                                Foreground="{DynamicResource TextTertiaryBrush}" />
                     <TextBlock x:Name="StateTitle" Style="{StaticResource StateTitleStyle}" />
                     <TextBlock x:Name="StateMessage" Style="{StaticResource StateMessageStyle}" />
+                    <Button x:Name="StateActionButton"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            HorizontalAlignment="Center"
+                            Margin="0,16,0,0"
+                            Visibility="Collapsed"
+                            Click="StateAction_Click" />
                 </StackPanel>
             </Border>
-        </StackPanel>
-    </ScrollViewer>
+
+            <!-- Progress for the current operation -->
+            <Border x:Name="ProgressPanel"
+                    Style="{StaticResource SectionCardStyle}"
+                    Padding="16"
+                    VerticalAlignment="Bottom"
+                    Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="ProgressText"
+                               Style="{StaticResource BodyTextStyle}"
+                               AutomationProperties.LiveSetting="Polite" />
+                    <ProgressBar x:Name="ProgressBarControl"
+                                 Height="4"
+                                 Margin="0,8,0,0"
+                                 IsIndeterminate="True" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
 </UserControl>
+
+

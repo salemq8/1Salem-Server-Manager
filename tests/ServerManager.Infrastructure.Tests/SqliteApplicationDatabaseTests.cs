@@ -47,14 +47,15 @@ public sealed class SqliteApplicationDatabaseTests : IDisposable
             "Backups",
             "Schedules",
             "AuditLog",
-            "CrashHistory"
+            "CrashHistory",
+            "InstalledContent"
         };
         Assert.All(required, table => Assert.Contains(table, tables));
 
         await reader.DisposeAsync();
         command.CommandText = "PRAGMA user_version;";
         var version = Convert.ToInt32(await command.ExecuteScalarAsync());
-        Assert.Equal(3, version);
+        Assert.Equal(4, version);
     }
 
     [Fact]

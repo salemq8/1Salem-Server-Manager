@@ -16,6 +16,8 @@ using ServerManager.Infrastructure.Windows;
 using ServerManager.Infrastructure.Files;
 using ServerManager.Infrastructure.Playit;
 using ServerManager.Infrastructure.Updates;
+using ServerManager.Core.Content;
+using ServerManager.Infrastructure.Content;
 
 var agentOptions = AgentOptions.Parse(args);
 var storageOptions = new SqliteStorageOptions(agentOptions.DataRoot);
@@ -146,6 +148,32 @@ builder.Services.AddSignalR(options =>
 });
 builder.Services.AddHostedService<AgentLiveBroadcastService>();
 builder.Services.AddHostedService<ServerRecoveryService>();
+
+// Content Hub. Redirects are followed by hand inside the download path so every hop can be
+// checked against the provider's own hosts, which is why auto-redirect is off here.
+builder.Services.AddHttpClient<ModrinthContentProvider>(client =>
+    {
+        client.BaseAddress = new Uri(ModrinthContentProvider.BaseAddress);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ContentClientDefaults.UserAgent);
+        client.Timeout = ContentClientDefaults.DownloadTimeout;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient<HangarContentProvider>(client =>
+    {
+        client.BaseAddress = new Uri(HangarContentProvider.BaseAddress);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ContentClientDefaults.UserAgent);
+        client.Timeout = ContentClientDefaults.DownloadTimeout;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddSingleton<IContentProvider>(
+    services => services.GetRequiredService<ModrinthContentProvider>());
+builder.Services.AddSingleton<IContentProvider>(
+    services => services.GetRequiredService<HangarContentProvider>());
+builder.Services.AddSingleton<IInstalledContentStore, SqliteInstalledContentStore>();
+builder.Services.AddSingleton<ContentProfileService>();
+builder.Services.AddSingleton<ContentCatalogService>();
+builder.Services.AddSingleton<InstalledContentService>();
+builder.Services.AddSingleton<PluginInstallService>();
 
 var app = builder.Build();
 app.UseMiddleware<ApiExceptionMiddleware>();
@@ -1407,6 +1435,7 @@ app.MapPost(
             cancellationToken);
         return Results.Ok(result);
     });
+app.MapContentEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 static string DescribeActivity(string action) => action switch

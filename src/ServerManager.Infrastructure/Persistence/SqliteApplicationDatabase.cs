@@ -7,7 +7,7 @@ public sealed class SqliteApplicationDatabase(
     SqliteStorageOptions options,
     SqliteConnectionFactory connectionFactory) : IApplicationDatabase
 {
-    private const int SchemaVersion = 3;
+    private const int SchemaVersion = 4;
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -176,6 +176,35 @@ public sealed class SqliteApplicationDatabase(
 
         CREATE INDEX IF NOT EXISTS IX_CrashHistory_ServerId_CrashedAtUtc
             ON CrashHistory (ServerId, CrashedAtUtc DESC);
+
+        -- What the Content Hub installed, kept outside the JAR so a plugin cannot rewrite
+        -- its own provenance. A file the person added by hand has no row here.
+        CREATE TABLE IF NOT EXISTS InstalledContent (
+            ServerId TEXT NOT NULL,
+            FileName TEXT NOT NULL,
+            Kind INTEGER NOT NULL DEFAULT 1,
+            Provider INTEGER NULL,
+            ProjectId TEXT NULL,
+            VersionId TEXT NULL,
+            ProjectName TEXT NULL,
+            InstalledVersion TEXT NULL,
+            MinecraftVersionAtInstall TEXT NULL,
+            PlatformAtInstall INTEGER NOT NULL DEFAULT 0,
+            ProjectUrl TEXT NULL,
+            ProviderSha512 TEXT NULL,
+            ProviderSha256 TEXT NULL,
+            LocalSha256 TEXT NULL,
+            SizeBytes INTEGER NOT NULL DEFAULT 0,
+            InstalledAtUtc TEXT NOT NULL,
+            RestartRequired INTEGER NOT NULL DEFAULT 0,
+            PreviousVersionId TEXT NULL,
+            PreviousFileName TEXT NULL,
+            PRIMARY KEY (ServerId, FileName),
+            FOREIGN KEY (ServerId) REFERENCES GameServers (Id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS IX_InstalledContent_ServerId
+            ON InstalledContent (ServerId);
         """;
 
     private const string MigrationV2Sql = """
