@@ -118,7 +118,8 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
         ServersHeadingText.Visibility = belowBanner;
         SecondarySummaries.Visibility = belowBanner;
         RetryButton.Visibility = unreachable ? Visibility.Visible : Visibility.Collapsed;
-        RetryButton.Content = LocalizationService.Get("Error.Retry");
+        RetryButton.Content = LocalizationService.Get(
+            _feed.NeedsElevation ? "Error.RestartAsAdministrator" : "Error.Retry");
 
         if (unreachable)
         {
@@ -145,16 +146,20 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
         var backupNeedsAttention = _feed.Servers.Any(
             server => server.BackupTone == UiStatusTone.Caution);
 
+        // One dropped poll keeps the last reading (the two-poll grace); before anything has
+        // loaded the honest headline is "Connecting", not "unreachable".
         var health = ServerPresentation.SummarizeHealth(
-            _feed.IsConnected,
+            _feed.HasCurrentData,
             statuses,
             remoteOnline,
             anyRunning,
-            _feed.HasAttempted,
+            _feed.ShowErrorState,
             remoteConfigured,
             backupNeedsAttention);
-        HealthHeadline.Text = health.Headline;
-        HealthTone = health.Tone;
+        HealthHeadline.Text = _feed.NeedsElevation
+            ? LocalizationService.Get("Error.NeedsAdministrator")
+            : health.Headline;
+        HealthTone = _feed.NeedsElevation ? UiStatusTone.Caution : health.Tone;
         HealthGlyph.Text = char.ConvertFromUtf32(health.Tone switch
         {
             UiStatusTone.Positive => 0xE73E,
@@ -169,12 +174,14 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
 
     private string BuildHealthDetail(bool anyRunning, int serverCount)
     {
-        if (!_feed.IsConnected)
+        if (!_feed.HasCurrentData)
         {
             // Reassurance first: a client that cannot see the servers has not stopped them.
-            return _feed.HasAttempted
-                ? LocalizationService.Get("Error.ServiceHint")
-                : LocalizationService.Get("Error.ServiceUnavailable");
+            // While still connecting nothing has failed, so there is no failure to announce.
+            return !_feed.ShowErrorState
+                ? string.Empty
+                : LocalizationService.Get(
+                    _feed.NeedsElevation ? "Error.NeedsAdministratorHint" : "Error.ServiceHint");
         }
 
         if (serverCount == 0)
@@ -233,9 +240,11 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
 
     private void RenderRemoteAccess(bool online)
     {
-        var address = _feed.Servers
-            .Select(server => server.InternetAddress)
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        // The same server the Network page describes, so the two pages cannot disagree.
+        var address = ServerPresentation.SelectRemoteAccessServer(
+            _feed.Servers,
+            server => server.RemoteAccessOnline,
+            server => server.InternetAddress)?.InternetAddress;
         var configured = !string.IsNullOrWhiteSpace(address);
 
         // With no internet address configured there is no remote access to be online or
@@ -298,6 +307,9 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
 
     private void PrimaryAction_Click(object sender, RoutedEventArgs e)
     {
+        // The card itself is clickable; without this the click also opens it a second time.
+        e.Handled = true;
+
         if (sender is not FrameworkElement { DataContext: ServerCardViewModel card })
         {
             return;
@@ -315,21 +327,23 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
 
     private async void Retry_Click(object sender, RoutedEventArgs e)
     {
-        RetryButton.IsEnabled = false;
-        try
+        if (_feed.NeedsElevation)
         {
-            await _feed.RefreshAsync();
-        }
-        finally
-        {
-            RetryButton.IsEnabled = true;
+            (Application.Current as App)?.RestartAsAdministrator();
+            return;
         }
 
+        // Kept enabled: disabling the focused button threw keyboard focus away, and the feed
+        // already ignores a refresh that is still in flight.
+        await _feed.RefreshAsync();
         Render();
     }
 
     private void MoreActions_Click(object sender, RoutedEventArgs e)
     {
+        // The card itself is clickable; without this the click also opens it a second time.
+        e.Handled = true;
+
         if (sender is FrameworkElement { DataContext: ServerCardViewModel card })
         {
             ServerOpenRequested?.Invoke(this, card.ServerId);

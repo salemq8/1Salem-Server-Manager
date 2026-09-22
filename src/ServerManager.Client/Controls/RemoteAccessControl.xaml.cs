@@ -210,12 +210,12 @@ public partial class RemoteAccessControl : System.Windows.Controls.UserControl, 
     {
         MessageBox.Show(
             $"1. Open the official Playit tunnel page.\n" +
-            $"2. Select the existing ALSarabeetMC Agent.\n" +
+            $"2. Select your Playit agent.\n" +
             $"3. Create a separate {game} tunnel.\n" +
             $"4. Protocol: {protocol}\n" +
             $"5. Local address: 127.0.0.1:{port}\n" +
             "6. Save it in Playit, then paste only its public address into Server Manager.\n\n" +
-            "Do not change or delete the existing Minecraft tunnel.",
+            "Keep any tunnels you already use for other servers unchanged.",
             $"{game} tunnel guide",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

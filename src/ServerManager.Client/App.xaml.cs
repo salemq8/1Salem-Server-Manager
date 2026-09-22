@@ -57,6 +57,25 @@ public partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>
+    /// Relaunches this app elevated and exits the current instance, for a session the Agent
+    /// refuses because it is not running as administrator. Declining the Windows prompt
+    /// leaves everything exactly as it was.
+    /// </summary>
+    public void RestartAsAdministrator()
+    {
+        try
+        {
+            ElevationService.RelaunchAsAdministrator(Environment.GetCommandLineArgs().Skip(1));
+        }
+        catch (Win32Exception exception) when (exception.NativeErrorCode == 1223)
+        {
+            return;
+        }
+
+        ExitDashboard();
+    }
+
     private void ExitDashboard()
     {
         _trayIcon?.Dispose();

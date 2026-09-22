@@ -40,11 +40,28 @@ public partial class ServerDetailPageControl : UserControl
     /// <summary>Raised when the person asks to go back to the server list.</summary>
     public event EventHandler? BackRequested;
 
-    public void Show(Guid serverId)
+    public void Show(Guid serverId, string tab = "Overview")
     {
         _context.Select(serverId);
-        SelectTab("Overview");
+        SelectTab(tab);
         Render();
+    }
+
+    /// <summary>
+    /// Starts the shown server through exactly the path the header's own Start uses,
+    /// including its availability check, so a card's "Start" really starts the server.
+    /// </summary>
+    public Task StartAsync() => RunActionAsync("start");
+
+    /// <summary>
+    /// Puts keyboard focus on the selected tab. Opening a server collapses the page the person
+    /// came from, which otherwise leaves focus on an element that is no longer on screen.
+    /// </summary>
+    public void FocusSelectedTab()
+    {
+        var selected = new[] { TabOverview, TabConsole, TabBackups, TabContent, TabSettings }
+            .FirstOrDefault(tab => tab.IsChecked == true);
+        selected?.Focus();
     }
 
     // --- tabs -------------------------------------------------------------------
@@ -119,6 +136,7 @@ public partial class ServerDetailPageControl : UserControl
         MenuOpenFolder.Header = LocalizationService.Get("Action.OpenFolder");
         MenuDiagnostics.Header = LocalizationService.Get("Action.Diagnostics");
         MenuForceStop.Header = LocalizationService.Get("Action.ForceStop");
+        MenuDeleteServer.Header = LocalizationService.Get("Action.DeleteServer");
 
         var card = _context.Card;
         if (card is null)
@@ -187,6 +205,7 @@ public partial class ServerDetailPageControl : UserControl
 
         MenuCreateBackup.IsEnabled = actions.CanBackup && !_busy;
         MenuForceStop.IsEnabled = actions.CanForceStop && !_busy;
+        MenuDeleteServer.IsEnabled = !_busy;
         MenuCopyAddress.IsEnabled = !string.IsNullOrWhiteSpace(card.InternetAddress)
             || !string.IsNullOrWhiteSpace(_context.Source?.LocalAddress);
     }
@@ -222,6 +241,9 @@ public partial class ServerDetailPageControl : UserControl
 
     private async void MenuCreateBackup_Click(object sender, RoutedEventArgs e) =>
         await RunActionAsync("backups");
+
+    private async void MenuDeleteServer_Click(object sender, RoutedEventArgs e) =>
+        await ServerDeletion.RequestAsync(Window.GetWindow(this), _context.Card);
 
     private async void MenuForceStop_Click(object sender, RoutedEventArgs e)
     {

@@ -1,0 +1,37 @@
+<Window x:Class="ServerManager.Client.ConfirmationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="500"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SurfaceBrush}">
+    <!-- For destructive actions whose final button must name what it does ("Delete Server"),
+         which a Yes/No message box cannot. Cancel is the default and the safe choice. -->
+    <StackPanel Margin="28,24,28,22">
+        <TextBlock x:Name="HeadingText"
+                   Style="{StaticResource SectionTitleStyle}" />
+        <TextBlock x:Name="BodyText"
+                   Style="{StaticResource SecondaryTextStyle}"
+                   Margin="0,10,0,0" />
+        <TextBlock x:Name="DetailText"
+                   Style="{StaticResource TechnicalValueStyle}"
+                   FlowDirection="LeftToRight"
+                   Margin="0,10,0,0"
+                   Visibility="Collapsed" />
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,22,0,0">
+            <Button x:Name="CancelButton"
+                    Style="{StaticResource QuietButtonStyle}"
+                    IsCancel="True"
+                    IsDefault="True"
+                    Click="Cancel_Click" />
+            <Button x:Name="ConfirmButton"
+                    Style="{StaticResource DangerButtonStyle}"
+                    Margin="8,0,0,0"
+                    Click="Confirm_Click" />
+        </StackPanel>
+    </StackPanel>
+</Window>

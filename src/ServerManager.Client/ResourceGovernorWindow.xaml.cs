@@ -38,18 +38,31 @@ public partial class ResourceGovernorWindow : Window
             budget,
             null,
             StopLowerBox.IsChecked == true);
-        using var response = await _httpClient.PostAsJsonAsync(
-            "/api/v1/resources/profile",
-            request);
-        if (!response.IsSuccessStatusCode)
+        // These handlers are async void and the client has no global exception handler, so an
+        // Agent error that escapes here would terminate the whole dashboard.
+        try
         {
-            StatusText.Text = await response.Content.ReadAsStringAsync();
-            return;
-        }
+            using var response = await _httpClient.PostAsJsonAsync(
+                "/api/v1/resources/profile",
+                request);
+            if (!response.IsSuccessStatusCode)
+            {
+                StatusText.Text = await response.Content.ReadAsStringAsync();
+                return;
+            }
 
-        Render(await response.Content.ReadFromJsonAsync<SystemResourceSnapshot>());
-        StatusText.Text = $"{mode} profile applied.";
+            Render(await response.Content.ReadFromJsonAsync<SystemResourceSnapshot>());
+            StatusText.Text = $"{mode} profile applied.";
+        }
+        catch (Exception exception) when (IsRequestFailure(exception))
+        {
+            StatusText.Text = $"Resource governor unavailable: {exception.Message}";
+        }
     }
+
+    private static bool IsRequestFailure(Exception exception) =>
+        exception is HttpRequestException or TaskCanceledException or
+            System.Text.Json.JsonException or NotSupportedException;
 
     private async void PrioritizeMinecraft_Click(object sender, RoutedEventArgs e) =>
         await PrioritizeAsync(GameType.Minecraft);
@@ -62,15 +75,28 @@ public partial class ResourceGovernorWindow : Window
 
     private async Task PrioritizeAsync(GameType game)
     {
-        using var response = await _httpClient.PostAsync(
-            $"/api/v1/resources/prioritize/{game}",
-            null);
-        response.EnsureSuccessStatusCode();
-        Render(await response.Content.ReadFromJsonAsync<SystemResourceSnapshot>());
-        ModeBox.SelectedItem = game == GameType.Minecraft
-            ? ResourceMode.MinecraftPriority
-            : ResourceMode.PalworldPriority;
-        StatusText.Text = $"{game} now has safe Above Normal priority.";
+        try
+        {
+            using var response = await _httpClient.PostAsync(
+                $"/api/v1/resources/prioritize/{game}",
+                null);
+            if (!response.IsSuccessStatusCode)
+            {
+                // A 409 (priority could not be applied) used to throw out of the click handler.
+                StatusText.Text = await response.Content.ReadAsStringAsync();
+                return;
+            }
+
+            Render(await response.Content.ReadFromJsonAsync<SystemResourceSnapshot>());
+            ModeBox.SelectedItem = game == GameType.Minecraft
+                ? ResourceMode.MinecraftPriority
+                : ResourceMode.PalworldPriority;
+            StatusText.Text = $"{game} now has safe Above Normal priority.";
+        }
+        catch (Exception exception) when (IsRequestFailure(exception))
+        {
+            StatusText.Text = $"Resource governor unavailable: {exception.Message}";
+        }
     }
 
     private async Task RefreshAsync()
@@ -81,7 +107,7 @@ public partial class ResourceGovernorWindow : Window
                 "/api/v1/resources"));
             StatusText.Text = "Resource status refreshed.";
         }
-        catch (HttpRequestException exception)
+        catch (Exception exception) when (IsRequestFailure(exception))
         {
             StatusText.Text = $"Resource governor unavailable: {exception.Message}";
         }

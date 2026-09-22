@@ -41,22 +41,31 @@
                                        Style="{StaticResource SecondaryTextStyle}"
                                        Margin="0,4,0,0"
                                        TextWrapping="Wrap" />
+                            <!-- The same Windows startup registration the tray menu offers -->
                             <Border Style="{StaticResource SettingRowStyle}" Margin="0,16,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="MinimiseToTrayLabel"
-                                               Style="{StaticResource BodyTextStyle}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="Wrap" />
-                                    <CheckBox x:Name="MinimiseToTrayToggle"
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock x:Name="StartWithWindowsLabel"
+                                                   Style="{StaticResource BodyTextStyle}" />
+                                        <TextBlock x:Name="StartWithWindowsNote"
+                                                   Style="{StaticResource CaptionTextStyle}"
+                                                   Margin="0,4,0,0"
+                                                   Visibility="Collapsed" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="StartWithWindowsToggle"
                                               Grid.Column="1"
-                                              IsEnabled="False"
-                                              IsChecked="True" />
+                                              VerticalAlignment="Center"
+                                              AutomationProperties.LabeledBy="{Binding ElementName=StartWithWindowsLabel}"
+                                              Click="StartWithWindows_Click" />
                                 </Grid>
                             </Border>
+                            <!-- Closing to the notification area is how the app always behaves;
+                                 it is stated plainly rather than shown as a control that can
+                                 never be changed. -->
                             <TextBlock x:Name="GeneralNote"
                                        Style="{StaticResource CaptionTextStyle}"
                                        Margin="0,12,0,0"
@@ -164,20 +173,16 @@
                                        Style="{StaticResource SecondaryTextStyle}"
                                        Margin="0,12,0,0"
                                        TextWrapping="Wrap" />
-                            <Expander x:Name="UpdatesAdvanced"
+                            <!-- The proven download / verify / install flow. Collapsed while
+                                 there is nothing to do; opened for the person when an update
+                                 is available or ready to install. -->
+                            <Expander x:Name="UpdateDetails"
                                       Style="{StaticResource AdvancedDisclosureStyle}"
                                       Margin="0,12,0,0">
-                                <TextBlock x:Name="UpdatesAdvancedBody"
-                                           Style="{StaticResource TechnicalValueStyle}"
-                                           FlowDirection="LeftToRight"
-                                           Margin="0,12,0,0" />
+                                <controls:ApplicationUpdateControl x:Name="UpdateInstaller"
+                                                                   Margin="0,4,0,0" />
                             </Expander>
                         </StackPanel>
-                    </Border>
-
-                    <!-- The proven download/stage/install flow, embedded unchanged -->
-                    <Border Style="{StaticResource SectionCardStyle}" Margin="0,12,0,0">
-                        <controls:ApplicationUpdateControl x:Name="UpdateInstaller" />
                     </Border>
                 </StackPanel>
 

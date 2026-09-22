@@ -22,6 +22,9 @@ public partial class LegacyServerEditorWindow : Window
     {
         InitializeComponent();
         Closed += (_, _) => LegacyPage.Dispose();
+        // The legacy overview's "Open Remote Access" had no subscriber once the sidebar
+        // destination was removed, so the menu item silently did nothing.
+        LegacyPage.RemoteAccessRequested += (_, _) => RemoteAccessWindow.Open(this);
     }
 
     public void ShowFor(GameType game, int tabIndex, string title, string subtitle)

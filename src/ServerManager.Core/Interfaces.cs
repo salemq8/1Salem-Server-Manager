@@ -317,6 +317,16 @@ public interface IGameServerStore
         string? lastError,
         CancellationToken cancellationToken = default) =>
         SetStateAsync(serverId, state, cancellationToken);
+
+    /// <summary>
+    /// Removes one server's registration (and the database rows that belong to it) without
+    /// touching any file on disk. Returns false when no such server was registered. Stores
+    /// that cannot remove registrations say so rather than pretending to.
+    /// </summary>
+    Task<bool> DeleteRegistrationAsync(
+        Guid serverId,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This server store cannot remove registrations.");
 }
 
 public interface IMinecraftVersionCatalog

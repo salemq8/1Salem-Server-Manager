@@ -18,13 +18,18 @@ using UserControl = System.Windows.Controls.UserControl;
 namespace ServerManager.Client.Controls;
 
 /// <summary>Protection state for one server, shown on the global Backups page.</summary>
+/// <remarks>
+/// The *Name members are what a screen reader announces for each row's buttons: every row
+/// has an "Open", so the visible label alone cannot say which server it acts on.
+/// </remarks>
 public sealed record ServerBackupHealthRow(
     Guid ServerId,
     string ServerName,
     string HealthLabel,
     UiStatusTone Tone,
     string Detail,
-    string OpenLabel);
+    string OpenLabel,
+    string OpenName);
 
 /// <summary>One backup from any server, for the cross-server list.</summary>
 public sealed record GlobalBackupRow(
@@ -40,7 +45,10 @@ public sealed record GlobalBackupRow(
     string RestoreLabel,
     string VerifyLabel,
     string DeleteLabel,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    string RestoreName,
+    string VerifyName,
+    string DeleteName);
 
 /// <summary>
 /// Backups across every server. Deliberately different from the per-server tab: this answers
@@ -55,6 +63,8 @@ public partial class BackupsPageControl : UserControl
     private readonly ObservableCollection<ServerBackupHealthRow> _serverRows = [];
     private readonly ObservableCollection<GlobalBackupRow> _backupRows = [];
     private bool _busy;
+    private bool _listFailed;
+    private int _loading;
 
     public BackupsPageControl()
     {
@@ -74,11 +84,23 @@ public partial class BackupsPageControl : UserControl
             _ = LoadAsync();
         });
         ThemeService.ThemeChanged += (_, _) => Dispatcher.Invoke(Render);
+        // Backups taken elsewhere (Server Detail, a schedule) must be listed when the person
+        // comes back here, not only after an action on this page.
+        IsVisibleChanged += (_, e) =>
+        {
+            if (e.NewValue is true)
+            {
+                _ = LoadAsync();
+            }
+        };
         Loaded += OnLoaded;
     }
 
     /// <summary>Raised when the person wants to open a server's own Backups tab.</summary>
     public event EventHandler<Guid>? BackupRequested;
+
+    /// <summary>Re-reads the backup list, e.g. from the top-bar Refresh.</summary>
+    public void Reload() => _ = LoadAsync();
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -98,7 +120,10 @@ public partial class BackupsPageControl : UserControl
         CreateBackupButton.Content = LocalizationService.Get("Action.CreateBackup");
         ByServerHeading.Text = LocalizationService.Get("Backups.ByServer");
         RecentHeading.Text = LocalizationService.Get("Backups.Recent");
-        RecentEmpty.Text = LocalizationService.Get("Backups.None");
+        RecentEmpty.Text = LocalizationService.Get(
+            _listFailed ? "Backups.ListUnavailable" : "Backups.NoneAnywhere");
+        // While something runs every row action is unavailable, and should look it.
+        RecentList.IsEnabled = !_busy;
         MenuOpenLocation.Header = LocalizationService.Get("Action.OpenLocation");
         MenuVerifyAll.Header = LocalizationService.Get("Backups.VerifyNewest");
         AutomationProperties.SetName(
@@ -119,23 +144,29 @@ public partial class BackupsPageControl : UserControl
     private void RenderServerHealth()
     {
         var now = _feed.Snapshot?.CapturedAtUtc ?? DateTimeOffset.UtcNow;
-        _serverRows.Clear();
 
         var healths = new List<BackupHealth>();
+        var rows = new List<ServerBackupHealthRow>();
         foreach (var server in _feed.Servers)
         {
             var last = server.Source?.LastBackupAtUtc;
             var health = ServerPresentation.ClassifyBackup(last, false, now);
             healths.Add(health);
             var described = ServerPresentation.DescribeBackupHealth(health);
-            _serverRows.Add(new ServerBackupHealthRow(
+            rows.Add(new ServerBackupHealthRow(
                 server.ServerId,
                 server.Name,
                 described.Label,
                 described.Tone,
                 server.BackupLabel,
-                LocalizationService.Get("Action.Open")));
+                LocalizationService.Get("Action.Open"),
+                LocalizationService.Format("Backups.OpenServerName", server.Name)));
         }
+
+        // Render runs on every feed notification — about a dozen per poll. Rebuilding the
+        // rows each time threw away their buttons, so keyboard and screen-reader focus was
+        // lost every two seconds. Rows are records, so unchanged ones are left alone.
+        SyncRows(_serverRows, rows);
 
         var overall = ServerPresentation.AggregateBackupHealth(healths);
         var summary = ServerPresentation.DescribeBackupHealth(overall);
@@ -182,32 +213,75 @@ public partial class BackupsPageControl : UserControl
             return;
         }
 
-        var rows = new List<GlobalBackupRow>();
-        foreach (var server in _feed.Servers.ToArray())
+        if (Interlocked.Exchange(ref _loading, 1) == 1)
         {
-            try
+            return;
+        }
+
+        try
+        {
+            var rows = new List<GlobalBackupRow>();
+            var failed = false;
+            foreach (var server in _feed.Servers.ToArray())
             {
-                var records = await _httpClient.GetFromJsonAsync<BackupRecord[]>(
-                    $"/api/v1/servers/{server.ServerId}/backups") ?? [];
-                foreach (var record in records)
+                try
                 {
-                    rows.Add(ToRow(server, record));
+                    var records = await _httpClient.GetFromJsonAsync<BackupRecord[]>(
+                        $"/api/v1/servers/{server.ServerId}/backups") ?? [];
+                    foreach (var record in records)
+                    {
+                        rows.Add(ToRow(server, record));
+                    }
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException)
+                {
+                    // Listing failed, which is not the same as having no backups. The rows
+                    // that did load are still shown; the empty text must not claim "none".
+                    failed = true;
                 }
             }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
+
+            _listFailed = failed;
+            SyncRows(_backupRows, [.. rows.OrderByDescending(item => item.CreatedAtUtc)]);
+            RecentEmpty.Text = LocalizationService.Get(
+                _listFailed ? "Backups.ListUnavailable" : "Backups.NoneAnywhere");
+            RecentEmpty.Visibility = _backupRows.Count == 0 || _listFailed
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _loading, 0);
+        }
+    }
+
+    /// <summary>
+    /// Brings a bound list in line with <paramref name="wanted"/> while touching only the rows
+    /// that changed, so containers — and whatever has focus inside them — survive a refresh.
+    /// </summary>
+    private static void SyncRows<T>(ObservableCollection<T> current, IReadOnlyList<T> wanted)
+    {
+        if (current.SequenceEqual(wanted))
+        {
+            return;
+        }
+
+        for (var index = 0; index < wanted.Count; index++)
+        {
+            if (index >= current.Count)
             {
-                // A server whose backups cannot be listed simply contributes none; the
-                // per-server health card above still reports what the dashboard knows.
+                current.Add(wanted[index]);
+            }
+            else if (!EqualityComparer<T>.Default.Equals(current[index], wanted[index]))
+            {
+                current[index] = wanted[index];
             }
         }
 
-        _backupRows.Clear();
-        foreach (var row in rows.OrderByDescending(item => item.CreatedAtUtc))
+        while (current.Count > wanted.Count)
         {
-            _backupRows.Add(row);
+            current.RemoveAt(current.Count - 1);
         }
-
-        RecentEmpty.Visibility = _backupRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private GlobalBackupRow ToRow(ServerCardViewModel server, BackupRecord record)
@@ -221,20 +295,24 @@ public partial class BackupsPageControl : UserControl
             ServerPresentation.FormatMemory(record.SizeBytes),
             LocalizationService.Format("Backups.Files", record.FileCount));
 
+        var title = string.IsNullOrWhiteSpace(record.DisplayName) ? taken : record.DisplayName!;
         return new GlobalBackupRow(
             record.Id,
             server.ServerId,
             server.Name,
-            string.IsNullOrWhiteSpace(record.DisplayName) ? taken : record.DisplayName!,
+            title,
             detail,
             LocalizationService.Get($"Backups.Status.{record.Status}"),
             complete ? UiStatusTone.Positive : UiStatusTone.Caution,
-            complete && canBackupActions?.CanRestore == true && !_busy,
-            !record.IsProtected && !_busy,
+            complete && canBackupActions?.CanRestore == true,
+            !record.IsProtected,
             LocalizationService.Get("Action.Restore"),
             LocalizationService.Get("Action.Verify"),
             LocalizationService.Get("Action.Delete"),
-            record.CreatedAtUtc);
+            record.CreatedAtUtc,
+            LocalizationService.Format("Backups.RestoreName", title, server.Name),
+            LocalizationService.Format("Backups.VerifyName", title, server.Name),
+            LocalizationService.Format("Backups.DeleteName", title, server.Name));
     }
 
     private static Brush ToneBrush(UiStatusTone tone)
@@ -310,8 +388,9 @@ public partial class BackupsPageControl : UserControl
             return;
         }
 
+        // Names the server and the exact backup: this replaces the live world.
         var confirmed = MessageBox.Show(
-            LocalizationService.Format("Confirm.RestoreServer", row.ServerName),
+            LocalizationService.Format("Confirm.RestoreBackup", row.ServerName, row.Title),
             LocalizationService.Get("Action.Restore"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning) == MessageBoxResult.Yes;
@@ -374,7 +453,7 @@ public partial class BackupsPageControl : UserControl
             NotificationService.Publish(
                 NotificationKind.Error,
                 LocalizationService.Get("Action.Delete"),
-                exception.Message);
+                LocalizationService.Get("Error.ServiceUnavailable"));
         }
         finally
         {
@@ -414,7 +493,7 @@ public partial class BackupsPageControl : UserControl
             NotificationService.Publish(
                 NotificationKind.Error,
                 LocalizationService.Get("Action.OpenLocation"),
-                exception.Message);
+                LocalizationService.Get("Error.FolderUnavailable"));
         }
     }
 
@@ -432,7 +511,7 @@ public partial class BackupsPageControl : UserControl
             NotificationService.Publish(
                 NotificationKind.Error,
                 LocalizationService.Get(titleKey),
-                exception.Message);
+                LocalizationService.Get("Error.ServiceUnavailable"));
         }
         finally
         {
@@ -447,9 +526,20 @@ public partial class BackupsPageControl : UserControl
         NotificationService.Publish(
             ok ? NotificationKind.Success : NotificationKind.Error,
             LocalizationService.Get(titleKey),
-            ok
-                ? LocalizationService.Get("Action.Done")
-                : ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture));
+            ok ? LocalizationService.Get("Action.Done") : DescribeFailure(response.StatusCode));
+
+    /// <summary>
+    /// A person reads why it did not work, in their language — not a bare "409". The agent's
+    /// own detail stays in its log.
+    /// </summary>
+    public static string DescribeFailure(System.Net.HttpStatusCode status) => status switch
+    {
+        System.Net.HttpStatusCode.Conflict => LocalizationService.Get("Backups.Error.Busy"),
+        System.Net.HttpStatusCode.NotFound => LocalizationService.Get("Backups.Error.NotFound"),
+        System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden =>
+            LocalizationService.Get("Error.ServiceUnavailable"),
+        _ => LocalizationService.Get("Backups.Error.Failed")
+    };
 
     private async void State_RetryRequested(object? sender, EventArgs e)
     {

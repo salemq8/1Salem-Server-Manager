@@ -96,6 +96,7 @@
                                     </StackPanel>
                                     <Button Grid.Column="1"
                                             Content="{Binding OpenLabel}"
+                                            AutomationProperties.Name="{Binding OpenName}"
                                             Style="{StaticResource QuietButtonStyle}"
                                             VerticalAlignment="Center"
                                             Tag="{Binding ServerId}"
@@ -151,16 +152,19 @@
                                                 Orientation="Horizontal"
                                                 VerticalAlignment="Center">
                                         <Button Content="{Binding RestoreLabel}"
+                                                AutomationProperties.Name="{Binding RestoreName}"
                                                 Style="{StaticResource QuietButtonStyle}"
                                                 IsEnabled="{Binding CanRestore}"
                                                 Tag="{Binding Id}"
                                                 Click="Restore_Click" />
                                         <Button Content="{Binding VerifyLabel}"
+                                                AutomationProperties.Name="{Binding VerifyName}"
                                                 Style="{StaticResource QuietButtonStyle}"
                                                 Margin="8,0,0,0"
                                                 Tag="{Binding Id}"
                                                 Click="Verify_Click" />
                                         <Button Content="{Binding DeleteLabel}"
+                                                AutomationProperties.Name="{Binding DeleteName}"
                                                 Style="{StaticResource QuietButtonStyle}"
                                                 Margin="8,0,0,0"
                                                 IsEnabled="{Binding CanDelete}"

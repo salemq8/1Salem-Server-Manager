@@ -413,7 +413,9 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="#342919"
+                <!-- Theme token, not a literal: the body text follows the theme, and on a
+                     fixed dark brown it was near-black on brown in Light. -->
+                <Border Background="{DynamicResource WarningSoftBrush}"
                         BorderBrush="{DynamicResource WarningBrush}"
                         BorderThickness="1"
                         CornerRadius="10"

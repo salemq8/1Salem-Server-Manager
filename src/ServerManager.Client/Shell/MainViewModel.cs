@@ -53,6 +53,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _databaseLabel = "Unknown";
     private string _lastError = string.Empty;
     private bool _agentConnected;
+    private bool _pipeAnswered;
+    private int _pipeFailures;
     private bool _serverDetailOpen;
     private bool _sidebarCollapsed;
     private int _refreshing;
@@ -64,7 +66,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Sections = [.. DestinationKeys.Select(CreateNavigationItem)];
         PrimarySections = [.. Sections.Where(IsPrimaryDestination)];
         _selectedSection = Sections[0];
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
+        RefreshCommand = new AsyncRelayCommand(RefreshAllAsync);
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -249,7 +251,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// comes back there is nothing to contradict, so the pipe alone decides.
     /// </summary>
     public bool IsAgentConnected =>
-        _agentConnected && (!_feed.HasAttempted || _feed.IsConnected);
+        _agentConnected && !_feed.ShowErrorState;
+
+    /// <summary>
+    /// Nothing has come back yet from either channel. The badge is neutral then: a red dot
+    /// beside "Connecting…" announces a failure that has not happened.
+    /// </summary>
+    public bool IsConnecting =>
+        !_agentConnected && (!_pipeAnswered || _pipeFailures < PipeFailuresBeforeLost) &&
+        !_feed.ShowErrorState;
+
+    /// <summary>The Agent refuses this non-elevated session: a caution, not a failure.</summary>
+    public bool NeedsElevation => !IsAgentConnected && _feed.NeedsElevation;
+
+    /// <summary>Consecutive failed pipe polls tolerated, matching the dashboard feed's grace.</summary>
+    private const int PipeFailuresBeforeLost = 2;
 
     private bool IsSelected(string key) =>
         SelectedSection.Key.Equals(key, StringComparison.Ordinal);
@@ -314,8 +330,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 item.Key.Equals(selectedKey, StringComparison.Ordinal))
             ?? Sections[0];
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SettingsSection)));
-        ConnectionLabel = LocalizationService.Get(
-            _agentConnected ? "Shell.Connected" : "Shell.AgentUnavailable");
+        // Same rule as every poll, so a language switch cannot show "Connected" by a red dot.
+        UpdateConnectionPresentation();
         PropertyChanged?.Invoke(
             this,
             new PropertyChangedEventArgs(nameof(LaunchModeLabel)));
@@ -333,6 +349,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private async void OnTimerTick(object? sender, EventArgs e) =>
         await RefreshAsync();
 
+    /// <summary>Raised by the visible Refresh button so pages with their own data reload it.</summary>
+    public event EventHandler? RefreshRequested;
+
+    /// <summary>
+    /// The top-bar Refresh. It used to re-read only the pipe status, so on every page it
+    /// visibly did nothing; it now refreshes what the pages actually show.
+    /// </summary>
+    private async Task RefreshAllAsync()
+    {
+        await RefreshAsync();
+        await _feed.RefreshAsync();
+        RefreshRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     private async Task RefreshAsync()
     {
         if (Interlocked.Exchange(ref _refreshing, 1) == 1)
@@ -343,6 +373,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var status = await _agentClient.GetStatusAsync(_lifetime.Token);
+            _pipeAnswered = true;
+            _pipeFailures = 0;
             _agentConnected = true;
             UpdateConnectionPresentation();
             AgentMachineName = status.MachineName;
@@ -353,13 +385,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
         }
-        catch (Exception exception) when (
-            exception is IOException or TimeoutException or UnauthorizedAccessException or OperationCanceledException)
+        // Runs from an async void timer tick: a malformed pipe frame (InvalidDataException,
+        // JsonException, InvalidOperationException) must read as "not connected", not crash
+        // the app. Only the second consecutive failure counts, like the dashboard feed.
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            _agentConnected = false;
+            _pipeAnswered = true;
+            if (_pipeFailures < int.MaxValue)
+            {
+                _pipeFailures++;
+            }
+
+            if (_pipeFailures >= PipeFailuresBeforeLost)
+            {
+                _agentConnected = false;
+                DatabaseLabel = LocalizationService.Get("Status.Unavailable");
+                LastError = LocalizationService.Get("Error.ServiceHint");
+            }
+
             UpdateConnectionPresentation();
-            DatabaseLabel = LocalizationService.Get("Status.Unavailable");
-            LastError = LocalizationService.Get("Error.ServiceHint");
         }
         finally
         {
@@ -369,8 +413,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnFeedChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Controls.DashboardFeed.IsConnected)
-            or nameof(Controls.DashboardFeed.HasAttempted))
+        if (e.PropertyName is nameof(Controls.DashboardFeed.ShowErrorState)
+            or nameof(Controls.DashboardFeed.HasCurrentData))
         {
             UpdateConnectionPresentation();
         }
@@ -379,8 +423,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void UpdateConnectionPresentation()
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAgentConnected)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsConnecting)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NeedsElevation)));
         ConnectionLabel = LocalizationService.Get(
-            IsAgentConnected ? "Shell.Connected" : "Shell.AgentUnavailable");
+            IsAgentConnected
+                ? "Shell.Connected"
+                : IsConnecting
+                    ? "Shell.Connecting"
+                    : _feed.NeedsElevation ? "Shell.NeedsAdministrator" : "Shell.AgentUnavailable");
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

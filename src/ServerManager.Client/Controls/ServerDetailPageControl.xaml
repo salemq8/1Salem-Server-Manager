@@ -121,6 +121,11 @@
                                 <Separator />
                                 <MenuItem x:Name="MenuDiagnostics" Click="MenuDiagnostics_Click" />
                                 <MenuItem x:Name="MenuForceStop" Click="MenuForceStop_Click" />
+                                <Separator />
+                                <!-- Destructive, so last, separated, and always confirmed -->
+                                <MenuItem x:Name="MenuDeleteServer"
+                                          Foreground="{DynamicResource DangerBrush}"
+                                          Click="MenuDeleteServer_Click" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>

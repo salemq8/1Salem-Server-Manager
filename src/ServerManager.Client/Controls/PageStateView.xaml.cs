@@ -18,6 +18,8 @@ public partial class PageStateView : UserControl
     private const string EmptyGlyph = "";
     private const string ErrorGlyph = "";
 
+    private bool _offerElevation;
+
     public PageStateView()
     {
         InitializeComponent();
@@ -47,12 +49,17 @@ public partial class PageStateView : UserControl
 
         if (feed.ShowErrorState)
         {
+            // The service answering "not allowed" is a different problem with a different fix.
+            _offerElevation = feed.NeedsElevation;
             ShowMessage(
                 ErrorGlyph,
-                "DangerBrush",
-                LocalizationService.Get("Error.ServiceUnavailable"),
-                LocalizationService.Get("Error.ServiceHint"),
-                LocalizationService.Get("Error.Retry"));
+                _offerElevation ? "WarningBrush" : "DangerBrush",
+                LocalizationService.Get(
+                    _offerElevation ? "Error.NeedsAdministrator" : "Error.ServiceUnavailable"),
+                LocalizationService.Get(
+                    _offerElevation ? "Error.NeedsAdministratorHint" : "Error.ServiceHint"),
+                LocalizationService.Get(
+                    _offerElevation ? "Error.RestartAsAdministrator" : "Error.Retry"));
             return true;
         }
 
@@ -104,7 +111,14 @@ public partial class PageStateView : UserControl
 
     private void Action_Click(object sender, RoutedEventArgs e)
     {
-        StateAction.IsEnabled = false;
+        if (_offerElevation)
+        {
+            (Application.Current as App)?.RestartAsAdministrator();
+            return;
+        }
+
+        // Not disabled while retrying: disabling the focused button threw keyboard focus
+        // away. The feed already ignores a refresh that is still in flight.
         RetryRequested?.Invoke(this, EventArgs.Empty);
     }
 }

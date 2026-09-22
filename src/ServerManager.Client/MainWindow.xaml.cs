@@ -27,24 +27,41 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         HomePage.ServerOpenRequested += (_, serverId) => OpenServer(serverId);
-        HomePage.ServerStartRequested += (_, serverId) => OpenServer(serverId);
+        HomePage.ServerStartRequested += async (_, serverId) => await StartServerAsync(serverId);
         ServersPage.ServerOpenRequested += (_, serverId) => OpenServer(serverId);
-        ServersPage.ServerStartRequested += (_, serverId) => OpenServer(serverId);
-        BackupsPage.BackupRequested += (_, serverId) => OpenServer(serverId);
+        ServersPage.ServerStartRequested += async (_, serverId) => await StartServerAsync(serverId);
+        // A server's own Backups tab, where Create Backup and the backup list are.
+        BackupsPage.BackupRequested += (_, serverId) => OpenServer(serverId, "Backups");
         ServerDetailPage.BackRequested += (_, _) =>
         {
             _viewModel.CloseServerDetail();
             SyncNavigationSelection();
         };
         SettingsPage.DiagnosticsRequested += async (_, _) => await ExportDiagnosticsAsync();
+        _viewModel.RefreshRequested += (_, _) =>
+        {
+            BackupsPage.Reload();
+            NetworkPage.Reload();
+            SettingsPage.Reload();
+        };
+        SettingsPage.ExitForUpdateRequested += (_, _) =>
+        {
+            _allowClose = true;
+            System.Windows.Application.Current.Shutdown();
+        };
         SettingsPage.PreferencesApplied += (_, preferences) =>
         {
             // Applying preferences rebuilds the destination items, which drops both
             // ListBoxes' selection; without re-syncing, the sidebar loses its highlight.
-            _viewModel.ApplyUiPreferences(preferences);
+            // A language or theme change must not move the sidebar either: the persisted
+            // value can differ from what is on screen (a narrow window collapses it
+            // automatically), and adopting it left labels drawn inside the 64px rail.
+            _viewModel.ApplyUiPreferences(
+                preferences with { SidebarCollapsed = _viewModel.SidebarCollapsed });
             SyncNavigationSelection();
         };
 
+        Controls.ServerDeletion.ServerDeleted += OnServerDeleted;
         Loaded += OnLoaded;
         Closed += OnClosed;
         Closing += OnClosing;
@@ -65,8 +82,25 @@ public partial class MainWindow : Window
         await _viewModel.StartAsync();
     }
 
+    /// <summary>
+    /// After the Agent confirmed a removal: close that server if it is open, land on the
+    /// server list, and refresh it so the removed server is gone at once.
+    /// </summary>
+    private async void OnServerDeleted(object? sender, Guid serverId)
+    {
+        if (_viewModel.IsServerDetailOpen && _viewModel.OpenServerId == serverId)
+        {
+            _viewModel.CloseServerDetail();
+        }
+
+        ShowSection("Servers");
+        await Controls.DashboardFeed.Shared.RefreshAsync();
+    }
+
     private void OnClosed(object? sender, EventArgs e)
     {
+        SettingsPage.Dispose();
+        Controls.ServerDeletion.ServerDeleted -= OnServerDeleted;
         _viewModel.Dispose();
         NotificationService.Published -= OnNotificationPublished;
         _notificationTimer.Stop();
@@ -87,12 +121,32 @@ public partial class MainWindow : Window
                     _ => "AccentBrush"
                 });
             NotificationToast.Visibility = Visibility.Visible;
+            AnnounceNotification(notification.Kind == NotificationKind.Error);
             _notificationTimer.Stop();
             if (!notification.Persistent)
             {
                 _notificationTimer.Start();
             }
         });
+    }
+
+    /// <summary>
+    /// The toast is the only report of whether a backup, restore or server action worked, so
+    /// assistive technology is told about it too; failures interrupt, successes wait their turn.
+    /// </summary>
+    private void AnnounceNotification(bool isError)
+    {
+        System.Windows.Automation.AutomationProperties.SetName(
+            NotificationMessage,
+            $"{NotificationTitle.Text}. {NotificationMessage.Text}");
+        System.Windows.Automation.AutomationProperties.SetLiveSetting(
+            NotificationMessage,
+            isError
+                ? System.Windows.Automation.AutomationLiveSetting.Assertive
+                : System.Windows.Automation.AutomationLiveSetting.Polite);
+        var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(
+            NotificationMessage);
+        peer?.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
     }
 
     private void DismissNotification_Click(object sender, RoutedEventArgs e)
@@ -106,7 +160,13 @@ public partial class MainWindow : Window
     public void ShowDashboard()
     {
         Show();
-        WindowState = WindowState.Normal;
+        // Restore only from minimised. In-app links (Settings > Go to Backups) and the tray
+        // both come through here, and forcing Normal un-maximised a maximised window.
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
         Activate();
     }
 
@@ -117,21 +177,47 @@ public partial class MainWindow : Window
         SyncNavigationSelection();
     }
 
+    /// <summary>
+    /// The tray still speaks in Build 5 tab indices (1 = Console, 2 = Settings). A game no
+    /// longer has a page of its own, so this opens that game's server in Server Detail on the
+    /// matching tab, falling back to the list when the server is not known yet.
+    /// </summary>
     public void ShowServer(GameType game, int tabIndex = 0)
     {
-        // Individual games no longer have their own destination; they live inside Servers.
-        _ = game;
-        _ = tabIndex;
-        ShowSection("Servers");
+        ShowDashboard();
+        var server = Controls.DashboardFeed.Shared.Servers.FirstOrDefault(
+            card => card.Game == game);
+        if (server is null)
+        {
+            ShowSection("Servers");
+            return;
+        }
+
+        OpenServer(
+            server.ServerId,
+            tabIndex switch
+            {
+                1 => "Console",
+                2 => "Settings",
+                _ => "Overview"
+            });
     }
 
+    /// <summary>The tray's Create item opens that game's installer, as it did in Build 5.</summary>
     public void OpenServerCreation(GameType game)
     {
-        _ = game;
         ShowSection("Servers");
+        ServersPage.OpenInstaller(game);
     }
 
     public void PrepareForExit() => _allowClose = true;
+
+    /// <summary>The PC-wide resource policy editor, for the tray's Resource Mode > Custom.</summary>
+    public void OpenResourcePolicy()
+    {
+        ShowDashboard();
+        new ResourceGovernorWindow { Owner = this }.ShowDialog();
+    }
 
     /// <summary>
     /// Writes a diagnostics bundle where the person chooses. The export itself redacts
@@ -166,11 +252,25 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OpenServer(Guid serverId)
+    private void OpenServer(Guid serverId, string tab = "Overview")
     {
         _viewModel.OpenServerDetail(serverId);
-        ServerDetailPage.Show(serverId);
+        ServerDetailPage.Show(serverId, tab);
         SyncNavigationSelection();
+        // After layout: the page has only just been made visible.
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(ServerDetailPage.FocusSelectedTab));
+    }
+
+    /// <summary>
+    /// A card labelled Start must start the server, as Build 5's Home did. It opens the server
+    /// so the person watches it come up, then uses Server Detail's own checked start path.
+    /// </summary>
+    private async Task StartServerAsync(Guid serverId)
+    {
+        OpenServer(serverId);
+        await ServerDetailPage.StartAsync();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

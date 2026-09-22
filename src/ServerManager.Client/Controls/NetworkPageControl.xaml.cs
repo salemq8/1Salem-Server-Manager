@@ -46,6 +46,9 @@ public partial class NetworkPageControl : UserControl
         Unloaded += (_, _) => _timer.Stop();
     }
 
+    /// <summary>Re-reads Playit and network status, e.g. from the top-bar Refresh.</summary>
+    public void Reload() => _ = LoadAsync();
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _feed.Start();
@@ -90,7 +93,6 @@ public partial class NetworkPageControl : UserControl
         LocalHeading.Text = LocalizationService.Get("Network.LocalNetwork");
         CopyAddressButton.Content = LocalizationService.Get("Action.CopyAddress");
         AdvancedSection.Header = LocalizationService.Get("Advanced.Title");
-        PairDeviceButton.Content = LocalizationService.Get("Network.PairDevice");
         NetworkDetailsButton.Content = LocalizationService.Get("Network.Details");
 
         var stateShown = StateView.Apply(_feed, "Empty.NoServers", "Empty.NoServersMessage");
@@ -100,9 +102,11 @@ public partial class NetworkPageControl : UserControl
             return;
         }
 
-        // The server whose tunnel is actually published, else the first one.
-        var server = _feed.Servers.FirstOrDefault(item => item.RemoteAccessOnline)
-            ?? _feed.Servers.FirstOrDefault();
+        // The same server Home describes: online tunnel, else a configured address, else first.
+        var server = ServerPresentation.SelectRemoteAccessServer(
+            _feed.Servers,
+            item => item.RemoteAccessOnline,
+            item => item.InternetAddress);
         var address = server?.InternetAddress;
         var configured = !string.IsNullOrWhiteSpace(address);
         var online = server?.RemoteAccessOnline == true;
@@ -121,6 +125,12 @@ public partial class NetworkPageControl : UserControl
             : server!.Source!.LocalAddress!;
 
         AdvancedDetails.Text = BuildAdvanced(server);
+
+        // "Set up" until Playit is installed and linked to an account; "Manage" after that.
+        RemoteAccessButton.Content = LocalizationService.Get(
+            _playit is { IsInstalled: true, IsLinked: true }
+                ? "Network.ManageRemoteAccess"
+                : "Network.SetUpRemoteAccess");
     }
 
     private string BuildDetail(bool configured, bool online)
@@ -156,8 +166,9 @@ public partial class NetworkPageControl : UserControl
         var lines = new List<string>();
         if (_playit is { } playit)
         {
+            // Running is not connected: a process waiting to be linked to an account is running.
             lines.Add($"Playit  {playit.State}  " +
-                      $"({(playit.IsRunning ? LocalizationService.Get("Advanced.Connected") : LocalizationService.Get("Advanced.Disconnected"))})");
+                      $"({(playit.IsRunning && playit.IsLinked ? LocalizationService.Get("Advanced.Connected") : LocalizationService.Get("Advanced.Disconnected"))})");
             if (!string.IsNullOrWhiteSpace(playit.Version))
             {
                 lines.Add($"{LocalizationService.Get("Metric.Version")}  {playit.Version}");
@@ -213,17 +224,33 @@ public partial class NetworkPageControl : UserControl
     private void CopyAddress_Click(object sender, RoutedEventArgs e)
     {
         var address = AddressValue.Text;
-        if (!string.IsNullOrWhiteSpace(address) &&
-            !string.Equals(address, EmDash, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(address) ||
+            string.Equals(address, EmDash, StringComparison.Ordinal))
         {
-            SafeClipboard.TrySetText(address);
+            return;
         }
+
+        // Say whether it worked: the clipboard can be held by another app.
+        var copied = SafeClipboard.TrySetText(address);
+        NotificationService.Publish(
+            copied ? NotificationKind.Success : NotificationKind.Warning,
+            LocalizationService.Get("Action.CopyAddress"),
+            LocalizationService.Get(copied ? "Network.AddressCopied" : "Network.ClipboardBusy"));
     }
 
-    /// <summary>Pairing another device to this machine — the proven Build 5 flow.</summary>
-    private void PairDevice_Click(object sender, RoutedEventArgs e) =>
-        new LanPairingWindow { Owner = Window.GetWindow(this) }.ShowDialog();
+    private async void RemoteAccess_Click(object sender, RoutedEventArgs e)
+    {
+        RemoteAccessWindow.Open(Window.GetWindow(this));
+        // Whatever changed in there (address, linking, stopped tunnel) shows here at once.
+        await _feed.RefreshAsync();
+        await LoadAsync();
+    }
 
+    // LAN device pairing is deliberately not offered here. It was never reachable in any
+    // released build, the installed Agent service runs without --lan so no other device can
+    // reach it, and minting a pairing code grants a new device full remote control.
+
+    /// <summary>The Build 5 Network Status window: per-server LAN addresses.</summary>
     private void NetworkDetails_Click(object sender, RoutedEventArgs e) =>
         new NetworkStatusWindow { Owner = Window.GetWindow(this) }.ShowDialog();
 

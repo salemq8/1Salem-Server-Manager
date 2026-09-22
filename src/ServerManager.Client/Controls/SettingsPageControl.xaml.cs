@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Windows;
 using ServerManager.Client.Shell;
 using ServerManager.Contracts;
+using ServerManager.Infrastructure.Windows;
 using ComboBox = System.Windows.Controls.ComboBox;
 using ComboBoxItem = System.Windows.Controls.ComboBoxItem;
 using ListBoxItem = System.Windows.Controls.ListBoxItem;
@@ -18,21 +18,26 @@ namespace ServerManager.Client.Controls;
 /// Application-wide settings only. Anything belonging to one server lives in that server's own
 /// Settings tab, and nothing here shows a raw configuration key or a credential.
 /// </summary>
-public partial class SettingsPageControl : UserControl
+public partial class SettingsPageControl : UserControl, IDisposable
 {
     private const string ArabicDisplayName = "العربية";
 
     private readonly UiPreferencesStore _store = new();
+    private readonly WindowsStartupManager _startupManager = new();
     private readonly HttpClient _httpClient =
         AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(30));
     private bool _loading;
-    private ApplicationUpdateStatusResponse? _updates;
+    private bool _updateDetailsOpenedForOffer;
     private AgentStatusResponse? _agent;
 
     public SettingsPageControl()
     {
         InitializeComponent();
         LocalizationService.LanguageChanged += (_, _) => Dispatcher.Invoke(Localize);
+        UpdateInstaller.ExitForUpdateRequested += (_, _) =>
+            ExitForUpdateRequested?.Invoke(this, EventArgs.Empty);
+        // One source of truth for update status: the proven control's own refresh.
+        UpdateInstaller.StatusChanged += (_, _) => RenderUpdates();
         Loaded += OnLoaded;
     }
 
@@ -41,6 +46,26 @@ public partial class SettingsPageControl : UserControl
 
     /// <summary>Raised when the person asks for the diagnostics export.</summary>
     public event EventHandler? DiagnosticsRequested;
+
+    /// <summary>
+    /// Raised once the updater has been launched and is waiting on this process to exit.
+    /// The shell must actually exit: the updater will not replace the Client's files while
+    /// the process it was told to wait for is still running.
+    /// </summary>
+    public event EventHandler? ExitForUpdateRequested;
+
+    public void Dispose()
+    {
+        UpdateInstaller.Dispose();
+        _httpClient.Dispose();
+    }
+
+    /// <summary>Re-reads service and update status, e.g. from the top-bar Refresh.</summary>
+    public void Reload()
+    {
+        _ = LoadAgentAsync();
+        _ = UpdateInstaller.RefreshNowAsync();
+    }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -55,6 +80,10 @@ public partial class SettingsPageControl : UserControl
         await LoadAgentAsync();
     }
 
+    /// <summary>
+    /// Re-read whenever Advanced or About is shown, so the service details are never a
+    /// snapshot from whenever the app happened to start.
+    /// </summary>
     private async Task LoadAgentAsync()
     {
         try
@@ -66,7 +95,7 @@ public partial class SettingsPageControl : UserControl
             _agent = null;
         }
 
-        ApplyCategory();
+        RenderAgent();
     }
 
     private string CurrentCategory =>
@@ -89,8 +118,9 @@ public partial class SettingsPageControl : UserControl
 
         GeneralTitle.Text = LocalizationService.Get("Settings.Category.General");
         GeneralDescription.Text = LocalizationService.Get("Settings.GeneralDescription");
-        MinimiseToTrayLabel.Text = LocalizationService.Get("Settings.MinimiseToTray");
-        GeneralNote.Text = LocalizationService.Get("Settings.MinimiseToTrayNote");
+        StartWithWindowsLabel.Text = LocalizationService.Get("Settings.StartWithWindows");
+        StartWithWindowsNote.Text = LocalizationService.Get("Settings.StartWithWindowsUnavailable");
+        GeneralNote.Text = LocalizationService.Get("Settings.CloseBehaviour");
 
         AppearanceTitle.Text = LocalizationService.Get("Appearance.Title");
         AppearanceDescription.Text = LocalizationService.Get("Appearance.Description");
@@ -100,7 +130,7 @@ public partial class SettingsPageControl : UserControl
         UpdatesTitle.Text = LocalizationService.Get("Settings.Category.Updates");
         UpdatesVersionLabel.Text = LocalizationService.Get("Settings.Version");
         CheckUpdatesButton.Content = LocalizationService.Get("Action.CheckUpdates");
-        UpdatesAdvanced.Header = LocalizationService.Get("Advanced.Title");
+        UpdateDetails.Header = LocalizationService.Get("Updates.Details");
 
         AdvancedTitle.Text = LocalizationService.Get("Settings.Category.Advanced");
         AdvancedIntro.Text = LocalizationService.Get("Settings.AdvancedIntro");
@@ -197,14 +227,21 @@ public partial class SettingsPageControl : UserControl
             RenderPolicy(category);
         }
 
+        if (category == "General")
+        {
+            RenderStartup();
+        }
+
         if (category == "Updates")
         {
             RenderUpdates();
+            _ = UpdateInstaller.RefreshNowAsync();
         }
 
         if (category is "Advanced" or "About")
         {
             RenderAgent();
+            _ = LoadAgentAsync();
         }
     }
 
@@ -228,34 +265,31 @@ public partial class SettingsPageControl : UserControl
 
     private void RenderUpdates()
     {
-        // Visible product version is 1.5; the build revision is a diagnostic detail.
+        // Visible product version is 1.5; the build revision is a detail of Update details.
         UpdatesVersionValue.Text = LocalizationService.Format(
             "Settings.VersionValue",
             ProductInfo.Version);
 
-        if (_updates is { } status)
-        {
-            UpdatesStatus.Text = status.IsUpdateAvailable
-                ? LocalizationService.Format(
-                    "Settings.UpdateAvailable",
-                    status.LatestVersion ?? "—")
-                : LocalizationService.Get("Settings.UpToDate");
+        var status = UpdateInstaller.CurrentStatus;
+        UpdatesStatus.Text = ApplicationUpdateControl.DescribeSimpleStatus(
+            status,
+            UpdateInstaller.LastRefreshFailed);
 
-            UpdatesAdvancedBody.Text = string.Join(
-                Environment.NewLine,
-                $"Channel  {status.Channel}",
-                $"Build  {status.CurrentBuildRevision.ToString(CultureInfo.InvariantCulture)}",
-                $"Stage  {status.Stage}",
-                status.LastCheckedAtUtc is { } checkedAt
-                    ? $"Checked  {checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}"
-                    : "Checked  —");
-        }
-        else
+        // When there is something to do, open the flow for the person — once per offer, so
+        // closing it again is respected until the next update comes along.
+        var actionable =
+            status is { IsUpdateAvailable: true } ||
+            status?.Stage is ApplicationUpdateStage.Downloading
+                or ApplicationUpdateStage.Verified
+                or ApplicationUpdateStage.ReadyToInstall;
+        if (actionable && !_updateDetailsOpenedForOffer)
         {
-            UpdatesStatus.Text = LocalizationService.Get("ServerSettings.UpdatesUnknown");
-            UpdatesAdvancedBody.Text = LocalizationService.Format(
-                "Settings.BuildValue",
-                ProductInfo.BuildRevision);
+            UpdateDetails.IsExpanded = true;
+            _updateDetailsOpenedForOffer = true;
+        }
+        else if (!actionable)
+        {
+            _updateDetailsOpenedForOffer = false;
         }
     }
 
@@ -271,10 +305,27 @@ public partial class SettingsPageControl : UserControl
         AgentBody.Text = _agent is { } agent
             ? string.Join(
                 Environment.NewLine,
-                $"Service  {agent.Version}",
-                $"Machine  {agent.MachineName}",
-                $"Database  {(agent.DatabaseReady ? "ready" : "starting")}")
+                LocalizationService.Format("Settings.Agent.Version", agent.Version),
+                LocalizationService.Format("Settings.Agent.Machine", agent.MachineName),
+                LocalizationService.Get(
+                    agent.DatabaseReady ? "Settings.Agent.DatabaseReady" : "Settings.Agent.DatabaseStarting"))
             : LocalizationService.Get("Status.Unavailable");
+    }
+
+    /// <summary>Reflects what Windows actually has registered, not what was last clicked.</summary>
+    private void RenderStartup()
+    {
+        var available = TrayIconService.IsDashboardExecutable(Environment.ProcessPath);
+        StartWithWindowsNote.Visibility = available ? Visibility.Collapsed : Visibility.Visible;
+        try
+        {
+            StartWithWindowsToggle.IsChecked = _startupManager.IsEnabled();
+            StartWithWindowsToggle.IsEnabled = available;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            StartWithWindowsToggle.IsEnabled = false;
+        }
     }
 
     // --- actions ----------------------------------------------------------------
@@ -289,20 +340,53 @@ public partial class SettingsPageControl : UserControl
         var language = (LanguageBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "en-US";
         var theme = (ThemeBox.SelectedItem as ComboBoxItem)?.Tag as AppTheme? ?? AppTheme.Dark;
 
+        // Apply first and tell the shell, so the whole window follows the change even when it
+        // cannot be written down; a failed save must not leave the page half switched.
+        var preferences = _store.Load() with { Language = language, Theme = theme };
+        LocalizationService.Apply(language);
+        ThemeService.Apply(theme);
+        PreferencesApplied?.Invoke(this, preferences);
         try
         {
-            var preferences = _store.Load() with { Language = language, Theme = theme };
-            LocalizationService.Apply(language);
-            ThemeService.Apply(theme);
             _store.Save(preferences);
             AppearanceStatus.Text = LocalizationService.Get("Appearance.Applied");
-            PreferencesApplied?.Invoke(this, preferences);
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException)
         {
-            AppearanceStatus.Text = LocalizationService.Get("Error.ServiceUnavailable");
+            AppearanceStatus.Text = LocalizationService.Get("Appearance.NotSaved");
         }
+    }
+
+    private void StartWithWindows_Click(object sender, RoutedEventArgs e)
+    {
+        // Same registration the tray menu's "Start Dashboard with Windows" item performs.
+        var executable = Environment.ProcessPath;
+        if (TrayIconService.IsDashboardExecutable(executable))
+        {
+            try
+            {
+                var result = _startupManager.SetEnabled(
+                    executable!,
+                    StartWithWindowsToggle.IsChecked == true);
+                if (!result.Success)
+                {
+                    NotificationService.Publish(
+                        NotificationKind.Error,
+                        LocalizationService.Get("Settings.StartWithWindows"),
+                        LocalizationService.Get("Settings.StartWithWindowsFailed"));
+                }
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                NotificationService.Publish(
+                    NotificationKind.Error,
+                    LocalizationService.Get("Settings.StartWithWindows"),
+                    LocalizationService.Get("Settings.StartWithWindowsFailed"));
+            }
+        }
+
+        RenderStartup();
     }
 
     private void PolicyAction_Click(object sender, RoutedEventArgs e)
@@ -317,28 +401,28 @@ public partial class SettingsPageControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Asks the agent to check, then reads the result back through the update control. The
+    /// outcome — including a failed check — comes from the agent's own status, so this card
+    /// can never claim "up to date" on the strength of a request that did not work.
+    /// </summary>
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         CheckUpdatesButton.IsEnabled = false;
+        UpdatesStatus.Text = LocalizationService.Get("Updates.Stage.Checking");
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(
+            using var response = await _httpClient.PostAsJsonAsync(
                 "/api/v1/application-updates/check",
                 new { });
-            if (response.IsSuccessStatusCode)
-            {
-                _updates = await _httpClient.GetFromJsonAsync<ApplicationUpdateStatusResponse>(
-                    "/api/v1/application-updates");
-            }
-
-            RenderUpdates();
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            UpdatesStatus.Text = LocalizationService.Get("Error.ServiceUnavailable");
+            // Reported below from the status read-back, which fails the same way.
         }
         finally
         {
+            await UpdateInstaller.RefreshNowAsync();
             CheckUpdatesButton.IsEnabled = true;
         }
     }

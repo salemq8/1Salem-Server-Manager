@@ -174,6 +174,49 @@ public sealed class SqliteGameServerStore(SqliteConnectionFactory connectionFact
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// One transaction, one server. Backup rows reference the server with ON DELETE RESTRICT,
+    /// so they are removed explicitly first; runtime settings, update state, schedules and
+    /// crash history cascade. Only database rows are removed: backup archives, worlds and the
+    /// server folder are files, and nothing here touches the file system.
+    /// </summary>
+    public async Task<bool> DeleteRegistrationAsync(
+        Guid serverId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = connectionFactory.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(
+            cancellationToken);
+
+        await using (var backups = connection.CreateCommand())
+        {
+            backups.Transaction = transaction;
+            backups.CommandText = "DELETE FROM Backups WHERE ServerId = $id;";
+            backups.Parameters.AddWithValue("$id", serverId.ToString());
+            await backups.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        int removed;
+        await using (var server = connection.CreateCommand())
+        {
+            server.Transaction = transaction;
+            server.CommandText = "DELETE FROM GameServers WHERE Id = $id;";
+            server.Parameters.AddWithValue("$id", serverId.ToString());
+            removed = await server.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (removed != 1)
+        {
+            // Nothing registered under that id: leave everything exactly as it was.
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
     private static GameServerDefinition ReadServer(SqliteDataReader reader) =>
         new(
             Guid.Parse(reader.GetString(0)),

@@ -45,11 +45,10 @@ public sealed class TrayIconService : IDisposable
         AddResourceMode("Balanced", "balanced");
         AddResourceMode("Minecraft Priority", "minecraft");
         AddResourceMode("Palworld Priority", "palworld");
-        // "Resources" is no longer a destination; resource governance now lives inside a
-        // server. Pointing at the deleted key made this item silently do nothing.
+        // "Custom" opens the PC-wide resource policy editor itself, as Build 5's Resources
+        // section did. Landing on the server list promised an editor and showed none.
         var custom = _resourceMenu.DropDownItems.Add("Custom");
-        custom.Click += (_, _) => _window.Dispatcher.Invoke(
-            () => _window.ShowSection("Servers"));
+        custom.Click += (_, _) => _window.Dispatcher.Invoke(_window.OpenResourcePolicy);
         _menu.Items.Add(_resourceMenu);
 
         _agentStatus = new Forms.ToolStripMenuItem("Agent status: checking")
@@ -331,7 +330,11 @@ public sealed class TrayIconService : IDisposable
         _window.Dispatcher.Invoke(_exitDashboard);
     }
 
-    private static bool IsDashboardExecutable(string? path) =>
+    /// <summary>
+    /// Only the real dashboard executable may register itself to start with Windows; a
+    /// development run hosted by dotnet.exe must never write that registry value.
+    /// </summary>
+    internal static bool IsDashboardExecutable(string? path) =>
         !string.IsNullOrWhiteSpace(path) &&
         File.Exists(path) &&
         Path.GetFileName(path).StartsWith(

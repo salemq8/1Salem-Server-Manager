@@ -73,8 +73,8 @@
             <Border Margin="0,10,0,0"
                     Padding="16"
                     CornerRadius="8"
-                    Background="#2B2117"
-                    BorderBrush="#6B4E24"
+                    Background="{DynamicResource WarningSoftBrush}"
+                    BorderBrush="{DynamicResource WarningBrush}"
                     BorderThickness="1">
                 <TextBlock x:Name="WarningText"
                            Text="No resource warnings."

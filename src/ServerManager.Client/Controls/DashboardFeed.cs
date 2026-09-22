@@ -25,6 +25,7 @@ public sealed class DashboardFeed : INotifyPropertyChanged, IDisposable
     private const int FailuresBeforeErrorState = 2;
 
     private bool _isConnected;
+    private bool _isAccessDenied;
     private bool _hasLoadedOnce;
     private bool _hasAttempted;
     private int _consecutiveFailures;
@@ -78,6 +79,23 @@ public sealed class DashboardFeed : INotifyPropertyChanged, IDisposable
         private set => SetField(ref _lastErrorMessage, value);
     }
 
+    /// <summary>The most recent failure was the Agent refusing the credential (401/403).</summary>
+    public bool IsAccessDenied
+    {
+        get => _isAccessDenied;
+        private set => SetField(ref _isAccessDenied, value);
+    }
+
+    /// <summary>
+    /// The page cannot show servers because this session is not elevated. The Agent's local
+    /// credential is readable only by Administrators, and the main shortcuts start the app
+    /// without elevation, so "can't reach the background service" would name the wrong cause:
+    /// the service answered. An already-elevated session never gets this message.
+    /// </summary>
+    public bool NeedsElevation => ShowErrorState && IsAccessDenied && !IsElevated.Value;
+
+    private static readonly Lazy<bool> IsElevated = new(ElevationService.IsAdministrator);
+
     public DashboardSnapshot? Snapshot { get; private set; }
 
     public void Start()
@@ -107,6 +125,7 @@ public sealed class DashboardFeed : INotifyPropertyChanged, IDisposable
             Snapshot = snapshot;
             LastSuccessUtc = snapshot.CapturedAtUtc;
             _consecutiveFailures = 0;
+            IsAccessDenied = false;
             IsConnected = true;
             LastErrorMessage = null;
             Merge(snapshot);
@@ -125,6 +144,11 @@ public sealed class DashboardFeed : INotifyPropertyChanged, IDisposable
                 _consecutiveFailures++;
             }
 
+            // The service answered but refused: that is a rights problem, not a lost service.
+            IsAccessDenied = exception is HttpRequestException
+            {
+                StatusCode: System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
+            };
             IsConnected = false;
             LastErrorMessage = LocalizationService.Get("Error.ServiceUnavailable");
             RaiseDerived();
@@ -173,12 +197,24 @@ public sealed class DashboardFeed : INotifyPropertyChanged, IDisposable
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowEmptyState)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowSkeleton)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowErrorState)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCurrentData)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NeedsElevation)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastSuccessUtc)));
     }
 
     public bool HasServers => Servers.Count > 0;
 
-    public bool ShowEmptyState => HasLoadedOnce && IsConnected && Servers.Count == 0;
+    /// <summary>
+    /// Keyed off the error threshold rather than <see cref="IsConnected"/>, so the one-poll
+    /// grace keeps the last trustworthy "no servers yet" instead of flickering it away.
+    /// </summary>
+    public bool ShowEmptyState => HasLoadedOnce && !ShowErrorState && Servers.Count == 0;
+
+    /// <summary>
+    /// Data on screen can be trusted: it has loaded at least once and the connection has not
+    /// been declared lost. A single dropped poll does not change this — that is the grace.
+    /// </summary>
+    public bool HasCurrentData => HasLoadedOnce && !ShowErrorState;
 
     /// <summary>
     /// Nothing trustworthy to show and no way to get it: the person needs a next step, not a
@@ -191,7 +227,13 @@ public sealed class DashboardFeed : INotifyPropertyChanged, IDisposable
     public bool ShowErrorState =>
         HasAttempted && !IsConnected && _consecutiveFailures >= FailuresBeforeErrorState;
 
-    public bool ShowSkeleton => !HasAttempted;
+    /// <summary>
+    /// Still settling: nothing has loaded yet and the failure threshold has not been reached.
+    /// Before, a single failed first poll dropped the skeleton without raising the error
+    /// state, so pages rendered with no data and stated things they could not know, such as
+    /// "no internet address is set up".
+    /// </summary>
+    public bool ShowSkeleton => !HasLoadedOnce && !ShowErrorState;
 
     /// <summary>
     /// When the newest snapshot was captured, or null before the first success. Views use this

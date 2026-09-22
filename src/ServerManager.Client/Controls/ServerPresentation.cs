@@ -229,6 +229,24 @@ public static class ServerPresentation
     }
 
     /// <summary>
+    /// The one server whose remote access Home and Network both describe: a server whose
+    /// tunnel is online, else one that has an internet address configured, else the first.
+    /// Each page used to choose differently, so with two servers they contradicted each other
+    /// and Network could hide a configured address behind a server that had none.
+    /// </summary>
+    public static T? SelectRemoteAccessServer<T>(
+        IEnumerable<T> servers,
+        Func<T, bool> tunnelOnline,
+        Func<T, string?> internetAddress)
+        where T : class
+    {
+        var list = servers.ToList();
+        return list.FirstOrDefault(tunnelOnline)
+            ?? list.FirstOrDefault(server => !string.IsNullOrWhiteSpace(internetAddress(server)))
+            ?? list.FirstOrDefault();
+    }
+
+    /// <summary>
     /// Remote access in one phrase. A server with no internet address was never set up to be
     /// reachable from outside, which is not the same as one whose tunnel is down, and saying
     /// "Offline" for it would invent a problem.

@@ -101,6 +101,8 @@ public partial class ServerSettingsTab : UserControl
         AdvancedExpander.Header = LocalizationService.Get("Advanced.Title");
         CopyDiagnosticsButton.Content = LocalizationService.Get("Action.CopyDiagnostics");
         OpenFilesButton.Content = LocalizationService.Get("Action.OpenFolder");
+        // The Safe File Manager's only entry point; without a label it rendered as a blank button.
+        FileManagerButton.Content = LocalizationService.Get("ServerSettings.Files");
 
         var group = CurrentGroup;
         var isPalworld = _context.Source?.Game == GameType.Palworld;

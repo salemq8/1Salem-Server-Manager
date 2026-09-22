@@ -1327,6 +1327,23 @@ app.MapPost(
         GameServerOrchestrator orchestrator,
         CancellationToken cancellationToken) =>
         Results.Ok(await orchestrator.RestartAsync(serverId, cancellationToken)));
+// Removes the server from the manager only; no file is deleted. The route's guid constraint
+// validates the id, and the orchestrator refuses a server that is running or busy.
+app.MapDelete(
+    "/api/v1/servers/{serverId:guid}",
+    async (
+        Guid serverId,
+        GameServerOrchestrator orchestrator,
+        CancellationToken cancellationToken) =>
+    {
+        var result = await orchestrator.RemoveAsync(serverId, cancellationToken);
+        return result switch
+        {
+            { Success: true } => Results.Ok(result),
+            { ErrorCode: "ServerNotFound" } => Results.NotFound(result),
+            _ => Results.Conflict(result)
+        };
+    });
 app.MapPost(
     "/api/v1/servers/{serverId:guid}/console",
     async (

@@ -929,6 +929,7 @@
                             <ToggleButton x:Name="HeaderToggle"
                                           Cursor="Hand"
                                           Focusable="True"
+                                          FocusVisualStyle="{x:Null}"
                                           HorizontalContentAlignment="Left"
                                           Content="{TemplateBinding Header}"
                                           ContentTemplate="{TemplateBinding HeaderTemplate}"
@@ -941,8 +942,13 @@
                                                               Mode=TwoWay}">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
+                                        <!-- Constant 1px border so the keyboard focus ring
+                                             (the default dotted adorner is near invisible
+                                             on dark surfaces) never shifts the layout. -->
                                         <Border x:Name="HeaderBorder"
                                                 Background="Transparent"
+                                                BorderBrush="Transparent"
+                                                BorderThickness="1"
                                                 CornerRadius="{StaticResource RadiusSm}"
                                                 Padding="2,4">
                                             <StackPanel Orientation="Horizontal">
@@ -964,6 +970,11 @@
                                             </StackPanel>
                                         </Border>
                                         <ControlTemplate.Triggers>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="HeaderBorder"
+                                                        Property="BorderBrush"
+                                                        Value="{DynamicResource FocusBrush}" />
+                                            </Trigger>
                                             <Trigger Property="IsChecked" Value="True">
                                                 <Trigger.EnterActions>
                                                     <BeginStoryboard>

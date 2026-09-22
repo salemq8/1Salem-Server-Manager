@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using UserControl = System.Windows.Controls.UserControl;
 using ComboBox = System.Windows.Controls.ComboBox;
@@ -6,6 +6,7 @@ using ComboBoxItem = System.Windows.Controls.ComboBoxItem;
 using ListBoxItem = System.Windows.Controls.ListBoxItem;
 using SelectionChangedEventArgs = System.Windows.Controls.SelectionChangedEventArgs;
 using ServerManager.Client.Shell;
+using ServerManager.Contracts;
 
 namespace ServerManager.Client.Controls;
 
@@ -119,10 +120,16 @@ public partial class ServersPageControl : UserControl, INotifyPropertyChanged
     }
 
     private void AddPalworld_Click(object sender, RoutedEventArgs e) =>
-        ShowInstaller(new PalworldInstallWindow());
+        OpenInstaller(GameType.Palworld);
 
     private void AddMinecraft_Click(object sender, RoutedEventArgs e) =>
-        ShowInstaller(new MinecraftInstallWindow());
+        OpenInstaller(GameType.Minecraft);
+
+    /// <summary>Also used by the tray's Create item, which already knows the game.</summary>
+    public void OpenInstaller(GameType game) =>
+        ShowInstaller(game == GameType.Minecraft
+            ? new MinecraftInstallWindow()
+            : new PalworldInstallWindow());
 
     private async void ShowInstaller(Window window)
     {
@@ -140,6 +147,9 @@ public partial class ServersPageControl : UserControl, INotifyPropertyChanged
 
     private void PrimaryAction_Click(object sender, RoutedEventArgs e)
     {
+        // The card itself is clickable; without this the click also opens it a second time.
+        e.Handled = true;
+
         if (sender is not FrameworkElement { DataContext: ServerCardViewModel card })
         {
             return;
@@ -157,9 +167,37 @@ public partial class ServersPageControl : UserControl, INotifyPropertyChanged
 
     private void MoreActions_Click(object sender, RoutedEventArgs e)
     {
+        // The card itself is clickable; without this the click also opens it a second time.
+        e.Handled = true;
+
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu } button)
+        {
+            return;
+        }
+
+        foreach (var item in menu.Items.OfType<System.Windows.Controls.MenuItem>())
+        {
+            item.Header = LocalizationService.Get(
+                item.Tag as string == "Delete" ? "Action.DeleteServer" : "Action.Open");
+        }
+
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
+
+    private void MenuOpenServer_Click(object sender, RoutedEventArgs e)
+    {
         if (sender is FrameworkElement { DataContext: ServerCardViewModel card })
         {
             ServerOpenRequested?.Invoke(this, card.ServerId);
+        }
+    }
+
+    private async void MenuDeleteServer_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ServerCardViewModel card })
+        {
+            await ServerDeletion.RequestAsync(Window.GetWindow(this), card);
         }
     }
 }

@@ -281,6 +281,73 @@ public sealed class GameServerOrchestrator(
         }
     }
 
+    /// <summary>
+    /// Removes a server from 1Salem Server Manager. Its files are never touched: the folder,
+    /// worlds and backup archives stay where they are, and only the registration and its
+    /// database rows go. A server that is running, or in the middle of any operation, is
+    /// refused rather than stopped — deleting must never take a live server down.
+    /// </summary>
+    public async Task<OperationResult> RemoveAsync(
+        Guid serverId,
+        CancellationToken cancellationToken = default)
+    {
+        IAsyncDisposable handle;
+        try
+        {
+            // Short wait: a backup, restore or start in flight means "not now", not "queue".
+            handle = await coordinator.AcquireAsync(
+                serverId,
+                "Remove",
+                TimeSpan.FromSeconds(2),
+                cancellationToken);
+        }
+        catch (ServerBusyException exception)
+        {
+            return OperationResult.Fail("ServerBusy", exception.Message);
+        }
+
+        await using (handle)
+        {
+            var server = await gameServerStore.GetAsync(serverId, cancellationToken);
+            if (server is null)
+            {
+                return OperationResult.Fail("ServerNotFound", $"Server {serverId} is not registered.");
+            }
+
+            var snapshot = await processSupervisor.GetSnapshotAsync(serverId, cancellationToken);
+            var processAlive = snapshot is not null && IsLiveProcessSnapshot(snapshot);
+            if (processAlive || server.State is
+                    ServerState.Starting or ServerState.Running or ServerState.Stopping or
+                    ServerState.Restarting or ServerState.Updating or ServerState.BackingUp or
+                    ServerState.Restoring)
+            {
+                return OperationResult.Fail(
+                    "ServerRunning",
+                    "The server is running or busy. Stop it before deleting it.");
+            }
+
+            var removed = await gameServerStore.DeleteRegistrationAsync(serverId, cancellationToken);
+            if (removed)
+            {
+                await settingsStore.SetAsync<ManagedProcessIdentity?>(
+                    ProcessIdentityKey(serverId),
+                    null,
+                    cancellationToken);
+            }
+
+            await auditLogStore.WriteAsync(
+                "LocalAdministrator",
+                "ServerRemoved",
+                serverId.ToString(),
+                removed,
+                $"{server.Game} '{server.Name}' removed from the manager; files kept at {server.RootPath}",
+                cancellationToken);
+            return removed
+                ? OperationResult.Ok()
+                : OperationResult.Fail("ServerNotFound", $"Server {serverId} is not registered.");
+        }
+    }
+
     public Task<OperationResult> SendConsoleAsync(
         Guid serverId,
         string command,

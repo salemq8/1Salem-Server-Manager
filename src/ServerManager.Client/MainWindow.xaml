@@ -210,6 +210,18 @@
                                                     <Setter Property="Fill"
                                                             Value="{DynamicResource SuccessBrush}" />
                                                 </DataTrigger>
+                                                <!-- Neutral while connecting: nothing has failed yet -->
+                                                <DataTrigger Binding="{Binding IsConnecting}"
+                                                             Value="True">
+                                                    <Setter Property="Fill"
+                                                            Value="{DynamicResource TextTertiaryBrush}" />
+                                                </DataTrigger>
+                                                <!-- Caution when only administrator rights are missing -->
+                                                <DataTrigger Binding="{Binding NeedsElevation}"
+                                                             Value="True">
+                                                    <Setter Property="Fill"
+                                                            Value="{DynamicResource WarningBrush}" />
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Ellipse.Style>
@@ -298,8 +310,10 @@
                     <TextBlock x:Name="NotificationTitle"
                                Style="{StaticResource SectionTitleStyle}"
                                FontSize="{StaticResource FontSizeBody}" />
+                    <!-- A live region, so a screen reader announces whether an action worked -->
                     <TextBlock x:Name="NotificationMessage"
                                Style="{StaticResource SecondaryTextStyle}"
+                               AutomationProperties.LiveSetting="Polite"
                                Margin="0,4,0,0" />
                 </StackPanel>
                 <Button Grid.Column="1"

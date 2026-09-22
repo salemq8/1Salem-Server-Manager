@@ -134,7 +134,19 @@
                                                 ToolTip="{Binding DataContext.MoreActionsLabel,
                                                                   RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 AutomationProperties.Name="{Binding DataContext.MoreActionsLabel,
-                                                                                    RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                                                                    RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                            <!-- Headers are set when the menu opens: a context
+                                                 menu is outside the page's visual tree. -->
+                                            <Button.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Tag="Open" Click="MenuOpenServer_Click" />
+                                                    <Separator />
+                                                    <MenuItem Tag="Delete"
+                                                              Foreground="{DynamicResource DangerBrush}"
+                                                              Click="MenuDeleteServer_Click" />
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
 

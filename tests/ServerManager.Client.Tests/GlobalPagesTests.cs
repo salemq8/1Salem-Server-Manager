@@ -181,7 +181,91 @@ public sealed class GlobalPagesTests
             StringComparison.Ordinal);
     }
 
+    // --- updates ------------------------------------------------------------------
+
+    /// <summary>
+    /// The updater is launched with --wait-pid and will not replace the Client while this
+    /// process is alive. Build 5's shell exited from ExitForUpdateRequested; when the update
+    /// control moved into Settings nothing handled the event any more, so Update Now left the
+    /// updater waiting on a Client that never exited. The shell must exit exactly as before.
+    /// </summary>
+    [Fact]
+    public void UpdateNow_ExitsTheClientSoTheUpdaterCanProceed()
+    {
+        var settingsXaml = ReadSource(
+            "src", "ServerManager.Client", "Controls", "SettingsPageControl.xaml");
+        var settings = ReadSource(
+            "src", "ServerManager.Client", "Controls", "SettingsPageControl.xaml.cs");
+        var window = ReadSource("src", "ServerManager.Client", "MainWindow.xaml.cs");
+
+        Assert.Contains(
+            "<controls:ApplicationUpdateControl x:Name=\"UpdateInstaller\"",
+            settingsXaml,
+            StringComparison.Ordinal);
+        Assert.Matches(@"UpdateInstaller\.ExitForUpdateRequested\s*\+=", settings);
+        Assert.Matches(
+            @"SettingsPage\.ExitForUpdateRequested\s*\+=\s*\(_,\s*_\)\s*=>\s*\{\s*" +
+            @"_allowClose\s*=\s*true;\s*System\.Windows\.Application\.Current\.Shutdown\(\);",
+            window);
+    }
+
+    /// <summary>The update control owns a polling timer and an HttpClient, as in Build 5.</summary>
+    [Fact]
+    public void TheEmbeddedUpdateControlIsDisposedWhenTheShellCloses()
+    {
+        var settings = ReadSource(
+            "src", "ServerManager.Client", "Controls", "SettingsPageControl.xaml.cs");
+        var window = ReadSource("src", "ServerManager.Client", "MainWindow.xaml.cs");
+
+        Assert.Matches(@"void Dispose\(\)\s*\{\s*UpdateInstaller\.Dispose\(\);", settings);
+        Assert.Matches(@"void OnClosed\([^)]*\)\s*\{\s*SettingsPage\.Dispose\(\);", window);
+    }
+
+    // --- tray parity --------------------------------------------------------------
+
+    /// <summary>
+    /// Build 5's tray "Create … Server" opened that game's installer. Landing on the server
+    /// list instead made the item look broken.
+    /// </summary>
+    [Fact]
+    public void TrayCreateItem_OpensThatGamesInstaller()
+    {
+        var window = ReadSource("src", "ServerManager.Client", "MainWindow.xaml.cs");
+
+        Assert.Matches(
+            @"void OpenServerCreation\(GameType game\)\s*\{[^}]*ServersPage\.OpenInstaller\(game\);",
+            window);
+    }
+
+    /// <summary>The tray passes Build 5 tab indices: 1 was Console and 2 was Settings.</summary>
+    [Fact]
+    public void TrayConsoleAndSettingsItems_OpenThoseTabsInServerDetail()
+    {
+        var window = ReadSource("src", "ServerManager.Client", "MainWindow.xaml.cs");
+
+        Assert.Contains("1 => \"Console\"", window, StringComparison.Ordinal);
+        Assert.Contains("2 => \"Settings\"", window, StringComparison.Ordinal);
+        Assert.Matches(@"ServerDetailPage\.Show\(serverId,\s*tab\)", window);
+    }
+
     // --- network ------------------------------------------------------------------
+
+    /// <summary>
+    /// LAN pairing was never reachable in a released build, the installed service runs
+    /// without --lan so no other device can connect, and a pairing code grants full remote
+    /// control. It must not be offered from the simple Network page.
+    /// </summary>
+    [Fact]
+    public void NetworkPage_DoesNotOfferLanPairing()
+    {
+        var xaml = ReadSource("src", "ServerManager.Client", "Controls", "NetworkPageControl.xaml");
+        var code = ReadSource(
+            "src", "ServerManager.Client", "Controls", "NetworkPageControl.xaml.cs");
+
+        Assert.DoesNotContain("PairDevice", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("new LanPairingWindow", code, StringComparison.Ordinal);
+        Assert.Contains("new NetworkStatusWindow", code, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void NetworkStringsExistForEveryStateThePageCanShow()
@@ -218,5 +302,18 @@ public sealed class GlobalPagesTests
         {
             CultureInfo.CurrentUICulture = original;
         }
+    }
+
+    private static string ReadSource(params string[] parts)
+    {
+        var root = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName, "Directory.Build.props")))
+        {
+            root = root.Parent;
+        }
+
+        Assert.NotNull(root);
+        return File.ReadAllText(Path.Combine([root!.FullName, .. parts]));
     }
 }
