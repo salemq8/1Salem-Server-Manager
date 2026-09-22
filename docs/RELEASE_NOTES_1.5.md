@@ -1,4 +1,37 @@
-# 1Salem Server Manager 1.5 — Build 5
+# 1Salem Server Manager 1.5 — Build 6
+
+## A simpler, clearer app (Build 6)
+
+The whole app has been redesigned around five places: Home, Servers, Backups, Network and
+Settings. Everything a server can do now lives inside that server, and technical details
+sit behind "Advanced" instead of competing for attention.
+
+- **Home** answers "is everything OK?" at a glance, and one dropped reading no longer
+  flashes a false "can't connect".
+- **Servers** lists your servers and adds new ones. A server's own page has five tabs:
+  Overview, Console, Backups, Content and Settings. The **Start** button on a server card
+  now really starts the server.
+- **Backups** shows every server's protection at once, and never calls the whole set
+  healthy while one server is overdue.
+- **Network** shows the address to share and whether people can reach you. Setting up
+  remote access (installing and linking Playit, the public address, starting it with the
+  PC, stopping it, turning it off) is one click away in **Manage Remote Access**.
+- **Settings** holds language, theme, starting with Windows, updates, troubleshooting tools
+  and About. Updates tell you honestly whether a check worked, and **Update Now** closes
+  the app so the update can finish.
+- Dark and Light themes, English and Arabic (right-to-left), keyboard navigation and screen
+  readers are supported throughout.
+- If 1Salem is opened without administrator rights it now says so and offers **Restart as
+  Administrator**, instead of reporting that it cannot reach its background service.
+
+## Delete Server (Build 6)
+
+- **Delete Server** is in a server's **…** menu, on the Servers page and on the server's own
+  page. It always asks first, naming the server.
+- It removes the server from 1Salem Server Manager only. **No files are deleted**: the
+  server folder, its worlds and its backup files stay on disk, and the confirmation shows
+  where.
+- A running or busy server is never deleted and never stopped for you: stop it first.
 
 ## Update reliability repair (Build 5)
 
