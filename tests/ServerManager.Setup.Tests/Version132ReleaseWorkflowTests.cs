@@ -14,7 +14,7 @@ public sealed partial class Version132ReleaseWorkflowTests
         var props = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
 
         Assert.Equal("1.5", version);
-        Assert.Equal("6", File.ReadAllText(Path.Combine(root, "BUILD_REVISION")).Trim());
+        Assert.Equal("7", File.ReadAllText(Path.Combine(root, "BUILD_REVISION")).Trim());
         Assert.Contains("ReadAllText('$(VersionFile)').Trim()", props, StringComparison.Ordinal);
         Assert.Contains("<Version>$(ProductVersion)</Version>", props, StringComparison.Ordinal);
         Assert.Contains("<AssemblyVersion>$(ProductVersion).0.0</AssemblyVersion>", props, StringComparison.Ordinal);

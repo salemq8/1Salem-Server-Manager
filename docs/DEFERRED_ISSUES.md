@@ -46,6 +46,42 @@ instead.
 - **Future behaviour:** keep the memory safeguards when a profile or priority is applied, or
   say plainly in the UI which safeguards an action will clear before it runs.
 
+## A mods marketplace is not part of the Content Hub
+
+- **Found:** Build 7 scope, 2026-09-23.
+- **Status:** deliberately out of scope. Deferred.
+- **What happens today:** the Content Hub browses plugins, modpacks, data packs and resource
+  packs. Individual mods are not browsable, installable or advertised anywhere in the UI:
+  `ContentKind` has no Mods member and the type selector has no Mods entry.
+- **Future behaviour:** if mods are added, they need their own compatibility rules (loader and
+  loader version per file, client-vs-server sides, and dependency resolution across a mod set
+  rather than one file at a time) before anything is shown. Adding them to the existing plugin
+  flow would offer files that cannot load.
+
+## Palworld is still one server per machine
+
+- **Found:** Build 7 multi-server work, 2026-09-23.
+- **Status:** deliberate for now. Deferred.
+- **What happens today:** the database no longer treats a game type as an identity, so nothing
+  in storage stops a second Palworld server. The Palworld paths above it were not changed:
+  the resources endpoint, the management cache and the Palworld pages still resolve "the"
+  Palworld server as the first one registered.
+- **Future behaviour:** give Palworld the same treatment Minecraft now has — every lookup by
+  `ServerId`, and port checks across all registered servers — before a second Palworld server
+  is offered anywhere in the UI.
+
+## A modpack that needs a different Minecraft version is detected, not migrated
+
+- **Found:** Build 7 modpack lifecycle work, 2026-09-23.
+- **Status:** deliberate. Deferred.
+- **What happens today:** when a newer release of an installed modpack targets a different
+  Minecraft version or a different loader, the Installed row says "Requires server migration",
+  names the version, and the update action is disabled. Nothing is applied automatically.
+- **Future behaviour:** an explicit, reviewed migration flow — build the new server from the
+  new pack, show what would carry over (world, player data, server properties) and what would
+  not, and let the person decide, with the old server left intact until they say otherwise.
+  Applying such a release in place would break the world it was not built for.
+
 ## Playit still maps one tunnel per game, not per server
 
 - **Found:** Build 7 multi-server work, 2026-09-23.

@@ -1,4 +1,45 @@
-# 1Salem Server Manager 1.5 — Build 6
+# 1Salem Server Manager 1.5 — Build 7
+
+## Content Hub (Build 7)
+
+A server's **Content** tab now installs add-ons from Modrinth and Hangar — the sites'
+own APIs, with no scraping and nothing hosted by this app.
+
+- **Plugins** for Paper, Purpur, Spigot, Bukkit and Folia servers. Only releases that fit
+  your server's Minecraft version and platform are shown, and every download is checked
+  against the provider's own hash before it is installed.
+- **Data packs** go into the world the server actually runs, taken from `level-name`, and
+  ask for a reload rather than a restart.
+- **Resource packs** are downloaded and kept until you choose **Send to players**, which
+  points your server at the provider's own address with its hash. **Stop sending** clears it
+  again. Nothing is hosted here and no ports are opened.
+- **Modpacks** build a **new** server, never changing an existing one. You see what the pack
+  would do first — the Minecraft version, the loader, how many files and how large — and a
+  pack that needs an installer this app cannot run is refused by name rather than half-built.
+  A build that fails leaves nothing behind.
+- **Installed** lists what is on each server with where it came from, and **Updates** offers
+  a newer release only when it actually fits the server. Updating keeps the previous file so
+  it can be rolled back, and removing an add-on keeps its data folder.
+- Everything is in English and Arabic, works in Dark and Light, and is reachable by keyboard
+  and screen reader.
+
+Mods are not included in this release.
+
+## Several Minecraft servers on one PC (Build 7)
+
+- More than one Minecraft server can now be set up on the same computer. Each has its own
+  page, backups, schedules, content and settings, and appears on its own card on Home and on
+  the Servers page.
+- Existing servers, backups, schedules and installed add-ons are carried over exactly as they
+  are. Nothing is renamed, re-pointed or recreated.
+- Two servers can no longer be set up for the same port by accident: the app says which
+  server already uses it and offers a free one.
+- A server built from a modpack tracks the pack it came from. When a newer release fits the
+  same Minecraft version and loader, it is offered as an update. When it needs a different
+  Minecraft version or loader, it says **Requires server migration** and is not applied,
+  because that would break the world the server already has.
+- Remote access still provides one tunnel per game. A second Minecraft server is reachable on
+  your network, but not through the managed tunnel yet.
 
 ## A simpler, clearer app (Build 6)
 
