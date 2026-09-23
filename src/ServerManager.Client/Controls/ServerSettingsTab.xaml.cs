@@ -321,12 +321,15 @@ public partial class ServerSettingsTab : UserControl
             return;
         }
 
+        // The legacy editors are opened for the server that is on screen, by id: with several
+        // servers of one game registered, "the Minecraft server" is no longer an address.
         LegacyServerEditorWindow.Open(
             Window.GetWindow(this),
             source.Game,
             tabIndex,
             titleKey,
-            "ServerSettings.LegacyIntro");
+            "ServerSettings.LegacyIntro",
+            source.ServerId);
     }
 
     private void FileManager_Click(object sender, RoutedEventArgs e) =>

@@ -1,0 +1,110 @@
+<Window x:Class="ServerManager.Client.ModpackInstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="640"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource SurfaceBrush}">
+    <!--
+        A modpack decides the Minecraft version, the loader and every mod, so it always builds
+        a NEW server. This window shows exactly what would be created before anything is
+        downloaded, and never offers to change an existing server.
+    -->
+    <StackPanel Margin="{StaticResource PagePadding}">
+        <TextBlock x:Name="HeadingText" Style="{StaticResource PageTitleStyle}" TextWrapping="Wrap" />
+        <TextBlock x:Name="SubheadingText"
+                   Style="{StaticResource SecondaryTextStyle}"
+                   Margin="0,6,0,0"
+                   TextWrapping="Wrap" />
+
+        <Border Style="{StaticResource SectionCardStyle}" Padding="16" Margin="0,16,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock x:Name="MinecraftLabel" Grid.Row="0" Grid.Column="0"
+                           Style="{StaticResource CaptionTextStyle}" Margin="0,0,16,6" />
+                <TextBlock x:Name="MinecraftValue" Grid.Row="0" Grid.Column="1"
+                           Style="{StaticResource BodyTextStyle}" Margin="0,0,0,6" />
+
+                <TextBlock x:Name="LoaderLabel" Grid.Row="1" Grid.Column="0"
+                           Style="{StaticResource CaptionTextStyle}" Margin="0,0,16,6" />
+                <TextBlock x:Name="LoaderValue" Grid.Row="1" Grid.Column="1"
+                           Style="{StaticResource BodyTextStyle}" Margin="0,0,0,6" />
+
+                <TextBlock x:Name="PackVersionLabel" Grid.Row="2" Grid.Column="0"
+                           Style="{StaticResource CaptionTextStyle}" Margin="0,0,16,6" />
+                <TextBlock x:Name="PackVersionValue" Grid.Row="2" Grid.Column="1"
+                           Style="{StaticResource BodyTextStyle}" Margin="0,0,0,6" />
+
+                <TextBlock x:Name="SizeLabel" Grid.Row="3" Grid.Column="0"
+                           Style="{StaticResource CaptionTextStyle}" Margin="0,0,16,0" />
+                <TextBlock x:Name="SizeValue" Grid.Row="3" Grid.Column="1"
+                           Style="{StaticResource BodyTextStyle}" />
+            </Grid>
+        </Border>
+
+        <Border x:Name="BlockedPanel"
+                Style="{StaticResource SectionCardStyle}"
+                Padding="16"
+                Margin="0,12,0,0"
+                Visibility="Collapsed"
+                Background="{DynamicResource DangerSurfaceBrush}">
+            <TextBlock x:Name="BlockedText" Style="{StaticResource BodyTextStyle}" TextWrapping="Wrap" />
+        </Border>
+
+        <StackPanel x:Name="FormPanel" Margin="0,16,0,0">
+            <TextBlock x:Name="NameLabel" Style="{StaticResource CaptionTextStyle}" />
+            <TextBox x:Name="NameBox" Margin="0,6,0,0" Padding="10,7" />
+
+            <TextBlock x:Name="LocationLabel" Style="{StaticResource CaptionTextStyle}" Margin="0,14,0,0" />
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="LocationBox" Grid.Column="0" Padding="10,7" />
+                <Button x:Name="BrowseButton"
+                        Grid.Column="1"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="8,0,0,0"
+                        Click="Browse_Click" />
+            </Grid>
+
+            <TextBlock x:Name="PortLabel" Style="{StaticResource CaptionTextStyle}" Margin="0,14,0,0" />
+            <TextBox x:Name="PortBox" Margin="0,6,0,0" Padding="10,7" MaxLength="5" Width="120"
+                     HorizontalAlignment="Left" />
+
+            <CheckBox x:Name="EulaBox" Margin="0,16,0,0" />
+        </StackPanel>
+
+        <TextBlock x:Name="ErrorText"
+                   Style="{StaticResource BodyTextStyle}"
+                   Foreground="{DynamicResource DangerBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,12,0,0"
+                   Visibility="Collapsed" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="CancelButton"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    IsCancel="True"
+                    Click="Cancel_Click" />
+            <Button x:Name="CreateButton"
+                    Style="{StaticResource PrimaryActionStyle}"
+                    Margin="8,0,0,0"
+                    MinWidth="150"
+                    Click="Create_Click" />
+        </StackPanel>
+    </StackPanel>
+</Window>

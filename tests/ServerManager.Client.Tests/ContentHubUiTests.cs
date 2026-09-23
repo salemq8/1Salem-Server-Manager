@@ -177,6 +177,76 @@ public sealed class ContentHubUiTests : IDisposable
     }
 
     [Fact]
+    public void EveryContentTypeHasItsOwnWordsInBothLanguages()
+    {
+        foreach (var language in new[] { "en-US", "ar-SA" })
+        {
+            LocalizationService.Apply(language);
+            var labels = Enum.GetValues<ContentKind>().Select(ContentLabels.Kind).ToArray();
+
+            Assert.All(labels, label => Assert.False(string.IsNullOrWhiteSpace(label)));
+            Assert.DoesNotContain(labels, label => label.Contains("Content.", StringComparison.Ordinal));
+
+            // A data pack must never be shown as a plugin.
+            Assert.Equal(labels.Length, labels.Distinct(StringComparer.Ordinal).Count());
+        }
+    }
+
+    [Fact]
+    public void ARowSaysWhichTypeItIs()
+    {
+        LocalizationService.Apply("en-US");
+
+        Assert.Equal(
+            "Data Pack",
+            new InstalledItemViewModel(
+                Installed(InstalledContentState.ReloadRequired) with { Kind = ContentKind.DataPack })
+                .KindLabel);
+        Assert.Equal("Plugin", new InstalledItemViewModel(Installed(InstalledContentState.UpToDate)).KindLabel);
+    }
+
+    [Fact]
+    public void AResourcePackIsOfferedToPlayersOnlyWhenTheProviderHostsIt()
+    {
+        LocalizationService.Apply("en-US");
+        var hosted = Installed(InstalledContentState.NotDistributed) with
+        {
+            Kind = ContentKind.ResourcePack,
+            DownloadUrl = new Uri("https://cdn.modrinth.com/data/x/faithful.zip")
+        };
+
+        Assert.True(new InstalledItemViewModel(hosted).CanDistribute);
+
+        // Nothing to point clients at, so the option is not offered at all.
+        Assert.False(new InstalledItemViewModel(hosted with { DownloadUrl = null }).CanDistribute);
+
+        // Already being sent: the option becomes "stop sending".
+        var sending = new InstalledItemViewModel(hosted with
+        {
+            IsDistributed = true,
+            State = InstalledContentState.Distributed
+        });
+        Assert.False(sending.CanDistribute);
+        Assert.True(sending.CanWithdraw);
+        Assert.Equal("Sent to players", sending.StatusLabel);
+    }
+
+    [Fact]
+    public void ADataPackAsksForAReloadAndNotARestart()
+    {
+        LocalizationService.Apply("en-US");
+
+        Assert.Equal(
+            "Reload required",
+            new InstalledItemViewModel(
+                Installed(InstalledContentState.ReloadRequired) with { Kind = ContentKind.DataPack })
+                .StatusLabel);
+        Assert.Equal(
+            "Made for another version",
+            new InstalledItemViewModel(Installed(InstalledContentState.IncompatibleWithServer)).StatusLabel);
+    }
+
+    [Fact]
     public void UpdateIsOfferedOnlyWhenOneIsActuallyAvailable()
     {
         LocalizationService.Apply("en-US");
@@ -184,9 +254,55 @@ public sealed class ContentHubUiTests : IDisposable
         Assert.True(new InstalledItemViewModel(Installed(InstalledContentState.UpdateAvailable)).CanUpdate);
         Assert.False(new InstalledItemViewModel(Installed(InstalledContentState.UpToDate)).CanUpdate);
 
-        // A file that is gone offers neither an update nor a removal.
+        // A file that is gone offers neither an update nor a removal, but the button stays on
+        // screen, greyed, because for a plugin removing is a thing that exists.
         var missing = new InstalledItemViewModel(Installed(InstalledContentState.MissingFile));
         Assert.False(missing.CanUpdate);
         Assert.False(missing.CanUninstall);
+        Assert.True(missing.ShowUninstall);
+    }
+
+    [Fact]
+    public void AModpackIsTheServerItBuiltAndIsNotRemovedFromHere()
+    {
+        LocalizationService.Apply("en-US");
+        var pack = Installed(InstalledContentState.UpToDate) with
+        {
+            Kind = ContentKind.Modpack,
+            ProjectName = "Fabulously Optimized",
+            InstalledVersion = "14.0.0",
+            Loader = "fabric",
+            LoaderVersion = "0.19.5",
+            MinecraftVersionAtInstall = "26.2"
+        };
+        var view = new InstalledItemViewModel(pack);
+
+        // Removing or rolling back a modpack would mean the server itself, which is not done
+        // from a content list, so neither is offered.
+        Assert.False(view.CanUninstall);
+        Assert.False(view.ShowUninstall);
+        Assert.False(view.CanRollback);
+        Assert.Equal("Modpack", view.KindLabel);
+        Assert.Equal("Minecraft 26.2 · Fabric 0.19.5", view.EnvironmentLine);
+
+        // A newer release for the same environment is an ordinary update.
+        var updatable = new InstalledItemViewModel(pack with
+        {
+            State = InstalledContentState.UpdateAvailable,
+            AvailableVersionNumber = "14.1.0"
+        });
+        Assert.True(updatable.CanUpdate);
+
+        // One that changes the Minecraft version or loader is not offered as an update at all,
+        // and says why instead.
+        var migration = new InstalledItemViewModel(pack with
+        {
+            State = InstalledContentState.RequiresServerMigration,
+            AvailableVersionNumber = "15.0.0"
+        });
+        Assert.False(migration.CanUpdate);
+        Assert.Equal("Requires server migration", migration.StatusLabel);
+        Assert.Contains("15.0.0", migration.UpdateLine);
+        Assert.Contains("cannot be applied as an update", migration.UpdateLine);
     }
 }

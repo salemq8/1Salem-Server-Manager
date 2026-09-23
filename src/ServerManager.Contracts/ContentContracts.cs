@@ -66,7 +66,25 @@ public enum InstalledContentState
     InstalledManually = 4,
     UnknownVersion = 5,
     MissingFile = 6,
-    ModifiedLocally = 7
+    ModifiedLocally = 7,
+
+    /// <summary>A data pack the world has not picked up yet: /reload or a restart.</summary>
+    ReloadRequired = 8,
+
+    /// <summary>Installed once, but the server has since moved to a version it does not fit.</summary>
+    IncompatibleWithServer = 9,
+
+    /// <summary>Downloaded and kept, but not being distributed to anyone yet.</summary>
+    NotDistributed = 10,
+
+    /// <summary>The server is pointing clients at this pack.</summary>
+    Distributed = 11,
+
+    /// <summary>
+    /// A newer release exists, but taking it would change the Minecraft version or the mod
+    /// loader. That is a server migration, not an update, so no update action is offered.
+    /// </summary>
+    RequiresServerMigration = 12
 }
 
 /// <summary>
@@ -206,7 +224,15 @@ public sealed record InstalledContent(
     string? AvailableVersionId = null,
     string? AvailableVersionNumber = null,
     long SizeBytes = 0,
-    bool ManagedByManager = false);
+    bool ManagedByManager = false,
+    Uri? DownloadUrl = null,
+    string? ProviderSha1 = null,
+    string? RelativePath = null,
+    bool IsDistributed = false,
+
+    /// <summary>For a modpack: the mod loader the server was built with, and its version.</summary>
+    string? Loader = null,
+    string? LoaderVersion = null);
 
 /// <summary>
 /// The digests of a local file, used to ask a provider what it is. Modrinth looks up SHA-1
@@ -271,6 +297,56 @@ public sealed record ContentInstallProgress(
     string? FileName = null,
     long? BytesReceived = null,
     long? TotalBytes = null);
+
+/// <summary>
+/// What a modpack would do, worked out from its index before anything is written. A modpack
+/// changes the Minecraft version, the loader and the whole mod set, so it is only ever
+/// installed into a new server and the person sees this first.
+/// </summary>
+public sealed record ModpackPlan(
+    ContentProviderId Provider,
+    string ProjectId,
+    string ProjectName,
+    string VersionId,
+    string VersionNumber,
+    string? MinecraftVersion,
+    string? Loader,
+    string? LoaderVersion,
+    int ServerFileCount,
+    long DownloadBytes,
+    bool HasServerOverrides,
+    IReadOnlyList<string> Warnings,
+    bool Blocked = false,
+    string? BlockedReason = null);
+
+/// <summary>Creating a new server from a modpack. The destination must not already exist.</summary>
+public sealed record ModpackInstallRequest(
+    ContentProviderId Provider,
+    string ProjectId,
+    string VersionId,
+    string ServerName,
+    string DestinationPath,
+    int Port = 25565,
+    bool EulaAccepted = false);
+
+public sealed record ModpackInstallResult(
+    bool Success,
+    string? ErrorCode = null,
+    string? Message = null,
+    Guid? ServerId = null,
+    string? RootPath = null,
+    string? MinecraftVersion = null,
+    string? Loader = null,
+    int FilesInstalled = 0);
+
+/// <summary>
+/// Pointing a server's clients at a resource pack. Only a provider-hosted HTTPS URL can be
+/// used: the manager does not host files or open ports.
+/// </summary>
+public sealed record ResourcePackDistributionRequest(
+    string FileName,
+    bool Require = false,
+    string? Prompt = null);
 
 public sealed record ContentOperationResult(
     bool Success,

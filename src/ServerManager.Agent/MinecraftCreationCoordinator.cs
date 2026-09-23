@@ -56,6 +56,17 @@ public sealed class MinecraftCreationCoordinator(
             warnings.Add(port.Message);
         }
 
+        // With several servers on one machine, the port has to be checked against the ones
+        // already managed here, not only against what happens to be listening right now.
+        var registered = await gameServerStore.ListAsync(cancellationToken);
+        if (ServerPortAllocationPolicy.FindConflict(registered, request.Port) is { } conflict)
+        {
+            var suggestion = ServerPortAllocationPolicy.SuggestPort(registered, request.Port);
+            warnings.Add(
+                $"Port {conflict.Port} is already used by '{conflict.ServerName}'." +
+                (suggestion is { } free ? $" Port {free} is free." : string.Empty));
+        }
+
         if (java is null || java.MajorVersion < version.RequiredJavaMajor)
         {
             warnings.Add(
@@ -148,6 +159,18 @@ public sealed class MinecraftCreationCoordinator(
             if (!plan.PortAvailable)
             {
                 throw new IOException($"TCP port {request.Port} is already in use.");
+            }
+
+            // Another managed server may be configured for this port even while it is stopped,
+            // which a live port test cannot see. Creating the second one anyway would leave
+            // two servers that can never run together.
+            var registered = await gameServerStore.ListAsync(cancellationToken);
+            if (ServerPortAllocationPolicy.FindConflict(registered, request.Port) is { } conflict)
+            {
+                var suggestion = ServerPortAllocationPolicy.SuggestPort(registered, request.Port);
+                throw new IOException(
+                    $"Port {conflict.Port} is already set up for '{conflict.ServerName}'." +
+                    (suggestion is { } free ? $" Try port {free}." : string.Empty));
             }
 
             var memory = MinecraftMemoryPolicy.Evaluate(

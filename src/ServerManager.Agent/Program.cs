@@ -174,6 +174,15 @@ builder.Services.AddSingleton<ContentProfileService>();
 builder.Services.AddSingleton<ContentCatalogService>();
 builder.Services.AddSingleton<InstalledContentService>();
 builder.Services.AddSingleton<PluginInstallService>();
+builder.Services.AddSingleton<PackInstallService>();
+builder.Services.AddHttpClient<ModpackService>(client =>
+    {
+        // Pack files come from the provider's allowed hosts and from Fabric's metadata site;
+        // redirects are checked by hand in the download path.
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ContentClientDefaults.UserAgent);
+        client.Timeout = ContentClientDefaults.DownloadTimeout;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = true });
 
 var app = builder.Build();
 app.UseMiddleware<ApiExceptionMiddleware>();
@@ -643,17 +652,19 @@ app.MapGet(
             .ToDictionary(snapshot => snapshot.ServerId);
         var palworld = servers.FirstOrDefault(server =>
             server.Game == GameType.Palworld);
-        var minecraft = servers.FirstOrDefault(server =>
-            server.Game == GameType.Minecraft);
+        var minecraftServers = servers
+            .Where(server => server.Game == GameType.Minecraft)
+            .ToArray();
         ProcessSnapshot? palworldProcess = null;
         if (palworld is not null)
         {
             processes.TryGetValue(palworld.Id, out palworldProcess);
         }
 
-        var minecraftConfigured = minecraft?.MaximumMemoryMb is { } maximum
-            ? maximum * 1024L * 1024
-            : 0;
+        // Several Minecraft servers may be registered, so the memory they are configured for
+        // is the total across them rather than whichever one happens to come first.
+        var minecraftConfigured = minecraftServers
+            .Sum(server => server.MaximumMemoryMb is { } maximum ? maximum * 1024L * 1024 : 0);
         var policy = governor.ActivePolicy;
         var registeredIds = servers.Select(server => server.Id).ToHashSet();
         var activeProcesses = processes.Values.Where(process =>
@@ -667,10 +678,10 @@ app.MapGet(
                 State: ServerState.Running,
                 ExitCode: null
             };
-        var minecraftRunning = minecraft is not null &&
-            processes.TryGetValue(minecraft.Id, out var minecraftProcess) &&
+        var minecraftRunning = minecraftServers.Any(server =>
+            processes.TryGetValue(server.Id, out var minecraftProcess) &&
             minecraftProcess.State == ServerState.Running &&
-            minecraftProcess.ExitCode is null;
+            minecraftProcess.ExitCode is null);
         var recommendations = new List<string>
         {
             "Palworld is a native application; this policy does not reserve RAM like Minecraft Xms/Xmx.",
@@ -715,7 +726,7 @@ app.MapGet(
             system.Warnings,
             policy.AllowUnsafeStartupOverride,
             palworld is not null,
-            minecraft is not null,
+            minecraftServers.Length > 0,
             palworldRunning,
             minecraftRunning,
             activeProcesses.Sum(process => process.WorkingSetBytes),

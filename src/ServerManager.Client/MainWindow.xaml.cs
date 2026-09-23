@@ -178,23 +178,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The tray still speaks in Build 5 tab indices (1 = Console, 2 = Settings). A game no
-    /// longer has a page of its own, so this opens that game's server in Server Detail on the
-    /// matching tab, falling back to the list when the server is not known yet.
+    /// Opens one named server in Server Detail. The tray still speaks in Build 5 tab indices
+    /// (1 = Console, 2 = Settings). Several servers of the same game can be registered, so
+    /// everything with a particular server in mind asks for it by id rather than by game.
     /// </summary>
-    public void ShowServer(GameType game, int tabIndex = 0)
+    public void ShowServer(Guid serverId, int tabIndex = 0)
     {
         ShowDashboard();
-        var server = Controls.DashboardFeed.Shared.Servers.FirstOrDefault(
-            card => card.Game == game);
-        if (server is null)
-        {
-            ShowSection("Servers");
-            return;
-        }
-
         OpenServer(
-            server.ServerId,
+            serverId,
             tabIndex switch
             {
                 1 => "Console",

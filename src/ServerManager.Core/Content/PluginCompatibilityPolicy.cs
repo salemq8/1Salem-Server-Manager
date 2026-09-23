@@ -14,20 +14,33 @@ public static class PluginCompatibilityPolicy
     /// Minecraft version is among its game versions, and the provider hosts the file itself.
     /// Both providers list exact version strings, so this is a membership test, not a range.
     /// </summary>
-    public static bool IsCompatible(ContentVersion version, ServerContentProfile profile)
+    public static bool IsCompatible(
+        ContentVersion version,
+        ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin)
     {
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(profile);
-        if (!profile.SupportsPlugins || version.File is null)
+        if (version.File is null)
         {
             return false;
         }
 
-        return MatchesPlatform(version, profile.Platform) &&
+        // Plugins need a plugin-capable platform; data and resource packs are vanilla
+        // features, so they only need a known Minecraft version.
+        if (kind == ContentKind.Plugin && !profile.SupportsPlugins)
+        {
+            return false;
+        }
+
+        return MatchesPlatform(version, profile.Platform, kind) &&
                MatchesGameVersion(version, profile.MinecraftVersion);
     }
 
-    public static bool MatchesPlatform(ContentVersion version, ServerPlatform platform)
+    public static bool MatchesPlatform(
+        ContentVersion version,
+        ServerPlatform platform,
+        ContentKind kind = ContentKind.Plugin)
     {
         ArgumentNullException.ThrowIfNull(version);
         if (version.Platforms.Count == 0)
@@ -38,7 +51,7 @@ public static class PluginCompatibilityPolicy
 
         var accepted = version.Provider == ContentProviderId.Hangar
             ? Single(PluginPlatformPolicy.HangarPlatform(platform))
-            : PluginPlatformPolicy.ModrinthLoaders(platform);
+            : ContentTypePolicy.ModrinthLoaders(kind, platform);
         return accepted.Any(name => version.Platforms.Contains(name, StringComparer.OrdinalIgnoreCase));
     }
 
@@ -64,12 +77,13 @@ public static class PluginCompatibilityPolicy
     public static ContentVersion? SelectBest(
         IEnumerable<ContentVersion> versions,
         ServerContentProfile profile,
-        bool allowPrerelease = false)
+        bool allowPrerelease = false,
+        ContentKind kind = ContentKind.Plugin)
     {
         ArgumentNullException.ThrowIfNull(versions);
         ArgumentNullException.ThrowIfNull(profile);
         var compatible = versions
-            .Where(version => IsCompatible(version, profile))
+            .Where(version => IsCompatible(version, profile, kind))
             .Where(version => allowPrerelease || version.Channel == ContentReleaseChannel.Release)
             .ToArray();
         if (compatible.Length == 0)

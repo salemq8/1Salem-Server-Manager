@@ -18,6 +18,13 @@ public interface IContentProvider
     /// </summary>
     bool CanServe(ServerContentProfile profile);
 
+    /// <summary>
+    /// Whether this provider can serve this content type to this server. Hangar has plugins
+    /// only, so anything else is answered here rather than by returning empty results.
+    /// </summary>
+    bool CanServe(ServerContentProfile profile, ContentKind kind) =>
+        kind == ContentKind.Plugin && CanServe(profile);
+
     Task<ContentSearchResult> SearchAsync(
         ContentSearchRequest request,
         ServerContentProfile profile,
@@ -26,11 +33,13 @@ public interface IContentProvider
     Task<ContentProject?> GetProjectAsync(
         string projectId,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ContentVersion>> GetVersionsAsync(
         string projectId,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default);
 
     /// <summary>The newest release that fits this exact server, or null when none does.</summary>
@@ -38,6 +47,7 @@ public interface IContentProvider
         string projectId,
         ServerContentProfile profile,
         bool allowPrerelease = false,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -7,7 +7,7 @@ public sealed class SqliteApplicationDatabase(
     SqliteStorageOptions options,
     SqliteConnectionFactory connectionFactory) : IApplicationDatabase
 {
-    private const int SchemaVersion = 4;
+    private const int SchemaVersion = 6;
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -38,6 +38,18 @@ public sealed class SqliteApplicationDatabase(
         if (existingVersion < 3)
         {
             command.CommandText = MigrationV3Sql;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (existingVersion < 5)
+        {
+            command.CommandText = MigrationV5Sql;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (existingVersion < 6)
+        {
+            command.CommandText = MigrationV6Sql;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -103,8 +115,10 @@ public sealed class SqliteApplicationDatabase(
             UpdatedAtUtc TEXT NOT NULL
         );
 
-        CREATE UNIQUE INDEX IF NOT EXISTS IX_GameServers_GameType
-            ON GameServers (GameType);
+        -- A server is identified by its Id, never by which game it runs: several Minecraft
+        -- servers can be managed side by side. This index is for lookups only.
+        CREATE INDEX IF NOT EXISTS IX_GameServers_Game
+            ON GameServers (GameType, Name);
 
         CREATE TABLE IF NOT EXISTS ServerRuntimeSettings (
             ServerId TEXT NOT NULL PRIMARY KEY,
@@ -226,5 +240,24 @@ public sealed class SqliteApplicationDatabase(
         ALTER TABLE Backups ADD COLUMN DisplayName TEXT NULL;
         ALTER TABLE Backups ADD COLUMN Notes TEXT NULL;
         ALTER TABLE Backups ADD COLUMN IsScheduled INTEGER NOT NULL DEFAULT 0;
+        """;
+
+    // Content Hub phase 2: a resource pack is distributed by pointing clients at the
+    // provider's own URL, so the URL and its SHA-1 have to be remembered. RelativePath keeps
+    // packs that do not live in one flat folder, such as a world's datapacks directory.
+    // Build 7: several Minecraft servers may be managed at once. Only the old uniqueness rule
+    // is dropped; no row is rewritten, so every server keeps its Id and everything attached to
+    // it (backups, schedules, installed content) stays attached.
+    private const string MigrationV6Sql = """
+        DROP INDEX IF EXISTS IX_GameServers_GameType;
+        CREATE INDEX IF NOT EXISTS IX_GameServers_Game ON GameServers (GameType, Name);
+        ALTER TABLE InstalledContent ADD COLUMN Loader TEXT NULL;
+        ALTER TABLE InstalledContent ADD COLUMN LoaderVersion TEXT NULL;
+        """;
+
+    private const string MigrationV5Sql = """
+        ALTER TABLE InstalledContent ADD COLUMN DownloadUrl TEXT NULL;
+        ALTER TABLE InstalledContent ADD COLUMN ProviderSha1 TEXT NULL;
+        ALTER TABLE InstalledContent ADD COLUMN RelativePath TEXT NULL;
         """;
 }

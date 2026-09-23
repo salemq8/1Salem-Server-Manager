@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ServerManager.Contracts;
 using ServerManager.Core.Content;
 
@@ -19,6 +19,13 @@ public sealed class HangarContentProvider(HttpClient client) : IContentProvider
         profile is { SupportsPlugins: true } &&
         PluginPlatformPolicy.HangarPlatform(profile.Platform) is not null;
 
+    /// <summary>
+    /// Hangar is a plugin repository. It has no modpacks, data packs or resource packs, so it
+    /// answers no for every other content type rather than returning an empty list.
+    /// </summary>
+    public bool CanServe(ServerContentProfile profile, ContentKind kind) =>
+        kind == ContentKind.Plugin && CanServe(profile);
+
     public async Task<ContentSearchResult> SearchAsync(
         ContentSearchRequest request,
         ServerContentProfile profile,
@@ -27,7 +34,7 @@ public sealed class HangarContentProvider(HttpClient client) : IContentProvider
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(profile);
         var platform = PluginPlatformPolicy.HangarPlatform(profile.Platform);
-        if (platform is null)
+        if (platform is null || request.Kind != ContentKind.Plugin)
         {
             return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
         }
@@ -80,6 +87,7 @@ public sealed class HangarContentProvider(HttpClient client) : IContentProvider
     public async Task<ContentProject?> GetProjectAsync(
         string projectId,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
         using var document = await ContentHttp.GetJsonAsync(
@@ -93,11 +101,12 @@ public sealed class HangarContentProvider(HttpClient client) : IContentProvider
     public async Task<IReadOnlyList<ContentVersion>> GetVersionsAsync(
         string projectId,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
         var platform = PluginPlatformPolicy.HangarPlatform(profile.Platform);
-        if (platform is null)
+        if (platform is null || kind != ContentKind.Plugin)
         {
             return [];
         }
@@ -133,10 +142,11 @@ public sealed class HangarContentProvider(HttpClient client) : IContentProvider
         string projectId,
         ServerContentProfile profile,
         bool allowPrerelease = false,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
-        var versions = await GetVersionsAsync(projectId, profile, cancellationToken);
-        return PluginCompatibilityPolicy.SelectBest(versions, profile, allowPrerelease);
+        var versions = await GetVersionsAsync(projectId, profile, kind, cancellationToken);
+        return PluginCompatibilityPolicy.SelectBest(versions, profile, allowPrerelease, kind);
     }
 
     public async Task<ContentIdentification?> IdentifyAsync(
@@ -377,3 +387,4 @@ public sealed class HangarContentProvider(HttpClient client) : IContentProvider
             _ => ContentReleaseChannel.Release
         };
 }
+

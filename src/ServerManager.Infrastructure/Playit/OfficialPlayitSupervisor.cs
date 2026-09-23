@@ -45,16 +45,40 @@ public sealed class OfficialPlayitSupervisor : IDisposable
         _logger = logger;
     }
 
+    /// <summary>
+    /// The port a tunnel should target: the server it was bound to if one was chosen, and
+    /// otherwise the first server of that game, which is how single-server installations have
+    /// always behaved.
+    /// </summary>
+    private static int? PortFor(
+        IReadOnlyList<GameServerDefinition> servers,
+        GameType game,
+        Guid? boundServerId)
+    {
+        if (boundServerId is { } id)
+        {
+            var bound = servers.FirstOrDefault(server => server.Id == id);
+            if (bound is not null)
+            {
+                return bound.Port;
+            }
+        }
+
+        return servers.FirstOrDefault(server => server.Game == game)?.Port;
+    }
+
     public async Task<PlayitStatusResponse> GetStatusAsync(
         CancellationToken cancellationToken = default)
     {
         var installation = _locator.Detect();
         var settings = await LoadSettingsAsync(cancellationToken);
         var servers = await _serverStore.ListAsync(cancellationToken);
-        var minecraftPort = servers.FirstOrDefault(item => item.Game == GameType.Minecraft)?.Port
-            ?? 25565;
-        var palworldPort = servers.FirstOrDefault(item => item.Game == GameType.Palworld)?.Port
-            ?? 8211;
+
+        // Several Minecraft servers can be registered, so remote access remembers which one
+        // its tunnel points at. Until a server is chosen the first one is used, which is what
+        // a single-server installation has always done, so existing tunnels do not move.
+        var minecraftPort = PortFor(servers, GameType.Minecraft, settings.MinecraftServerId) ?? 25565;
+        var palworldPort = PortFor(servers, GameType.Palworld, settings.PalworldServerId) ?? 8211;
         var managedId = _process is { HasExited: false } ? _process.Id : (int?)null;
         var externalIds = installation.ExecutablePath is null
             ? []
@@ -672,7 +696,13 @@ public sealed class OfficialPlayitSupervisor : IDisposable
         bool LinkedPreviously,
         DateTimeOffset? LastConnectionAtUtc,
         int? LastKnownProcessId = null,
-        DateTimeOffset? LastKnownProcessStartTimeUtc = null)
+        DateTimeOffset? LastKnownProcessStartTimeUtc = null,
+
+        // Which server each tunnel belongs to, now that several Minecraft servers can exist.
+        // Null keeps the long-standing behaviour of using the first server of that game, so
+        // an existing installation's tunnel is unaffected until someone chooses a server.
+        Guid? MinecraftServerId = null,
+        Guid? PalworldServerId = null)
     {
         public static PlayitSettings Default { get; } = new(
             false,

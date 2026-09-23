@@ -82,13 +82,21 @@ public partial class GameServerPageControl : System.Windows.Controls.UserControl
 
     public GameType Game { get; private set; } = GameType.Minecraft;
 
+    /// <summary>
+    /// The server this page is showing. Several servers of one game can be registered, so a
+    /// caller that knows which one it means says so; without it the page falls back to the
+    /// first server of the game, as it did when only one could exist.
+    /// </summary>
+    public Guid? ServerId { get; private set; }
+
     public event EventHandler<GameType>? CreateRequested;
 
     public event EventHandler? RemoteAccessRequested;
 
-    public void Configure(GameType game)
+    public void Configure(GameType game, Guid? serverId = null)
     {
         Game = game;
+        ServerId = serverId;
         TitleText.Text = game == GameType.Minecraft ? "Minecraft" : "Palworld";
         SubtitleText.Text = game == GameType.Minecraft
             ? "Vanilla Minecraft server overview, console, settings, players, files, backups, updates, resources, and network."
@@ -330,7 +338,9 @@ public partial class GameServerPageControl : System.Windows.Controls.UserControl
         {
             _dashboard = await _httpClient.GetFromJsonAsync<DashboardSnapshot>(
                 "/api/v1/dashboard");
-            _server = _dashboard?.Servers.FirstOrDefault(server => server.Game == Game);
+            _server = ServerId is { } serverId
+                ? _dashboard?.Servers.FirstOrDefault(server => server.ServerId == serverId)
+                : _dashboard?.Servers.FirstOrDefault(server => server.Game == Game);
             if (Game == GameType.Palworld && _server is not null)
             {
                 await RefreshPalworldOverviewDetailsAsync(force);

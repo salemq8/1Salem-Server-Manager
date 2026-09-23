@@ -684,6 +684,7 @@ public sealed class ContentHubTests : IDisposable
         public Task<ContentProject?> GetProjectAsync(
             string projectId,
             ServerContentProfile profile,
+            ContentKind kind = ContentKind.Plugin,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<ContentProject?>(new ContentProject(
                 Id,
@@ -701,6 +702,7 @@ public sealed class ContentHubTests : IDisposable
         public Task<IReadOnlyList<ContentVersion>> GetVersionsAsync(
             string projectId,
             ServerContentProfile profile,
+            ContentKind kind = ContentKind.Plugin,
             CancellationToken cancellationToken = default)
         {
             if (_incompatible.Contains(projectId))
@@ -719,11 +721,13 @@ public sealed class ContentHubTests : IDisposable
             string projectId,
             ServerContentProfile profile,
             bool allowPrerelease = false,
+            ContentKind kind = ContentKind.Plugin,
             CancellationToken cancellationToken = default) =>
             PluginCompatibilityPolicy.SelectBest(
-                await GetVersionsAsync(projectId, profile, cancellationToken),
+                await GetVersionsAsync(projectId, profile, kind, cancellationToken),
                 profile,
-                allowPrerelease);
+                allowPrerelease,
+                kind);
 
         public Task<ContentIdentification?> IdentifyAsync(
             ContentFileDigests digests,

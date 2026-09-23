@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ServerManager.Contracts;
 using ServerManager.Core.Content;
 
@@ -25,14 +25,19 @@ public sealed class ContentCatalogService(
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(profile);
-        if (!profile.SupportsPlugins)
+
+        // Plugins need a plugin-capable server; data and resource packs work on any
+        // Minecraft server, including Vanilla, which is why this asks the type rather than
+        // the plugin flag.
+        if (!ContentTypePolicy.IsSupportedBy(request.Kind, profile))
         {
             return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
         }
 
         var selected = _providers
             .Where(provider => request.Provider is null || provider.Id == request.Provider)
-            .Where(provider => provider.CanServe(profile))
+            .Where(provider => ContentTypePolicy.IsServedBy(request.Kind, provider.Id))
+            .Where(provider => provider.CanServe(profile, request.Kind))
             .ToArray();
 
         var tasks = selected.Select(async provider =>
@@ -99,20 +104,23 @@ public sealed class ContentCatalogService(
             ContentProviderId providerId,
             string projectId,
             ServerContentProfile profile,
+            ContentKind kind = ContentKind.Plugin,
             CancellationToken cancellationToken = default)
     {
         var provider = Find(providerId);
-        if (provider is null || !provider.CanServe(profile))
+        if (provider is null || !provider.CanServe(profile, kind))
         {
             return (null, null, []);
         }
 
-        var project = await provider.GetProjectAsync(projectId, profile, cancellationToken);
-        var versions = await provider.GetVersionsAsync(projectId, profile, cancellationToken);
-        var latest = PluginCompatibilityPolicy.SelectBest(versions, profile);
+        var project = await provider.GetProjectAsync(projectId, profile, kind, cancellationToken);
+        var versions = await provider.GetVersionsAsync(projectId, profile, kind, cancellationToken);
+        var latest = PluginCompatibilityPolicy.SelectBest(versions, profile, false, kind);
         return (project, latest, versions);
     }
 
     private static ContentSearchResult Empty(ContentSearchRequest request) =>
         new([], request.Offset, request.Limit, 0, []);
 }
+
+

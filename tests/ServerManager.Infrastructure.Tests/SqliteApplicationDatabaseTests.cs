@@ -55,7 +55,7 @@ public sealed class SqliteApplicationDatabaseTests : IDisposable
         await reader.DisposeAsync();
         command.CommandText = "PRAGMA user_version;";
         var version = Convert.ToInt32(await command.ExecuteScalarAsync());
-        Assert.Equal(4, version);
+        Assert.Equal(6, version);
     }
 
     [Fact]

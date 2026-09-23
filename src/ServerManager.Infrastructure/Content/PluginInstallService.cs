@@ -62,16 +62,16 @@ public sealed class PluginInstallService(
             ContentProject? project;
             try
             {
-                project = await provider.GetProjectAsync(projectId, profile, cancellationToken);
+                project = await provider.GetProjectAsync(projectId, profile, cancellationToken: cancellationToken);
                 version = !isDependency && request.VersionId is { Length: > 0 } pinned
-                    ? (await provider.GetVersionsAsync(projectId, profile, cancellationToken))
+                    ? (await provider.GetVersionsAsync(projectId, profile, cancellationToken: cancellationToken))
                         .FirstOrDefault(candidate =>
                             string.Equals(candidate.VersionId, pinned, StringComparison.Ordinal))
                     : await provider.ResolveCompatibleVersionAsync(
                         projectId,
                         profile,
                         allowPrerelease: false,
-                        cancellationToken);
+                        cancellationToken: cancellationToken);
             }
             catch (ContentProviderException exception)
             {
@@ -202,7 +202,7 @@ public sealed class PluginInstallService(
                 foreach (var item in plan.Items)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var versions = await provider.GetVersionsAsync(item.ProjectId, profile, cancellationToken);
+                    var versions = await provider.GetVersionsAsync(item.ProjectId, profile, cancellationToken: cancellationToken);
                     var version = versions.FirstOrDefault(candidate =>
                         string.Equals(candidate.VersionId, item.VersionId, StringComparison.Ordinal));
                     if (version?.File is null)
@@ -381,14 +381,14 @@ public sealed class PluginInstallService(
         try
         {
             target = versionId is { Length: > 0 }
-                ? (await provider.GetVersionsAsync(existing.ProjectId, profile, cancellationToken))
+                ? (await provider.GetVersionsAsync(existing.ProjectId, profile, cancellationToken: cancellationToken))
                     .FirstOrDefault(candidate =>
                         string.Equals(candidate.VersionId, versionId, StringComparison.Ordinal))
                 : await provider.ResolveCompatibleVersionAsync(
                     existing.ProjectId,
                     profile,
                     allowPrerelease: false,
-                    cancellationToken);
+                    cancellationToken: cancellationToken);
         }
         catch (ContentProviderException exception)
         {
@@ -741,3 +741,4 @@ public sealed class PluginInstallService(
         }
     }
 }
+

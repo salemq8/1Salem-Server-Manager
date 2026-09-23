@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using ServerManager.Client.Shell;
 using ServerManager.Contracts;
+using ServerManager.Core.Content;
 using AutomationProperties = System.Windows.Automation.AutomationProperties;
 using Button = System.Windows.Controls.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
@@ -35,6 +36,9 @@ public partial class ServerContentTab : UserControl
     private CancellationTokenSource? _inFlight;
     private bool _loaded;
     private bool _busy;
+
+    /// <summary>The content types this server can actually use, in selector order.</summary>
+    private IReadOnlyList<ContentKind> _kinds = [ContentKind.Plugin];
 
     public ServerContentTab()
     {
@@ -72,7 +76,7 @@ public partial class ServerContentTab : UserControl
     {
         _loaded = true;
         await LoadProfileAsync();
-        if (_profile is not { SupportsPlugins: true })
+        if (_profile is null || _kinds.Count == 0)
         {
             return;
         }
@@ -130,7 +134,17 @@ public partial class ServerContentTab : UserControl
             "Hangar"
         };
         ProviderBox.SelectedIndex = providerIndex;
+
+        AutomationProperties.SetName(KindBox, LocalizationService.Get("Content.KindLabel"));
+        var kindIndex = KindBox.SelectedIndex < 0 ? 0 : KindBox.SelectedIndex;
+        KindBox.ItemsSource = _kinds.Select(ContentLabels.Kind).ToArray();
+        KindBox.SelectedIndex = Math.Min(kindIndex, Math.Max(0, _kinds.Count - 1));
     }
+
+    private ContentKind SelectedKind =>
+        KindBox.SelectedIndex >= 0 && KindBox.SelectedIndex < _kinds.Count
+            ? _kinds[KindBox.SelectedIndex]
+            : _kinds.FirstOrDefault();
 
     private async Task LoadProfileAsync()
     {
@@ -158,7 +172,14 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
-        if (!_profile.SupportsPlugins)
+        // A Vanilla server cannot run plugins but can still take data packs and resource
+        // packs, so the selector offers whatever this server genuinely supports.
+        _kinds = ContentLabels.SelectableKinds
+            .Where(kind => ContentTypePolicy.IsSupportedBy(kind, _profile))
+            .ToArray();
+        Localize();
+
+        if (_kinds.Count == 0)
         {
             // Say plainly why, rather than showing an empty catalogue that never works.
             var reasonKey = _profile.UnsupportedReason switch
@@ -180,7 +201,7 @@ public partial class ServerContentTab : UserControl
 
     private async Task SearchAsync()
     {
-        if (_profile is not { SupportsPlugins: true })
+        if (_profile is null || _kinds.Count == 0)
         {
             return;
         }
@@ -206,6 +227,7 @@ public partial class ServerContentTab : UserControl
             var query = new List<string>
             {
                 $"sort={sort}",
+                $"kind={SelectedKind}",
                 $"compatibleOnly={(CompatibleOnlyBox.IsChecked == true).ToString().ToLowerInvariant()}",
                 "limit=30"
             };
@@ -281,7 +303,7 @@ public partial class ServerContentTab : UserControl
 
     private async Task LoadInstalledAsync()
     {
-        if (_profile is not { SupportsPlugins: true })
+        if (_profile is null || _kinds.Count == 0)
         {
             return;
         }
@@ -345,10 +367,17 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
+        if (item.Project.Kind == ContentKind.Modpack)
+        {
+            await InstallModpackAsync(item);
+            return;
+        }
+
         var request = new ContentInstallRequest(
             _context.ServerId,
             item.Provider,
-            item.ProjectId);
+            item.ProjectId,
+            Kind: item.Project.Kind);
 
         item.IsBusy = true;
         _busy = true;
@@ -518,7 +547,8 @@ public partial class ServerContentTab : UserControl
         {
             using var client = _context.CreateClient(TimeSpan.FromSeconds(30));
             var detail = await client.GetFromJsonAsync<ContentProjectDetail>(
-                $"/api/v1/servers/{_context.ServerId}/content/projects/{item.Provider}/{Uri.EscapeDataString(item.ProjectId)}");
+                $"/api/v1/servers/{_context.ServerId}/content/projects/{item.Provider}/" +
+                $"{Uri.EscapeDataString(item.ProjectId)}?kind={item.Project.Kind}");
             if (detail is null)
             {
                 Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage");
@@ -600,6 +630,167 @@ public partial class ServerContentTab : UserControl
 
     private void Filter_Changed(object sender, SelectionChangedEventArgs e) =>
         Filter_Changed(sender, (RoutedEventArgs)e);
+
+    private void Kind_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded)
+        {
+            return;
+        }
+
+        // Switching type changes what "compatible" even means, so the list is rebuilt rather
+        // than filtered in place.
+        _discovered.Clear();
+        _ = TabDiscover.IsChecked == true ? SearchAsync() : LoadInstalledAsync();
+    }
+
+    private async void Distribute_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || sender is not Button { DataContext: InstalledItemViewModel item })
+        {
+            return;
+        }
+
+        item.IsBusy = true;
+        _busy = true;
+        try
+        {
+            using var client = _context.CreateClient(TimeSpan.FromSeconds(30));
+            var result = await PostAsync<ContentOperationResult>(
+                client,
+                $"/api/v1/servers/{_context.ServerId}/content/resource-pack/distribute",
+                new ResourcePackDistributionRequest(item.FileName));
+            if (result is { Success: true })
+            {
+                Notify(
+                    NotificationKind.Success,
+                    "Content.Distributed.Title",
+                    result.RestartRequired ? "Content.RestartRequired" : "Content.Distributed.Message",
+                    item.DisplayName);
+                await LoadInstalledAsync();
+            }
+            else
+            {
+                Notify(NotificationKind.Error, "Content.Distribute.FailedTitle", DescribeError(result?.ErrorCode));
+            }
+        }
+        catch (Exception exception) when (IsTransport(exception))
+        {
+            Notify(NotificationKind.Error, "Content.Error.AgentTitle", "Content.Error.AgentMessage");
+        }
+        finally
+        {
+            item.IsBusy = false;
+            _busy = false;
+        }
+    }
+
+    private async void Withdraw_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || sender is not Button { DataContext: InstalledItemViewModel item })
+        {
+            return;
+        }
+
+        item.IsBusy = true;
+        _busy = true;
+        try
+        {
+            using var client = _context.CreateClient(TimeSpan.FromSeconds(30));
+            var result = await PostAsync<ContentOperationResult>(
+                client,
+                $"/api/v1/servers/{_context.ServerId}/content/resource-pack/withdraw",
+                new { });
+            if (result is { Success: true })
+            {
+                Notify(NotificationKind.Success, "Content.Withdrawn.Title", "Content.Done", item.DisplayName);
+                await LoadInstalledAsync();
+            }
+            else
+            {
+                Notify(NotificationKind.Error, "Content.Distribute.FailedTitle", DescribeError(result?.ErrorCode));
+            }
+        }
+        catch (Exception exception) when (IsTransport(exception))
+        {
+            Notify(NotificationKind.Error, "Content.Error.AgentTitle", "Content.Error.AgentMessage");
+        }
+        finally
+        {
+            item.IsBusy = false;
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// A modpack never changes this server: it shows what would be built, asks where, and
+    /// creates a new server.
+    /// </summary>
+    private async Task InstallModpackAsync(ContentItemViewModel item)
+    {
+        item.IsBusy = true;
+        _busy = true;
+        try
+        {
+            using var client = _context.CreateClient(TimeSpan.FromMinutes(30));
+            ShowProgress("Content.Stage.ResolvingPack");
+            var plan = await client.GetFromJsonAsync<ModpackPlan>(
+                $"/api/v1/servers/{_context.ServerId}/content/modpacks/plan" +
+                $"?provider={item.Provider}&projectId={Uri.EscapeDataString(item.ProjectId)}");
+            HideProgress();
+            if (plan is null)
+            {
+                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage");
+                return;
+            }
+
+            var choices = ModpackInstallWindow.Ask(Window.GetWindow(this), plan);
+            if (choices is null)
+            {
+                return;
+            }
+
+            ShowProgress("Content.Stage.BuildingServer");
+            var result = await PostAsync<ModpackInstallResult>(
+                client,
+                $"/api/v1/servers/{_context.ServerId}/content/modpacks/install",
+                choices with
+                {
+                    Provider = plan.Provider,
+                    ProjectId = plan.ProjectId,
+                    VersionId = plan.VersionId
+                });
+            HideProgress();
+
+            if (result is { Success: true })
+            {
+                NotificationService.Publish(
+                    NotificationKind.Success,
+                    LocalizationService.Get("Content.Modpack.CreatedTitle"),
+                    LocalizationService.Format(
+                        "Content.Modpack.CreatedMessage",
+                        choices.ServerName,
+                        result.MinecraftVersion ?? string.Empty));
+            }
+            else
+            {
+                Notify(
+                    NotificationKind.Error,
+                    "Content.Modpack.FailedTitle",
+                    DescribeError(result?.ErrorCode));
+            }
+        }
+        catch (Exception exception) when (IsTransport(exception))
+        {
+            HideProgress();
+            Notify(NotificationKind.Error, "Content.Error.AgentTitle", "Content.Error.AgentMessage");
+        }
+        finally
+        {
+            item.IsBusy = false;
+            _busy = false;
+        }
+    }
 
     private async void StateAction_Click(object sender, RoutedEventArgs e) => await ReloadAsync();
 
@@ -683,6 +874,21 @@ public partial class ServerContentTab : UserControl
             "NoCompatibleVersion" => "Content.Error.NoCompatibleVersion",
             "NoRollback" or "RollbackMissing" => "Content.Error.NoRollback",
             "AlreadyCurrent" => "Content.Error.AlreadyCurrent",
+
+            // Phase 2 content types bring their own ways of not working.
+            "NeedsReachableUrl" => "Content.Error.NeedsReachableUrl",
+            "NoSha1" => "Content.Error.NoSha1",
+            "PackTooLarge" => "Content.Error.PackTooLarge",
+            "NoWorld" or "NoLevelName" or "NoServerProperties" or "UnsafeLevelName"
+                or "PropertiesUnreadable" => "Content.Error.NoWorld",
+            "InvalidArchive" => "Content.Error.InvalidArchive",
+            "DestinationNotEmpty" => "Content.Error.DestinationNotEmpty",
+            "EulaRequired" => "Content.Error.EulaRequired",
+            "JavaMissing" => "Content.Error.JavaMissing",
+            "FileUnavailable" => "Content.Error.FileUnavailable",
+            "UnsupportedServer" or "UnsupportedKind" => "Content.Error.UnsupportedServer",
+            "PortInUse" => "Content.Error.PortInUse",
+            "RegistrationFailed" => "Content.Error.RegistrationFailed",
             _ => "Content.Error.Generic"
         };
 
@@ -726,3 +932,5 @@ public partial class ServerContentTab : UserControl
         exception is HttpRequestException or TaskCanceledException or
             System.Text.Json.JsonException or InvalidOperationException;
 }
+
+

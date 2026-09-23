@@ -16,7 +16,8 @@ public sealed class SqliteInstalledContentStore(SqliteConnectionFactory connecti
         ServerId, FileName, Kind, Provider, ProjectId, VersionId, ProjectName,
         InstalledVersion, MinecraftVersionAtInstall, PlatformAtInstall, ProjectUrl,
         ProviderSha512, ProviderSha256, LocalSha256, SizeBytes, InstalledAtUtc,
-        RestartRequired, PreviousVersionId, PreviousFileName
+        RestartRequired, PreviousVersionId, PreviousFileName, DownloadUrl, ProviderSha1,
+        RelativePath, Loader, LoaderVersion
         """;
 
     public async Task<IReadOnlyList<InstalledContent>> ListAsync(
@@ -76,12 +77,14 @@ public sealed class SqliteInstalledContentStore(SqliteConnectionFactory connecti
                 ServerId, FileName, Kind, Provider, ProjectId, VersionId, ProjectName,
                 InstalledVersion, MinecraftVersionAtInstall, PlatformAtInstall, ProjectUrl,
                 ProviderSha512, ProviderSha256, LocalSha256, SizeBytes, InstalledAtUtc,
-                RestartRequired, PreviousVersionId, PreviousFileName)
+                RestartRequired, PreviousVersionId, PreviousFileName, DownloadUrl,
+                ProviderSha1, RelativePath, Loader, LoaderVersion)
             VALUES (
                 $serverId, $fileName, $kind, $provider, $projectId, $versionId, $projectName,
                 $installedVersion, $minecraftVersion, $platform, $projectUrl,
                 $sha512, $sha256, $localSha256, $sizeBytes, $installedAt,
-                $restartRequired, $previousVersionId, $previousFileName)
+                $restartRequired, $previousVersionId, $previousFileName, $downloadUrl,
+                $providerSha1, $relativePath, $loader, $loaderVersion)
             ON CONFLICT (ServerId, FileName) DO UPDATE SET
                 Kind = excluded.Kind,
                 Provider = excluded.Provider,
@@ -99,7 +102,12 @@ public sealed class SqliteInstalledContentStore(SqliteConnectionFactory connecti
                 InstalledAtUtc = excluded.InstalledAtUtc,
                 RestartRequired = excluded.RestartRequired,
                 PreviousVersionId = excluded.PreviousVersionId,
-                PreviousFileName = excluded.PreviousFileName;
+                PreviousFileName = excluded.PreviousFileName,
+                DownloadUrl = excluded.DownloadUrl,
+                ProviderSha1 = excluded.ProviderSha1,
+                RelativePath = excluded.RelativePath,
+                Loader = excluded.Loader,
+                LoaderVersion = excluded.LoaderVersion;
             """;
         command.Parameters.AddWithValue("$serverId", record.ServerId.ToString());
         command.Parameters.AddWithValue("$fileName", record.FileName);
@@ -134,6 +142,19 @@ public sealed class SqliteInstalledContentStore(SqliteConnectionFactory connecti
         command.Parameters.AddWithValue(
             "$previousFileName",
             (object?)record.PreviousFileName ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$downloadUrl",
+            (object?)record.DownloadUrl?.ToString() ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$providerSha1",
+            (object?)record.ProviderSha1 ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$relativePath",
+            (object?)record.RelativePath ?? DBNull.Value);
+        command.Parameters.AddWithValue("$loader", (object?)record.Loader ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$loaderVersion",
+            (object?)record.LoaderVersion ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -180,5 +201,14 @@ public sealed class SqliteInstalledContentStore(SqliteConnectionFactory connecti
             null,
             null,
             reader.GetInt64(14),
-            ManagedByManager: true);
+            ManagedByManager: true,
+            DownloadUrl: reader.IsDBNull(19) ||
+                         !Uri.TryCreate(reader.GetString(19), UriKind.Absolute, out var download)
+                ? null
+                : download,
+            ProviderSha1: reader.IsDBNull(20) ? null : reader.GetString(20),
+            RelativePath: reader.IsDBNull(21) ? null : reader.GetString(21),
+            Loader: reader.IsDBNull(22) ? null : reader.GetString(22),
+            LoaderVersion: reader.IsDBNull(23) ? null : reader.GetString(23));
 }
+

@@ -46,6 +46,31 @@ instead.
 - **Future behaviour:** keep the memory safeguards when a profile or priority is applied, or
   say plainly in the UI which safeguards an action will clear before it runs.
 
+## Playit still maps one tunnel per game, not per server
+
+- **Found:** Build 7 multi-server work, 2026-09-23.
+- **Status:** deliberate for now. Deferred.
+- **What happens today:** several Minecraft servers can be registered, but Playit's settings
+  hold one Minecraft tunnel and one Palworld tunnel. `PlayitSettings` now carries
+  `MinecraftServerId` and `PalworldServerId` so a tunnel can say which server it belongs to,
+  and `OfficialPlayitSupervisor.PortFor` uses it; when it is unset the supervisor falls back
+  to the first server of that game, which is exactly what it did before. Nothing about an
+  existing tunnel changes.
+- **Future behaviour:** let a person add a tunnel per server and choose which server each
+  tunnel points at. Until then, a second Minecraft server is reachable on the LAN and
+  through whatever the person sets up themselves, but not through the managed tunnel.
+
+## Home's old two-tile dashboard control is dead code
+
+- **Found:** Build 7 multi-server UI check, 2026-09-23.
+- **Status:** harmless. Deferred.
+- **What happens today:** `src/ServerManager.Client/Controls/HomeDashboardControl.xaml(.cs)`
+  is a leftover from an earlier Home design with one tile per game. `MainWindow` uses
+  `HomePageControl`, which lists every registered server as its own card, so the old control
+  is compiled but never shown.
+- **Future behaviour:** delete the control and its XAML once nothing else is expected to need
+  it, so nobody edits a page that is not on screen.
+
 ## Fresh-install Playit defaults need a cleanup and security review
 
 - **Found:** Version 1.5 review, 2026-09-22.

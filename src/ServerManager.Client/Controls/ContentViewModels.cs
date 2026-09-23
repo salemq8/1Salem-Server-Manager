@@ -14,7 +14,9 @@ public sealed class ContentItemViewModel(ContentProject project) : INotifyProper
 {
     private bool _isBusy;
     private bool _isInstalled;
-    private string _actionLabel = LocalizationService.Get("Content.Install");
+    private string _actionLabel = LocalizationService.Get(
+        project is { Kind: ContentKind.Modpack } ? "Content.CreateServer" : "Content.Install") ??
+        string.Empty;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -49,9 +51,14 @@ public sealed class ContentItemViewModel(ContentProject project) : INotifyProper
 
     public bool IsCompatible => Project.IsCompatible;
 
-    public string AutomationName => LocalizationService.Format("Content.InstallNamed", Name);
+    public string AutomationName => LocalizationService.Format(
+        Project.Kind == ContentKind.Modpack ? "Content.CreateServerNamed" : "Content.InstallNamed",
+        Name);
 
     public string DetailsLabel => LocalizationService.Get("Content.Details");
+
+    /// <summary>The small badge that says what this item is.</summary>
+    public string KindLabel => ContentLabels.Kind(Project.Kind);
 
     public bool IsBusy
     {
@@ -142,21 +149,61 @@ public sealed class InstalledItemViewModel(InstalledContent record) : INotifyPro
         InstalledContentState.InstalledManually => "Content.State.InstalledManually",
         InstalledContentState.MissingFile => "Content.State.MissingFile",
         InstalledContentState.ModifiedLocally => "Content.State.ModifiedLocally",
+
+        // A data pack waits for a reload, not a restart, and a resource pack is either being
+        // advertised to players or simply kept.
+        InstalledContentState.ReloadRequired => "Content.State.ReloadRequired",
+        InstalledContentState.IncompatibleWithServer => "Content.State.Incompatible",
+        InstalledContentState.NotDistributed => "Content.State.NotDistributed",
+        InstalledContentState.Distributed => "Content.State.Distributed",
+        InstalledContentState.RequiresServerMigration => "Content.State.RequiresMigration",
         _ => "Content.State.UnknownVersion"
     });
 
     public string UpdateLine => Record.AvailableVersionNumber is { Length: > 0 } available
-        ? LocalizationService.Format(
-            "Content.UpdateFromTo",
-            Record.InstalledVersion ?? LocalizationService.Get("Content.VersionUnknown"),
-            available)
+        ? Record.State == InstalledContentState.RequiresServerMigration
+            ? LocalizationService.Format("Content.MigrationNeeded", available)
+            : LocalizationService.Format(
+                "Content.UpdateFromTo",
+                Record.InstalledVersion ?? LocalizationService.Get("Content.VersionUnknown"),
+                available)
+        : string.Empty;
+
+    /// <summary>A modpack row says which Minecraft version and loader the server runs.</summary>
+    public string EnvironmentLine => Record.Kind == ContentKind.Modpack
+        ? string.Join(
+            " · ",
+            new[]
+                {
+                    Record.MinecraftVersionAtInstall is { Length: > 0 } minecraft
+                        ? LocalizationService.Format("Content.MinecraftVersion", minecraft)
+                        : null,
+                    Record.Loader is { Length: > 0 } loader
+                        ? $"{char.ToUpperInvariant(loader[0])}{loader[1..]} {Record.LoaderVersion}".Trim()
+                        : null
+                }
+                .Where(part => part is { Length: > 0 }))
         : string.Empty;
 
     public bool CanUpdate => !IsBusy && Record.State == InstalledContentState.UpdateAvailable;
 
-    public bool CanRollback => !IsBusy && Record.PreviousFileName is { Length: > 0 };
+    public bool CanRollback =>
+        !IsBusy && Record.Kind != ContentKind.Modpack && Record.PreviousFileName is { Length: > 0 };
 
-    public bool CanUninstall => !IsBusy && Record.State != InstalledContentState.MissingFile;
+    /// <summary>
+    /// A modpack is the server it built, so it is not removed from here: that would be
+    /// deleting the server, which lives on the server itself.
+    /// </summary>
+    public bool CanUninstall =>
+        !IsBusy &&
+        Record.Kind != ContentKind.Modpack &&
+        Record.State != InstalledContentState.MissingFile;
+
+    /// <summary>
+    /// Removing is shown, but greyed, while it merely cannot be done right now. For a modpack
+    /// it can never be done from here, so the button is not there at all.
+    /// </summary>
+    public bool ShowUninstall => Record.Kind != ContentKind.Modpack;
 
     public bool CanViewProject => Record.ProjectUrl is not null;
 
@@ -175,8 +222,32 @@ public sealed class InstalledItemViewModel(InstalledContent record) : INotifyPro
             Raise(nameof(CanUpdate));
             Raise(nameof(CanRollback));
             Raise(nameof(CanUninstall));
+            Raise(nameof(CanDistribute));
+            Raise(nameof(CanWithdraw));
         }
     }
+
+    public string KindLabel => ContentLabels.Kind(Record.Kind);
+
+    /// <summary>
+    /// A resource pack can be advertised to players only when the provider hosts it and
+    /// published a SHA-1: this app never hosts files itself.
+    /// </summary>
+    public bool CanDistribute =>
+        !IsBusy &&
+        Record.Kind == ContentKind.ResourcePack &&
+        Record.DownloadUrl is not null &&
+        !Record.IsDistributed &&
+        Record.State != InstalledContentState.MissingFile;
+
+    public bool CanWithdraw => !IsBusy && Record.Kind == ContentKind.ResourcePack && Record.IsDistributed;
+
+    public string DistributeLabel => LocalizationService.Get("Content.Distribute");
+
+    public string WithdrawLabel => LocalizationService.Get("Content.Withdraw");
+
+    public string DistributeAutomationName =>
+        LocalizationService.Format("Content.DistributeNamed", DisplayName);
 
     public string ViewProjectLabel => LocalizationService.Get("Content.ViewProject");
 
@@ -195,6 +266,9 @@ public sealed class InstalledItemViewModel(InstalledContent record) : INotifyPro
     public void Update(InstalledContent record)
     {
         Record = record;
+        Raise(nameof(KindLabel));
+        Raise(nameof(CanDistribute));
+        Raise(nameof(CanWithdraw));
         Raise(nameof(DisplayName));
         Raise(nameof(VersionLine));
         Raise(nameof(SourceLine));
@@ -209,3 +283,4 @@ public sealed class InstalledItemViewModel(InstalledContent record) : INotifyPro
     private void Raise([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
+

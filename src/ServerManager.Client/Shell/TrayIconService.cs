@@ -154,8 +154,8 @@ public sealed class TrayIconService : IDisposable
     {
         menu.DropDownItems.Clear();
         menu.Enabled = true;
-        var server = _snapshot?.Servers.FirstOrDefault(item => item.Game == game);
-        if (server is null)
+        var servers = _snapshot?.Servers.Where(item => item.Game == game).ToArray() ?? [];
+        if (servers.Length == 0)
         {
             var create = menu.DropDownItems.Add($"Create {game} Server");
             create.Click += (_, _) => _window.Dispatcher.Invoke(
@@ -163,7 +163,31 @@ public sealed class TrayIconService : IDisposable
             return;
         }
 
+        // Several servers of one game get a submenu each, so Start can never reach the
+        // server the person did not mean.
+        if (servers.Length > 1)
+        {
+            menu.Text = $"{game} · {servers.Length} servers";
+            foreach (var each in servers)
+            {
+                var entry = new Forms.ToolStripMenuItem($"{each.Name} · {each.State}");
+                BuildServerActions(entry, each, game);
+                menu.DropDownItems.Add(entry);
+            }
+
+            return;
+        }
+
+        var server = servers[0];
         menu.Text = $"{game} · {server.State}";
+        BuildServerActions(menu, server, game);
+    }
+
+    private void BuildServerActions(
+        Forms.ToolStripMenuItem menu,
+        ServerDashboardCard server,
+        GameType game)
+    {
         AddServerAction(menu, "Start", server.Actions.CanStart, server, "start");
         AddServerAction(
             menu,
@@ -179,12 +203,12 @@ public sealed class TrayIconService : IDisposable
         var console = menu.DropDownItems.Add("Open Console");
         console.Enabled = server.IsInstalled;
         console.Click += (_, _) => _window.Dispatcher.Invoke(
-            () => _window.ShowServer(game, 1));
+            () => _window.ShowServer(server.ServerId, 1));
 
         var settings = menu.DropDownItems.Add("Settings");
         settings.Enabled = server.IsInstalled;
         settings.Click += (_, _) => _window.Dispatcher.Invoke(
-            () => _window.ShowServer(game, 2));
+            () => _window.ShowServer(server.ServerId, 2));
 
         var copyLocal = menu.DropDownItems.Add(
             $"Copy Local Address · {server.LocalAddress ?? $"port {server.Port}"}");

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace ServerManager.Core.Content;
 
@@ -24,6 +24,49 @@ public static class ContentPathPolicy
     public static string ResolvePluginsDirectory(string serverRoot) =>
         SafePathPolicy.ResolveWithinRoot(Path.GetFullPath(serverRoot), PluginsDirectoryName);
 
+    /// <summary>
+    /// The active world's data pack folder. The world's name comes from that server's own
+    /// server.properties, so this is never assumed to be "world": a server with
+    /// level-name=survival keeps its data packs in survival\datapacks.
+    /// </summary>
+    public static string ResolveDataPackDirectory(string serverRoot, string levelName)
+    {
+        if (string.IsNullOrWhiteSpace(levelName))
+        {
+            throw new ArgumentException("A world name is required.", nameof(levelName));
+        }
+
+        // level-name is server-owned text, so it is treated as untrusted: one path segment,
+        // no separators, resolved back inside the root.
+        if (levelName.IndexOfAny(['/', '\\', ':']) >= 0 ||
+            levelName.Split('/', '\\').Any(segment => segment is "." or ".."))
+        {
+            throw new UnauthorizedAccessException("The world name is not a single folder name.");
+        }
+
+        return SafePathPolicy.ResolveWithinRoot(
+            Path.GetFullPath(serverRoot),
+            Path.Combine(levelName, "datapacks"));
+    }
+
+    /// <summary>
+    /// Where downloaded resource packs are kept. A server does not load these itself; they
+    /// are stored for the person and can be pointed at clients later.
+    /// </summary>
+    public static string ResolveResourcePackDirectory(string serverRoot) =>
+        SafePathPolicy.ResolveWithinRoot(
+            Path.GetFullPath(serverRoot),
+            Path.Combine(".1salem", "content", "resourcepacks"));
+
+    /// <summary>
+    /// Where the .mrpack a server was built from is kept. It is small, and keeping it means
+    /// the server can say exactly what it came from and be checked against it later.
+    /// </summary>
+    public static string ResolveModpackDirectory(string serverRoot) =>
+        SafePathPolicy.ResolveWithinRoot(
+            Path.GetFullPath(serverRoot),
+            Path.Combine(".1salem", "content", "modpack"));
+
     /// <summary>Where downloads are staged before anything touches the plugins folder.</summary>
     public static string ResolveStagingDirectory(string serverRoot) =>
         SafePathPolicy.ResolveWithinRoot(
@@ -41,7 +84,10 @@ public static class ContentPathPolicy
     /// dropped rather than honoured, so "../../evil.jar" becomes "evil.jar" and can only
     /// ever land inside the plugins folder.
     /// </summary>
-    public static string SanitizeFileName(string? providerFileName, string fallbackStem)
+    public static string SanitizeFileName(
+        string? providerFileName,
+        string fallbackStem,
+        string extension = ".jar")
     {
         var candidate = providerFileName ?? string.Empty;
 
@@ -66,9 +112,9 @@ public static class ContentPathPolicy
             safe = safe.Replace("..", ".", StringComparison.Ordinal);
         }
 
-        if (!safe.EndsWith(".jar", StringComparison.OrdinalIgnoreCase))
+        if (!safe.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
         {
-            safe = $"{safe}.jar";
+            safe = $"{safe}{extension}";
         }
 
         var stem = Path.GetFileNameWithoutExtension(safe);
@@ -76,13 +122,14 @@ public static class ContentPathPolicy
             ReservedNames.Contains(stem, StringComparer.OrdinalIgnoreCase))
         {
             stem = SanitizeStem(fallbackStem);
-            safe = $"{stem}.jar";
+            safe = $"{stem}{extension}";
         }
 
         if (safe.Length > MaximumFileNameLength)
         {
-            stem = stem[..Math.Min(stem.Length, MaximumFileNameLength - 4)].TrimEnd('.', '-', ' ');
-            safe = $"{stem}.jar";
+            var room = Math.Max(1, MaximumFileNameLength - extension.Length);
+            stem = stem[..Math.Min(stem.Length, room)].TrimEnd('.', '-', ' ');
+            safe = $"{stem}{extension}";
         }
 
         return safe;
@@ -145,3 +192,4 @@ public static class ContentPathPolicy
             : builder.ToString().Trim('-');
     }
 }
+

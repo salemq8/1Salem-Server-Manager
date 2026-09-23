@@ -203,6 +203,137 @@ cannot be resolved automatically and must be reported honestly instead.
   Server Manager never republishes or rehosts provider files; downloads go directly from the
   provider's own CDN to the person's machine.
 
+---
+
+## Content types: who actually serves what
+
+Verified 2026-09-22 against `GET /v2/tag/project_type`, `GET /v2/tag/loader` and live searches.
+
+| Content type | Modrinth | Hangar |
+|---|---|---|
+| Plugin | yes (`project_type:plugin` facet; loaders paper, spigot, bukkit, purpur, folia) | yes (the only type it has) |
+| Modpack | yes (`project_type:modpack`; loaders fabric, forge, neoforge, quilt) | no |
+| Data pack | yes (`project_type:datapack` facet; loader `datapack`) | no |
+| Resource pack | yes (`project_type:resourcepack`; loader `minecraft`) | no |
+
+Hangar is a plugin repository: its `Platform` enum is PAPER, WATERFALL and VELOCITY, and it
+has no pack types at all. Modpacks, data packs and resource packs therefore come from
+Modrinth only, and the UI says so rather than showing an empty Hangar section.
+
+Modrinth's full project type list is `mod, modpack, resourcepack, shader, plugin, datapack,
+minecraft_java_server`.
+
+---
+
+## Modpacks (Modrinth)
+
+### Search and versions
+
+`project_type:modpack`, with the loader as a category facet. A version's file is a
+`.mrpack` archive; its `loaders` are mod loaders (**fabric, forge, neoforge, quilt**), never
+Paper or Spigot. A modpack is not a plugin and cannot be installed into a plugin server.
+
+### The .mrpack format
+
+A ZIP containing `modrinth.index.json` (UTF-8, at the root):
+
+- `formatVersion` (currently 1), `game` (`minecraft` only), `versionId`, `name`, `summary`
+- `files[]`: `path` (destination relative to the instance root), `hashes` (**sha1 and sha512
+  required**), `env` (`client`/`server`, each `required`, `optional` or `unsupported`),
+  `downloads[]` (HTTPS), `fileSize`
+- `dependencies`: `minecraft` plus one of `fabric-loader`, `forge`, `neoforge`,
+  `quilt-loader`, each with a version
+- Optional folders applied in order: `overrides`, then `server-overrides`.
+  `client-overrides` is for clients and is ignored on a server.
+
+### Trust model for pack file downloads
+
+Modrinth restricts pack downloads to four domains: **cdn.modrinth.com, github.com,
+raw.githubusercontent.com, gitlab.com**. The manager accepts only those four, over HTTPS
+only, and verifies every file against the SHA-512 in the index (falling back to SHA-1 when
+SHA-512 is absent). A file whose host is not on the list, or whose hash does not match, stops
+the whole install.
+
+### Loader support, and its honest limit
+
+A modpack server needs the loader itself, which is not part of the pack.
+
+- **Fabric** can be installed deterministically: `meta.fabricmc.net` publishes a server
+  launcher jar at `/v2/versions/loader/{game}/{loader}/{installer}/server/jar`
+  (verified: 1.21.8 returns HTTP 200).
+- **Forge, NeoForge and Quilt** require running their own installer programs. The manager
+  does not run third-party installers, so packs for these loaders are listed and described
+  but not installed, and the reason is shown.
+
+### Limitations
+
+- Installs into a **new** server only. A modpack changes the Minecraft version, the loader
+  and the whole mods set, so it is never applied over an existing configured server.
+- `env.client: required` files that are `server: unsupported` are skipped: they would never
+  load on a dedicated server.
+
+---
+
+## Data packs (Modrinth)
+
+### Search and versions
+
+The `project_type:datapack` facet works, but a hit's own `project_type` still reads `mod`
+with `datapack` among its categories, exactly like plugins. Identity comes from the
+`datapack` loader, never from `project_type`.
+
+### Compatibility
+
+Provider `game_versions` must contain the server's exact Minecraft version. The archive's own
+`pack.mcmeta` is also read: it carries `description` plus `pack_format`, or `min_format` and
+`max_format` on newer packs. The wiki does not state that a mismatched format blocks loading,
+so a mismatch is reported as uncertain rather than claimed as incompatible.
+
+### Destination
+
+`<server root>/<level-name>/datapacks`, where `level-name` comes from that server's
+`server.properties` and names both the world and its directory. The path is never assumed to
+be `world/datapacks`: if `server.properties` has no readable `level-name`, the manager says it
+cannot identify the world instead of guessing.
+
+### Activation
+
+A data pack added to a running world needs `/reload` or a restart. The manager never sends
+console commands; it reports "Reload or restart required" honestly.
+
+---
+
+## Resource packs (Modrinth)
+
+### Search and versions
+
+`project_type:resourcepack`, loader tag `minecraft`, filtered by game version.
+
+### What "support" means on a dedicated server
+
+A dedicated server does not load resource packs itself. It *points clients at one* through
+`server.properties` (verified against the current Java Edition documentation):
+
+- `resource-pack` — a URL clients download from; the pack may not exceed 250 MiB
+- `resource-pack-sha1` — lowercase hexadecimal SHA-1; a wrong value logs
+  "Invalid sha1 for resource-pack-sha1" at startup
+- `resource-pack-id` — optional UUID identifying the pack to clients
+- `resource-pack-prompt` — chat component shown when the pack is required
+- `require-resource-pack` — whether declining disconnects the player
+
+### How that is handled here
+
+Modrinth already serves the file over HTTPS from `cdn.modrinth.com` and publishes its SHA-1,
+so a provider-hosted pack can be distributed by pointing `resource-pack` at that URL with the
+provider's SHA-1 — no hosting by this app. Writing those settings happens only when the person
+asks for it.
+
+A pack that exists only as a local file cannot be distributed: clients need a reachable URL.
+The manager does not start an HTTP server, open ports or touch the tunnel, so that case is
+reported as "needs a reachable URL" rather than shown as installed.
+
+---
+
 ## Product-wide rules that follow from this research
 
 1. Public reads only. No accounts, no tokens, no uploads.

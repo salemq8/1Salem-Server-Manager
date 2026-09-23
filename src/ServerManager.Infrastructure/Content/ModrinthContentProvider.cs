@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 using ServerManager.Contracts;
 using ServerManager.Core.Content;
@@ -15,9 +15,14 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
 
     public ContentProviderId Id => ContentProviderId.Modrinth;
 
-    public bool CanServe(ServerContentProfile profile) =>
-        profile is { SupportsPlugins: true } &&
-        PluginPlatformPolicy.ModrinthLoaders(profile.Platform).Count > 0;
+    public bool CanServe(ServerContentProfile profile) => CanServe(profile, ContentKind.Plugin);
+
+    /// <summary>
+    /// Modrinth carries every content type this app supports; whether this server can take
+    /// the type is the type policy's decision, not the provider's.
+    /// </summary>
+    public bool CanServe(ServerContentProfile profile, ContentKind kind) =>
+        profile is not null && ContentTypePolicy.IsSupportedBy(kind, profile);
 
     public async Task<ContentSearchResult> SearchAsync(
         ContentSearchRequest request,
@@ -26,21 +31,30 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(profile);
-        if (!CanServe(profile))
+        if (!CanServe(profile, request.Kind))
         {
             return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
         }
 
-        var loaders = PluginPlatformPolicy.ModrinthLoaders(profile.Platform);
+        var loaders = ContentTypePolicy.ModrinthLoaders(request.Kind, profile.Platform);
 
         // Facets are AND between the inner arrays and OR inside one, so this reads as:
-        // "a plugin, for any loader this server runs, (and for this Minecraft version)".
+        // "this content type, for any loader this server runs, (and for this Minecraft
+        // version)". A data pack and a plugin are both reported as "mod" by the API, so the
+        // type facet and the loaders together are what identify them.
         var facets = new List<string>
         {
-            Facet(["project_type:plugin"]),
-            Facet([.. loaders.Select(loader => $"categories:{loader}")])
+            Facet([$"project_type:{ContentTypePolicy.ModrinthProjectType(request.Kind)}"])
         };
-        if (request.CompatibleOnly && !string.IsNullOrWhiteSpace(profile.MinecraftVersion))
+        if (loaders.Count > 0)
+        {
+            facets.Add(Facet([.. loaders.Select(loader => $"categories:{loader}")]));
+        }
+        // A modpack brings its own Minecraft version with it, so this server's version must
+        // not narrow the list.
+        if (request.CompatibleOnly &&
+            request.Kind != ContentKind.Modpack &&
+            !string.IsNullOrWhiteSpace(profile.MinecraftVersion))
         {
             facets.Add(Facet([$"versions:{profile.MinecraftVersion}"]));
         }
@@ -66,7 +80,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
         var projects = new List<ContentProject>();
         foreach (var hit in root.Array("hits"))
         {
-            projects.Add(ReadProject(hit, profile));
+            projects.Add(ReadProject(hit, profile, kind: request.Kind));
         }
 
         return new ContentSearchResult(
@@ -80,6 +94,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
     public async Task<ContentProject?> GetProjectAsync(
         string projectId,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
         using var document = await ContentHttp.GetJsonAsync(
@@ -87,23 +102,24 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             Id,
             $"project/{Uri.EscapeDataString(projectId)}",
             cancellationToken);
-        return ReadProject(document.RootElement, profile, includeBody: true);
+        return ReadProject(document.RootElement, profile, includeBody: true, kind: kind);
     }
 
     public async Task<IReadOnlyList<ContentVersion>> GetVersionsAsync(
         string projectId,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        var loaders = PluginPlatformPolicy.ModrinthLoaders(profile.Platform);
+        var loaders = ContentTypePolicy.ModrinthLoaders(kind, profile.Platform);
         var query = new List<string>();
         if (loaders.Count > 0)
         {
             query.Add($"loaders={Encode(loaders)}");
         }
 
-        if (!string.IsNullOrWhiteSpace(profile.MinecraftVersion))
+        if (kind != ContentKind.Modpack && !string.IsNullOrWhiteSpace(profile.MinecraftVersion))
         {
             query.Add($"game_versions={Encode([profile.MinecraftVersion])}");
         }
@@ -132,10 +148,11 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
         string projectId,
         ServerContentProfile profile,
         bool allowPrerelease = false,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
-        var versions = await GetVersionsAsync(projectId, profile, cancellationToken);
-        return PluginCompatibilityPolicy.SelectBest(versions, profile, allowPrerelease);
+        var versions = await GetVersionsAsync(projectId, profile, kind, cancellationToken);
+        return PluginCompatibilityPolicy.SelectBest(versions, profile, allowPrerelease, kind);
     }
 
     public async Task<ContentIdentification?> IdentifyAsync(
@@ -187,11 +204,12 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
     public async Task<IReadOnlyDictionary<string, ContentVersion>> FindUpdatesAsync(
         IReadOnlyCollection<string> sha1Hashes,
         ServerContentProfile profile,
+        ContentKind kind = ContentKind.Plugin,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sha1Hashes);
         ArgumentNullException.ThrowIfNull(profile);
-        if (sha1Hashes.Count == 0 || !CanServe(profile))
+        if (sha1Hashes.Count == 0 || !CanServe(profile, kind))
         {
             return new Dictionary<string, ContentVersion>();
         }
@@ -200,7 +218,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
         {
             hashes = sha1Hashes.Select(hash => hash.ToLowerInvariant()).ToArray(),
             algorithm = "sha1",
-            loaders = PluginPlatformPolicy.ModrinthLoaders(profile.Platform).ToArray(),
+            loaders = ContentTypePolicy.ModrinthLoaders(kind, profile.Platform).ToArray(),
             game_versions = string.IsNullOrWhiteSpace(profile.MinecraftVersion)
                 ? Array.Empty<string>()
                 : new[] { profile.MinecraftVersion }
@@ -256,7 +274,8 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
     private ContentProject ReadProject(
         JsonElement element,
         ServerContentProfile profile,
-        bool includeBody = false)
+        bool includeBody = false,
+        ContentKind kind = ContentKind.Plugin)
     {
         // Search hits use project_id; the project endpoint uses id.
         var projectId = element.String("project_id") ?? element.String("id") ?? string.Empty;
@@ -268,7 +287,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             .Concat(element.Strings("loaders"))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var runnable = PluginPlatformPolicy.ModrinthLoaders(profile.Platform);
+        var runnable = ContentTypePolicy.ModrinthLoaders(kind, profile.Platform);
         var platforms = loaders
             .Where(loader => runnable.Contains(loader, StringComparer.OrdinalIgnoreCase))
             .ToArray();
@@ -298,7 +317,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             platforms,
             gameVersions,
             license,
-            ContentKind.Plugin,
+            kind,
             includeBody ? element.String("body") : null,
             compatible);
     }
@@ -401,3 +420,8 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             _ => ContentDependencyKind.Required
         };
 }
+
+
+
+
+

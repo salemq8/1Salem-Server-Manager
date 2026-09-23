@@ -35,7 +35,7 @@ public sealed class Version110BehaviorTests : IDisposable
             new StaticGovernor(),
             new StaticNetworkService(),
             null!,
-            null!,
+            new EmptyServerStore(),
             null!,
             null!,
             new StaticLifetime(),
@@ -193,6 +193,38 @@ public sealed class Version110BehaviorTests : IDisposable
             CancellationToken cancellationToken = default) =>
             Task.FromResult(
                 new PortTestResponse(port, protocol, true, "available"));
+    }
+
+    /// <summary>
+    /// No servers registered yet. Planning now checks the requested port against the servers
+    /// this machine already manages, so the planner needs a store.
+    /// </summary>
+    private sealed class EmptyServerStore : IGameServerStore
+    {
+        public Task<IReadOnlyList<GameServerDefinition>> ListAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<GameServerDefinition>>([]);
+
+        public Task<GameServerDefinition?> GetAsync(
+            Guid serverId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<GameServerDefinition?>(null);
+
+        public Task UpsertAsync(
+            GameServerDefinition server,
+            ServerState state,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task SetStateAsync(
+            Guid serverId,
+            ServerState state,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task SetStateWithErrorAsync(
+            Guid serverId,
+            ServerState state,
+            string? lastError,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StaticLifetime : IHostApplicationLifetime
