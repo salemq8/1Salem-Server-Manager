@@ -107,6 +107,80 @@ instead.
 - **Future behaviour:** delete the control and its XAML once nothing else is expected to need
   it, so nobody edits a page that is not on screen.
 
+## The Agent's named pipe lets any local user add server instances
+
+- **Found:** Build 8 (1Salem Connect) research into named-pipe security, 2026-09-23.
+- **Status:** security finding in existing Build 7 code, outside the Connect phase. Deferred.
+- **What happens today:** `src/ServerManager.Agent/NamedPipeAgentServer.cs` grants
+  `BUILTIN\Users` `CreateNewInstance`, and allows `MaxAllowedServerInstances` instances. It never
+  sets first-instance or reject-remote-clients, and it does not deny NETWORK. .NET never sets
+  `PIPE_REJECT_REMOTE_CLIENTS` on its own (Microsoft Learn; runtime source). Any local account can
+  therefore create a competing instance of the pipe and may be handed a client's connection. If
+  the Server service is running, network logons by those accounts are checked only against this
+  ACL. On a single-user PC the exposure is small, but the ACL is wider than it needs to be.
+- **Future behaviour:** grant only SYSTEM, Administrators and the interactive user the rights
+  they need. Never grant `CreateNewInstance` to Users. Deny `NT AUTHORITY\NETWORK`. Create the
+  first instance with `PipeOptions.FirstPipeInstance`. Have the client verify the pipe server's
+  identity. 1Salem Connect's pipes follow this pattern from the start.
+
+## 1Salem Connect: a friend's tailnet node binding is self-reported (Phase 2: owner confirmation)
+
+- **Found:** Build 8 (1Salem Connect) Phase 1 security review, finding BRK-4, 2026-09-24.
+- **Status:** partly fixed in Phase 1; the rest needs the Agent's Tailscale API wiring. Deferred to
+  Connect Phase 2. Full write-up: `docs/CONNECT_ARCHITECTURE.md` §21, D-1.
+- **What happens today:** the broker records the node id the friend's device reports. It refuses a
+  node id another friend's device already holds on a live membership of the same owner
+  (`node_in_use`), binds once, and tickets only work from the WhoIs-verified node, so a wrong
+  binding gives no access. The owner cannot yet confirm, see or clear a binding.
+- **Future behaviour:** the Agent checks the reported node through the Tailscale API
+  (`tag:1salem-client`, created after the enrollment key, not bound elsewhere) and confirms it with
+  an owner-signed call; tickets are issued only for a confirmed binding. Revocation never deletes a
+  device without that tag check.
+
+## 1Salem Connect: the broker needs an outer rate limiter before any deployment (Phase 2)
+
+- **Found:** Build 8 (1Salem Connect) Phase 1 security review, finding BRK-2, 2026-09-24.
+- **Status:** the D1 side is fixed in Phase 1; the outer layer is deployment configuration.
+  Deferred to Connect Phase 2 (first real deployment). Full write-up:
+  `docs/CONNECT_ARCHITECTURE.md` §21, D-2.
+- **What happens today:** exact per-key, per-network and global budgets in D1; over-limit,
+  malformed, forged and replayed requests add no counter write. Every request that reaches the
+  Worker still costs at least one D1 read. The broker runs only locally, so this is not exposed.
+- **Future behaviour:** a Cloudflare WAF rate-limiting rule or a Workers Rate Limiting binding in
+  front of D1, keyed per client IP and sized above the D1 budgets; Pseudo IPv4 not set to
+  "Overwrite headers".
+
+## 1Salem Connect: a low-integrity local process can fill the friend pipe's slots (Phase 2)
+
+- **Found:** Build 8 (1Salem Connect) Phase 1 friend-app review, finding F7, 2026-09-25.
+- **Status:** local denial of service only; no secret exposure. Deferred to Connect Phase 2. Full
+  write-up: `docs/CONNECT_ARCHITECTURE.md` §21, D-3.
+- **What happens today:** the friend transport's pipe serves at most 8 clients and refuses the
+  rest by accepting and closing. A sandboxed, lower-integrity process of the same Windows user can
+  hold all 8, because the pipe's default label does not block reads. The next time the app needs
+  a new pipe connection, it is closed without an answer and reads as `unavailable`. At the start
+  of a Connect or an enrollment the app then restarts a transport it started, which ends the
+  friend's live sessions, or fails the call when it reused one. An `enroll` refused this way has
+  already used up the one-time blob, so the owner must approve the PC again. A refused status or
+  close call leaves the session open, with the page saying it could not be closed yet, until a
+  slot frees. Nothing is ever sent to the squatter: the app verifies the serving process before
+  writing.
+- **Future behaviour:** restart only when the transport this app started has exited; treat a
+  verified connection that closes without answering as `no_answer`; label the pipe no-read-up.
+
+## 1Salem Connect: a server card can show a stale connection state for up to about 60 s, or longer during a broker outage (Phase 2)
+
+- **Found:** Build 8 (1Salem Connect) Phase 1 friend-app review, finding F8, 2026-09-25.
+- **Status:** UI polish; no effect on access. Deferred to Connect Phase 2. Full write-up:
+  `docs/CONNECT_ARCHITECTURE.md` §21, D-3.
+- **What happens today:** each card on the friend app's Servers page is a snapshot taken at the
+  last successful refresh, and the page refreshes every 60 s when nothing is pending. While the
+  broker answers, a card can therefore still say "Connected" or "Server offline" for up to about a
+  minute after the session ended. While the broker cannot be reached or rate-limits the refresh,
+  the page shows its error line but keeps the last cards, so a card can stay stale for the whole
+  outage. The Connection page follows the session itself (every 5 s).
+- **Future behaviour:** bind each card to its connection's state changes.
+
 ## Fresh-install Playit defaults need a cleanup and security review
 
 - **Found:** Version 1.5 review, 2026-09-22.

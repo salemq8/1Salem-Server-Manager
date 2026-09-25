@@ -15,3 +15,27 @@ TestResults/
 *.db-shm
 *.db-wal
 *.log
+
+# 1Salem Connect (Build 8). Secrets, local cloud state, node identities and caches never
+# belong in the repository. These are listed before any such file is ever created.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.example
+.wrangler/
+node_modules/
+dist/
+coverage/
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+tailscaled.state
+tsnet-state/
+*.private.*
+*.secret.*
+*.pem
+*.key
+*.pfx

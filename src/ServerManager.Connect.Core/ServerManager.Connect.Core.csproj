@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Shared by the Agent (host side) and the standalone 1Salem Connect friend app, so it must not
+    reference any other ServerManager project. Everything it needs is in the .NET 8 shared
+    framework; no packages.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ServerManager.Connect.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

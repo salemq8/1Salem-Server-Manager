@@ -1,0 +1,77 @@
+<Window x:Class="ServerManager.Connect.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ServerManager.Connect.App.ViewModels"
+        xmlns:views="clr-namespace:ServerManager.Connect.App.Views"
+        xmlns:loc="clr-namespace:ServerManager.Connect.App.Localization"
+        Title="{Binding Title}"
+        Width="760"
+        Height="620"
+        MinWidth="520"
+        MinHeight="460"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource SurfaceBrush}"
+        FlowDirection="{Binding FlowDirection}"
+        UseLayoutRounding="True"
+        KeyboardNavigation.TabNavigation="Cycle"
+        AutomationProperties.Name="{Binding Title}">
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:WelcomeViewModel}">
+            <views:WelcomeView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:InviteViewModel}">
+            <views:InviteView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:WaitingViewModel}">
+            <views:WaitingView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ServersViewModel}">
+            <views:ServersView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ConnectionViewModel}">
+            <views:ConnectionView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DiagnosticsViewModel}">
+            <views:DiagnosticsView />
+        </DataTemplate>
+    </Window.Resources>
+    <DockPanel>
+        <Border DockPanel.Dock="Top"
+                Background="{DynamicResource SurfaceSunkenBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,10">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            KeyboardNavigation.TabNavigation="Local">
+                    <Button Content="{x:Static loc:Text.NavServers}"
+                            Command="{Binding ShowServersCommand}"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Margin="0,0,8,0"
+                            Visibility="{Binding CanUseServers, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            AutomationProperties.Name="{x:Static loc:Text.NavServers}" />
+                    <Button Content="{x:Static loc:Text.NavDiagnostics}"
+                            Command="{Binding ShowDiagnosticsCommand}"
+                            Style="{StaticResource QuietButtonStyle}"
+                            AutomationProperties.Name="{x:Static loc:Text.NavDiagnostics}" />
+                </StackPanel>
+                <TextBlock Text="{Binding Title}"
+                           Style="{StaticResource SectionTitleStyle}"
+                           VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+        <!-- Named explicitly: otherwise UI Automation names the region after its content, which
+             is a view model, and a screen reader would read out a .NET type name. -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Focusable="False"
+                      AutomationProperties.Name="{Binding Title}">
+            <ContentControl Content="{Binding CurrentPage}"
+                            Margin="{StaticResource PagePadding}"
+                            MaxWidth="680"
+                            Focusable="False"
+                            IsTabStop="False" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

@@ -103,10 +103,12 @@ public partial class ServerSettingsTab : UserControl
         OpenFilesButton.Content = LocalizationService.Get("Action.OpenFolder");
         // The Safe File Manager's only entry point; without a label it rendered as a blank button.
         FileManagerButton.Content = LocalizationService.Get("ServerSettings.Files");
+        LocalizeConnectCard();
 
         var group = CurrentGroup;
         var isPalworld = _context.Source?.Game == GameType.Palworld;
         GeneralGroup.Visibility = group == "General" ? Visibility.Visible : Visibility.Collapsed;
+        ConnectCard.Visibility = group == "Network" ? Visibility.Visible : Visibility.Collapsed;
         AdvancedCard.Visibility = group == "Advanced" ? Visibility.Visible : Visibility.Collapsed;
         DiagnosticsCard.Visibility = group == "Advanced" ? Visibility.Visible : Visibility.Collapsed;
         GroupCard.Visibility = group is "Game" or "Network" or "Resources"
@@ -184,6 +186,22 @@ public partial class ServerSettingsTab : UserControl
                 GroupPrimaryButton.IsEnabled = true;
                 break;
         }
+    }
+
+    /// <summary>
+    /// 1Salem Connect is a development preview with nothing configured in this build. The card
+    /// only says so: its buttons are disabled in the markup and have no handlers, so there is
+    /// no path by which it could appear to enable, invite or revoke anyone.
+    /// </summary>
+    private void LocalizeConnectCard()
+    {
+        ConnectTitle.Text = LocalizationService.Get("ServerSettings.Connect");
+        ConnectBadge.Text = LocalizationService.Get("ServerSettings.ConnectPreview");
+        ConnectBody.Text = LocalizationService.Get("ServerSettings.ConnectBody");
+        ConnectEnableButton.Content = LocalizationService.Get("ServerSettings.ConnectEnable");
+        ConnectInviteButton.Content = LocalizationService.Get("ServerSettings.ConnectInvite");
+        ConnectFriendsButton.Content = LocalizationService.Get("ServerSettings.ConnectFriends");
+        ConnectRevokeButton.Content = LocalizationService.Get("ServerSettings.ConnectRevoke");
     }
 
     private void RenderAdvanced()

@@ -1,0 +1,42 @@
+<UserControl x:Class="ServerManager.Connect.App.Views.InviteView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ServerManager.Connect.App.Localization"
+             AutomationProperties.Name="{x:Static loc:Text.InviteTitle}">
+    <StackPanel FocusManager.FocusedElement="{Binding ElementName=InviteBox}">
+        <TextBlock Text="{x:Static loc:Text.InviteTitle}"
+                   Style="{StaticResource PageTitleStyle}" />
+        <TextBlock Text="{x:Static loc:Text.InviteBody}"
+                   Style="{StaticResource PageSubtitleStyle}" />
+        <TextBlock Text="{x:Static loc:Text.InviteInputLabel}"
+                   Style="{StaticResource SecondaryTextStyle}"
+                   Margin="0,22,0,6" />
+        <!-- Links and codes are Latin text; they stay left to right under an RTL layout. -->
+        <TextBox x:Name="InviteBox"
+                 Text="{Binding InviteText, UpdateSourceTrigger=PropertyChanged}"
+                 FlowDirection="LeftToRight"
+                 IsEnabled="{Binding IsIdle}"
+                 AutomationProperties.Name="{x:Static loc:Text.InviteInputLabel}" />
+        <Border Style="{StaticResource NoticeStyle}"
+                Margin="0,14,0,0"
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="{Binding ErrorText}"
+                       Style="{StaticResource BodyTextStyle}"
+                       AutomationProperties.LiveSetting="Assertive" />
+        </Border>
+        <StackPanel Orientation="Horizontal"
+                    Margin="0,22,0,0">
+            <Button Content="{x:Static loc:Text.InviteJoin}"
+                    Command="{Binding JoinCommand}"
+                    Style="{StaticResource PrimaryActionStyle}"
+                    IsDefault="True"
+                    Margin="0,0,8,0"
+                    AutomationProperties.Name="{x:Static loc:Text.InviteJoin}" />
+            <Button Content="{x:Static loc:Text.CommonBack}"
+                    Command="{Binding BackCommand}"
+                    Style="{StaticResource QuietButtonStyle}"
+                    IsCancel="True"
+                    AutomationProperties.Name="{x:Static loc:Text.CommonBack}" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

@@ -120,6 +120,51 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Network: 1Salem Connect (private friend access). A development preview that is
+                     not configured in this build, so the card says so and every action stays
+                     disabled; nothing here provisions, invites or revokes anything. -->
+                <Border x:Name="ConnectCard"
+                        Style="{StaticResource SectionCardStyle}"
+                        Visibility="Collapsed"
+                        Margin="0,12,0,0">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="ConnectTitle"
+                                       Style="{StaticResource SectionTitleStyle}"
+                                       VerticalAlignment="Center" />
+                            <Border Grid.Column="1" Style="{StaticResource StatusBadgeStyle}">
+                                <TextBlock x:Name="ConnectBadge" Style="{StaticResource StatusBadgeTextStyle}" />
+                            </Border>
+                        </Grid>
+                        <TextBlock x:Name="ConnectBody"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Margin="0,14,0,0">
+                            <Button x:Name="ConnectEnableButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="0,0,8,8"
+                                    IsEnabled="False" />
+                            <Button x:Name="ConnectInviteButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="0,0,8,8"
+                                    IsEnabled="False" />
+                            <Button x:Name="ConnectFriendsButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="0,0,8,8"
+                                    IsEnabled="False" />
+                            <Button x:Name="ConnectRevokeButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="0,0,8,8"
+                                    IsEnabled="False" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- The world-settings editor is laid out for a full-width page: inside this
                      column its header clips and its grid columns squeeze to a few characters.
                      It opens at full size from the group's Configure action instead. -->

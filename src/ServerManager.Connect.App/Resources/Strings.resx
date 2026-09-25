@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one string table of 1Salem Connect. Every sentence a friend reads comes from here, so a
+  translation (Arabic first) is a Strings.<culture>.resx beside this file and nothing else.
+  Keys match the properties of Localization/Text.cs; a test checks the two lists agree.
+  Only keys that start with "Diagnostics" may use network vocabulary (tsnet, node ids, tickets).
+-->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="AppTitle" xml:space="preserve"><value>1Salem Connect</value></data>
+  <data name="NavServers" xml:space="preserve"><value>Servers</value></data>
+  <data name="NavDiagnostics" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="CommonBack" xml:space="preserve"><value>Back</value></data>
+  <data name="CommonRetry" xml:space="preserve"><value>Try again</value></data>
+
+  <data name="WelcomeTitle" xml:space="preserve"><value>Play on your friends' servers</value></data>
+  <data name="WelcomeBody" xml:space="preserve"><value>Join a friend's game server with an invite. Only the game connection goes through 1Salem Connect; the rest of this PC's internet traffic is left alone.</value></data>
+  <data name="WelcomeGetStarted" xml:space="preserve"><value>Get started</value></data>
+  <data name="NotConfigured" xml:space="preserve"><value>1Salem Connect is not configured yet</value></data>
+  <data name="NotConfiguredDetail" xml:space="preserve"><value>This copy of 1Salem Connect has no service address, so it cannot join servers. Install the official release of 1Salem Connect.</value></data>
+
+  <data name="InviteTitle" xml:space="preserve"><value>Enter your invite</value></data>
+  <data name="InviteBody" xml:space="preserve"><value>Paste the invite link or code that the server owner sent you.</value></data>
+  <data name="InviteInputLabel" xml:space="preserve"><value>Invite link or code</value></data>
+  <data name="InviteJoin" xml:space="preserve"><value>Join</value></data>
+  <data name="InviteNotValid" xml:space="preserve"><value>This invite isn't valid. Ask the server owner for a new one.</value></data>
+
+  <data name="WaitingTitle" xml:space="preserve"><value>Waiting for approval</value></data>
+  <data name="WaitingBody" xml:space="preserve"><value>The owner of {0} needs to approve this PC. This page checks by itself, and you can close the app and come back later.</value></data>
+  <data name="WaitingStatus" xml:space="preserve"><value>Waiting for the owner to approve…</value></data>
+  <data name="WaitingDeclined" xml:space="preserve"><value>The server owner declined this request.</value></data>
+
+  <data name="ServersTitle" xml:space="preserve"><value>Your servers</value></data>
+  <data name="ServersEmpty" xml:space="preserve"><value>You haven't joined any servers yet.</value></data>
+  <data name="ServersAdd" xml:space="preserve"><value>Add a server</value></data>
+  <data name="ServersRefresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="ServersOpen" xml:space="preserve"><value>Open</value></data>
+  <data name="ServersOpenNamed" xml:space="preserve"><value>Open {0}</value></data>
+
+  <data name="StatusWaitingForApproval" xml:space="preserve"><value>Waiting for approval</value></data>
+  <data name="StatusEnrollmentPending" xml:space="preserve"><value>Enrollment pending</value></data>
+  <data name="StatusReady" xml:space="preserve"><value>Ready</value></data>
+  <data name="StatusDeclined" xml:space="preserve"><value>Declined</value></data>
+  <data name="StatusUnavailable" xml:space="preserve"><value>Not available</value></data>
+
+  <data name="StateConnecting" xml:space="preserve"><value>Connecting…</value></data>
+  <data name="StateConnected" xml:space="preserve"><value>Connected</value></data>
+  <data name="StateDisconnected" xml:space="preserve"><value>Disconnected</value></data>
+  <data name="StateServerOffline" xml:space="preserve"><value>Server offline</value></data>
+  <data name="StateAccessExpired" xml:space="preserve"><value>Access expired</value></data>
+  <data name="StateAccessRevoked" xml:space="preserve"><value>Access revoked</value></data>
+
+  <data name="ConnectionConnect" xml:space="preserve"><value>Connect</value></data>
+  <data name="ConnectionDisconnect" xml:space="preserve"><value>Disconnect</value></data>
+  <data name="ConnectionCopy" xml:space="preserve"><value>Copy</value></data>
+  <data name="ConnectionCopyAddress" xml:space="preserve"><value>Copy the server address</value></data>
+  <data name="ConnectionCopied" xml:space="preserve"><value>Address copied</value></data>
+  <data name="ConnectionAddressLabel" xml:space="preserve"><value>Server address</value></data>
+  <data name="ConnectionAddressHint" xml:space="preserve"><value>In Minecraft, open Multiplayer, choose Direct Connection and enter this address.</value></data>
+
+  <data name="ErrorBrokerUnreachable" xml:space="preserve"><value>Can't reach 1Salem Connect. Check your internet connection and try again.</value></data>
+  <data name="ErrorTooManyAttempts" xml:space="preserve"><value>Too many attempts. Wait a minute and try again.</value></data>
+  <data name="ErrorDeviceNotAccepted" xml:space="preserve"><value>This PC couldn't be verified. Check that its date and time are correct, then try again.</value></data>
+  <data name="ErrorTransportUnavailable" xml:space="preserve"><value>The connection component isn't working. Restart 1Salem Connect, and reinstall it if this keeps happening.</value></data>
+  <data name="ErrorTransportUntrusted" xml:space="preserve"><value>Another program answered in place of 1Salem Connect's connection component, so nothing was sent to it. Close other copies of 1Salem Connect or restart this PC, then try again.</value></data>
+  <data name="ErrorSetupFailed" xml:space="preserve"><value>Setting up this server failed. Ask the server owner to approve this PC again.</value></data>
+  <data name="ErrorIdentityUnavailable" xml:space="preserve"><value>This PC's saved 1Salem Connect identity can't be opened by this Windows user, so this PC has to be paired again. Pairing again is not available in this version yet.</value></data>
+  <data name="ErrorSessionLost" xml:space="preserve"><value>The connection stopped. Connect again to continue.</value></data>
+  <data name="ErrorCloseUnconfirmed" xml:space="preserve"><value>The connection couldn't be closed yet, so the address may still work. 1Salem Connect keeps trying; you can also press Disconnect again.</value></data>
+  <data name="ErrorUnexpected" xml:space="preserve"><value>Something went wrong. Technical details are in Diagnostics.</value></data>
+
+  <data name="DiagnosticsTitle" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="DiagnosticsBody" xml:space="preserve"><value>Technical details for troubleshooting. Keys, tickets and invite codes are removed before anything is shown or copied.</value></data>
+  <data name="DiagnosticsRefresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="DiagnosticsCopy" xml:space="preserve"><value>Copy diagnostics</value></data>
+  <data name="DiagnosticsReportLabel" xml:space="preserve"><value>Diagnostic report</value></data>
+  <data name="DiagnosticsApp" xml:space="preserve"><value>App version</value></data>
+  <data name="DiagnosticsBroker" xml:space="preserve"><value>Broker</value></data>
+  <data name="DiagnosticsNotConfigured" xml:space="preserve"><value>not configured</value></data>
+  <data name="DiagnosticsDevelopmentMode" xml:space="preserve"><value>Development mode</value></data>
+  <data name="DiagnosticsDevice" xml:space="preserve"><value>Device id</value></data>
+  <data name="DiagnosticsConfiguredMode" xml:space="preserve"><value>Transport mode (configured)</value></data>
+  <data name="DiagnosticsFakeMode" xml:space="preserve"><value>fake, node id {0} (self-asserted, not a security boundary)</value></data>
+  <data name="DiagnosticsTransport" xml:space="preserve"><value>Transport</value></data>
+  <data name="DiagnosticsTransportNotRunning" xml:space="preserve"><value>not running</value></data>
+  <data name="DiagnosticsTicketKeys" xml:space="preserve"><value>Ticket keys</value></data>
+  <data name="DiagnosticsNodes" xml:space="preserve"><value>Nodes (tsnet node, node id, state)</value></data>
+  <data name="DiagnosticsSessions" xml:space="preserve"><value>Sessions (id, local, state, host bridge, connections)</value></data>
+  <data name="DiagnosticsErrors" xml:space="preserve"><value>Recent errors</value></data>
+  <data name="DiagnosticsTransportLog" xml:space="preserve"><value>Transport log</value></data>
+  <data name="DiagnosticsNone" xml:space="preserve"><value>none</value></data>
+</root>

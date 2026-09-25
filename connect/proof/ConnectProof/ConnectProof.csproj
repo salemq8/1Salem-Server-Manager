@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Development-only proof driver for 1Salem Connect Phase 1. Not part of the solution and never
+    shipped. It drives the local broker, the real Agent-side host authorization code, the friend
+    app's own services and page view models, and the real Go transports (fake network mode)
+    through connect/proof/Run-ConnectProof.ps1. The friend app is a WPF project; its framework
+    reference flows here, but the driver never opens a window.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>ConnectProof</AssemblyName>
+    <RootNamespace>ConnectProof</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\ServerManager.Connect.Core\ServerManager.Connect.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\ServerManager.Infrastructure\ServerManager.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\ServerManager.Connect.App\ServerManager.Connect.App.csproj" />
+  </ItemGroup>
+
+</Project>

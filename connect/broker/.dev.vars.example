@@ -1,0 +1,18 @@
+# 1Salem Connect broker: shape of the git-ignored .dev.vars used by `wrangler dev` (local only).
+#
+# Do not copy this file by hand. Generate real local values with:
+#   npm run dev-secrets -- --out .dev.vars
+#
+# The placeholders below are deliberately not valid keys. A broker started with them answers
+# 503 {"error":"not_configured"} on every route that needs a secret; it never falls back to a
+# default key. Never put production values here: in Cloudflare these would be set with
+# `wrangler secret put`, which Phase 1 never does.
+
+# PKCS#8 DER of an ECDSA P-256 private key, standard base64 (signs session tickets).
+TICKET_SIGNING_KEY="<base64 PKCS#8 ECDSA P-256 private key>"
+
+# At least 32 random bytes, base64url (keys the invite-secret HMAC and IP pseudonyms).
+INVITE_PEPPER="<base64url of 32 random bytes>"
+
+# CONNECT_DEV_LOOPBACK_BRIDGE does not belong here: wrangler loads only the secrets that
+# wrangler.jsonc declares as required from this file. See README.md for passing it with --var.

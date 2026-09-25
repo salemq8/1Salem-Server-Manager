@@ -1,0 +1,22 @@
+{
+  "name": "onesalem-connect-broker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "1Salem Connect control-plane broker (Cloudflare Worker + D1). Phase 1: local only.",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "migrate:local": "wrangler d1 migrations apply onesalem-connect --local",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "dev-secrets": "node scripts/new-dev-secrets.mjs",
+    "local-proof": "node scripts/local-proof.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.2.4",
+    "@cloudflare/workers-types": "5.20260923.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.137.0"
+  }
+}

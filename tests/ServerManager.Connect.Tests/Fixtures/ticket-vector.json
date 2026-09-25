@@ -1,0 +1,36 @@
+{
+  "keyset": {
+    "keys": [
+      {
+        "kid": "vector-2026-01",
+        "alg": "ES256",
+        "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkBGyqpCeG1maJNBg5_SVRo284P9LcrK7NBytH_Jysdbr0md9_voSGorakj_In7KhyHyMxg_rzFRMIzqxxYUvDQ"
+      }
+    ]
+  },
+  "ticket": "eyJhbGciOiJFUzI1NiIsInR5cCI6IjFzYWxlbS10aWNrZXQrand0Iiwia2lkIjoidmVjdG9yLTIwMjYtMDEifQ.eyJpc3MiOiIxc2FsZW0tY29ubmVjdC1icm9rZXIiLCJhdWQiOiJvd25faWQ1c21ldjNjZHU2ZWlrbXp1M3U1NnVjcHQiLCJqdGkiOiJYUjRyaXYweTdta0Z0UEMxX3pSZTdBIiwic3ViIjoiZGV2X256NW03N2V2cm9ienJwZHdneHltbDdjZjJnIiwibWlkIjoibWVtX3ZlY3RvcjAwMDEiLCJzaWQiOiIyOTZiOGUzNS0xMjQ1LTQxNWItOTAwZC1hZGMxNzI0NDc5MmMiLCJwcm90byI6InRjcCIsIm5pZCI6Im5WZWN0b3JOb2RlMUNOVFJMIiwic2twIjoiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFMFY4S09md2hTSWx5OGVvTkRnMi05Y0FvTGtVWlFwZGJzc0ZaSTF2aXh3UWJCY19aVTRoU3NhMXNCTkY3d3dudU5fSV82NlRFYlNfbW5pdFE0OFBvZXciLCJoYiI6IjEwMC4xMDEuMTAyLjEwMzo3NzgwIiwiYXYiOjMsImlhdCI6MTc2NzIyNTU3MCwibmJmIjoxNzY3MjI1NTcwLCJleHAiOjE3NjcyMjYxNzB9.m8BI1RaaAJEWFTbKC3k5Y8S8zXx5THkzNUn2_XhkqZPZRq4tlbGYA8cQo9yVVXox0juyiFmziH9mVuLrYA68uQ",
+  "sessionSpki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0V8KOfwhSIly8eoNDg2-9cAoLkUZQpdbssFZI1vixwQbBc_ZU4hSsa1sBNF7wwnuN_I_66TEbS_mnitQ48Poew",
+  "preamble": {
+    "t": "eyJhbGciOiJFUzI1NiIsInR5cCI6IjFzYWxlbS10aWNrZXQrand0Iiwia2lkIjoidmVjdG9yLTIwMjYtMDEifQ.eyJpc3MiOiIxc2FsZW0tY29ubmVjdC1icm9rZXIiLCJhdWQiOiJvd25faWQ1c21ldjNjZHU2ZWlrbXp1M3U1NnVjcHQiLCJqdGkiOiJYUjRyaXYweTdta0Z0UEMxX3pSZTdBIiwic3ViIjoiZGV2X256NW03N2V2cm9ienJwZHdneHltbDdjZjJnIiwibWlkIjoibWVtX3ZlY3RvcjAwMDEiLCJzaWQiOiIyOTZiOGUzNS0xMjQ1LTQxNWItOTAwZC1hZGMxNzI0NDc5MmMiLCJwcm90byI6InRjcCIsIm5pZCI6Im5WZWN0b3JOb2RlMUNOVFJMIiwic2twIjoiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFMFY4S09md2hTSWx5OGVvTkRnMi05Y0FvTGtVWlFwZGJzc0ZaSTF2aXh3UWJCY19aVTRoU3NhMXNCTkY3d3dudU5fSV82NlRFYlNfbW5pdFE0OFBvZXciLCJoYiI6IjEwMC4xMDEuMTAyLjEwMzo3NzgwIiwiYXYiOjMsImlhdCI6MTc2NzIyNTU3MCwibmJmIjoxNzY3MjI1NTcwLCJleHAiOjE3NjcyMjYxNzB9.m8BI1RaaAJEWFTbKC3k5Y8S8zXx5THkzNUn2_XhkqZPZRq4tlbGYA8cQo9yVVXox0juyiFmziH9mVuLrYA68uQ",
+    "n": "eVPIYRwGT-XCxzIhBVSJww",
+    "ts": 1767225600,
+    "p": "1y7VcR2quNnIaLs2JHlWNTs77Snvnfvt5zXclA_oMozpJXpth4dCkz3rNKOP84vg_5hZmTgB-dodQIqCws6_zw"
+  },
+  "claims": {
+    "iss": "1salem-connect-broker",
+    "aud": "own_id5smev3cdu6eikmzu3u56ucpt",
+    "jti": "XR4riv0y7mkFtPC1_zRe7A",
+    "sub": "dev_nz5m77evrobzrpdwgxyml7cf2g",
+    "mid": "mem_vector0001",
+    "sid": "296b8e35-1245-415b-900d-adc17244792c",
+    "proto": "tcp",
+    "nid": "nVectorNode1CNTRL",
+    "skp": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0V8KOfwhSIly8eoNDg2-9cAoLkUZQpdbssFZI1vixwQbBc_ZU4hSsa1sBNF7wwnuN_I_66TEbS_mnitQ48Poew",
+    "hb": "100.101.102.103:7780",
+    "av": 3,
+    "iat": 1767225570,
+    "nbf": 1767225570,
+    "exp": 1767226170
+  },
+  "fixedNowUnix": 1767225600
+}

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    1Salem Connect, the friend app (CONNECT_ARCHITECTURE.md §3). It references only
+    ServerManager.Connect.Core: it ships to friends who never run Server Manager, so nothing from
+    the owner side (Agent, Infrastructure, Contracts) may reach it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>1Salem.Connect</AssemblyName>
+    <RootNamespace>ServerManager.Connect.App</RootNamespace>
+    <Product>1Salem Connect</Product>
+    <NeutralLanguage>en</NeutralLanguage>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The WPF SDK leaves these out of the implicit usings (System.IO.Path would clash with
+         System.Windows.Shapes.Path, which this app does not use). -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <InternalsVisibleTo Include="ServerManager.Connect.App.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ServerManager.Connect.Core\ServerManager.Connect.Core.csproj" />
+  </ItemGroup>
+</Project>

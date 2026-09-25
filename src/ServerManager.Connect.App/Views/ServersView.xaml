@@ -1,0 +1,70 @@
+<UserControl x:Class="ServerManager.Connect.App.Views.ServersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ServerManager.Connect.App.Localization"
+             AutomationProperties.Name="{x:Static loc:Text.ServersTitle}">
+    <StackPanel>
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button Content="{x:Static loc:Text.ServersRefresh}"
+                        Command="{Binding RefreshCommand}"
+                        Style="{StaticResource QuietButtonStyle}"
+                        Margin="0,0,8,0"
+                        AutomationProperties.Name="{x:Static loc:Text.ServersRefresh}" />
+                <Button Content="{x:Static loc:Text.ServersAdd}"
+                        Command="{Binding AddServerCommand}"
+                        Style="{StaticResource PrimaryActionStyle}"
+                        AutomationProperties.Name="{x:Static loc:Text.ServersAdd}" />
+            </StackPanel>
+            <TextBlock Text="{x:Static loc:Text.ServersTitle}"
+                       Style="{StaticResource PageTitleStyle}" />
+        </DockPanel>
+        <Border Style="{StaticResource NoticeStyle}"
+                Margin="0,16,0,0"
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="{Binding ErrorText}"
+                       Style="{StaticResource BodyTextStyle}"
+                       AutomationProperties.LiveSetting="Assertive" />
+        </Border>
+        <TextBlock Text="{x:Static loc:Text.ServersEmpty}"
+                   Style="{StaticResource SecondaryTextStyle}"
+                   Margin="0,20,0,0"
+                   Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+        <ItemsControl ItemsSource="{Binding Servers}"
+                      Margin="0,20,0,0"
+                      Focusable="False"
+                      IsTabStop="False">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource SectionCardStyle}"
+                            Margin="0,0,0,12">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Content="{x:Static loc:Text.ServersOpen}"
+                                    Command="{Binding OpenCommand}"
+                                    Style="{StaticResource PrimaryActionStyle}"
+                                    VerticalAlignment="Center"
+                                    Margin="12,0,0,0"
+                                    Visibility="{Binding CanOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    AutomationProperties.Name="{Binding OpenAutomationName}" />
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}"
+                                           Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="{Binding StatusText}"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           Margin="0,4,0,0" />
+                                <TextBlock Text="{Binding Problem}"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           Foreground="{DynamicResource WarningBrush}"
+                                           Margin="0,4,0,0"
+                                           Visibility="{Binding HasProblem, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

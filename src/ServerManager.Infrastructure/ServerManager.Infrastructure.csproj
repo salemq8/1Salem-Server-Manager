@@ -3,6 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ServerManager.Connect.Core\ServerManager.Connect.Core.csproj" />
     <ProjectReference Include="..\ServerManager.Contracts\ServerManager.Contracts.csproj" />
     <ProjectReference Include="..\ServerManager.Core\ServerManager.Core.csproj" />
   </ItemGroup>
