@@ -332,9 +332,9 @@ func (n *TsnetNodes) beginEnroll(node, authKey, hostname string) (*tsnetNode, st
 }
 
 // errNodeDirInUse is returned by Enroll when the directory of a node that was
-// never enrolled could not be emptied, for example because a file in it is
-// still open.
-var errNodeDirInUse = errors.New("transport: the node directory could not be emptied before the node's first enrollment")
+// never enrolled could not be emptied, and by Forget when a forgotten node's
+// directory could not be, for example because a file in it is still open.
+var errNodeDirInUse = errors.New("transport: the node directory could not be emptied")
 
 // prepareFirstEnroll readies the directory of a node about to be enrolled.
 //
@@ -521,6 +521,96 @@ func (n *TsnetNodes) enrolledOnDisk(seen map[string]bool) []NodeInfo {
 		}
 	}
 	return out
+}
+
+// Forget stops a node and removes its directory, so that the node can be
+// enrolled again with a new key (§11 "tsnet state directories"). It holds the
+// node lock throughout, as the checks and reservation of Enroll do, so Get,
+// List and Enroll see the node either as it was or as gone, never half
+// removed:
+//
+//   - A node enrolling in this process right now is refused (ErrNodeBusy):
+//     until Enroll ends, the directory is the enrollment's.
+//   - The root, nodes and node directories get enrollment's checks (plain
+//     directory, through a handle that does not follow reparse points, owned
+//     by this account); nothing is created or re-protected. A node is enrolled
+//     when it runs in this process or its directory holds the marker. Anything
+//     else is ErrNotEnrolled and stays as it is: a directory without a marker
+//     is what a killed first enrollment leaves, and the next Enroll empties it.
+//   - A node running in this process is stopped and dropped before its files
+//     are touched. tsnet holds its logs open, and a node being forgotten must
+//     leave the tailnet whatever happens to its directory.
+//   - A directory that failed the checks is left alone (ErrForgetFailed): a
+//     marker or file reached through a junction, or in a directory another
+//     account owns, is nothing this process may delete.
+//
+// The node name has passed ValidateNodeName, so the directory is always a
+// direct child of <root>\nodes. The root, the nodes directory and every other
+// node's directory stay as they are.
+func (n *TsnetNodes) Forget(node string) error {
+	if err := ValidateNodeName(node); err != nil {
+		return err
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	e, inProcess := n.nodes[node]
+	if inProcess && e.t == nil {
+		return ErrNodeBusy
+	}
+	dir := n.nodeDir(node)
+	exists, checkErr := n.checkNodeDirs(dir)
+	if !inProcess && checkErr == nil && (!exists || !markerExists(dir)) {
+		return ErrNotEnrolled
+	}
+	if inProcess {
+		if err := e.t.Close(); err != nil {
+			n.logf("tsnet: node %s did not stop cleanly: %v", node, err)
+		}
+		delete(n.nodes, node)
+	}
+	if checkErr != nil {
+		return fmt.Errorf("%w: %w", ErrForgetFailed, checkErr)
+	}
+	if !exists {
+		return nil
+	}
+	if err := removeNodeDir(dir); err != nil {
+		return fmt.Errorf("%w: %w", ErrForgetFailed, err)
+	}
+	return nil
+}
+
+// checkNodeDirs runs enrollment's directory checks on the root, the nodes
+// directory and a node's directory, without creating or changing any of them.
+// It reports whether the node directory exists; a missing level means it does
+// not.
+func (n *TsnetNodes) checkNodeDirs(dir string) (bool, error) {
+	for _, d := range []string{n.root, filepath.Dir(dir), dir} {
+		if err := n.checkDir(d); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return false, nil
+			}
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// removeNodeDir removes a forgotten node's directory, which has passed the
+// reparse and owner checks. The marker goes first: without it nothing in the
+// directory belongs to an enrolled node, so if anything after it cannot be
+// removed, the directory is left the way a killed first enrollment leaves it,
+// and the next Enroll empties it or fails closed. Everything else goes the way
+// enrollment empties a directory (emptyDir: a junction or link is removed
+// itself, never followed), and the directory itself only once it is empty.
+func removeNodeDir(dir string) error {
+	if err := os.RemoveAll(filepath.Join(dir, markerFile)); err != nil {
+		return err
+	}
+	if err := emptyDir(dir); err != nil {
+		return err
+	}
+	return os.Remove(dir)
 }
 
 // Close stops every running node.

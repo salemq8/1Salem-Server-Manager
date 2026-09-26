@@ -51,6 +51,22 @@ func (n nodeSource) Get(ctx context.Context, node string) (transport.Transport, 
 	return n.tr, nil
 }
 
+type blockingNodeSource struct {
+	tr      transport.Transport
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (n *blockingNodeSource) Get(ctx context.Context, node string) (transport.Transport, error) {
+	close(n.entered)
+	select {
+	case <-n.release:
+		return n.tr, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // freeLoopback returns a loopback address with a port that was free a moment ago.
 func freeLoopback(t *testing.T) string {
 	t.Helper()
@@ -355,5 +371,91 @@ func TestOpenAndRefreshChecks(t *testing.T) {
 	}
 	if err := s.mgr.Close(info.SessionID); !errors.Is(err, friend.ErrNoSession) {
 		t.Errorf("second close: err = %v, want ErrNoSession", err)
+	}
+}
+
+func TestForgetNodeWaitsForAnOpeningSessionAndThenClosesIt(t *testing.T) {
+	signer := testkit.NewSigner(t, "k1")
+	fake, err := transport.NewFake(friendNodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes := &blockingNodeSource{tr: fake, entered: make(chan struct{}), release: make(chan struct{})}
+	mgr := friend.NewManager(friend.Config{
+		Verifier: &ticket.Verifier{Keys: mustKeys(t, signer), Mode: netpolicy.Fake},
+		Nodes:    nodes,
+		Logf:     t.Logf,
+	})
+	t.Cleanup(mgr.CloseAll)
+	hb, _ := fakeHost(t, preamble.StatusOK)
+	key := testkit.NewKey(t)
+	raw := signer.Mint(t, signer.Header(), testkit.Claims(t, time.Now(), hb, &key.PublicKey))
+
+	type openResult struct {
+		info friend.SessionInfo
+		err  error
+	}
+	opened := make(chan openResult, 1)
+	go func() {
+		info, err := mgr.Open(context.Background(), "owner1", raw, testkit.PKCS8(t, key), 0)
+		opened <- openResult{info: info, err: err}
+	}()
+	<-nodes.entered
+
+	forgetCalled := make(chan struct{})
+	forgotten := make(chan error, 1)
+	go func() {
+		forgotten <- mgr.ForgetNode("owner1", func() error {
+			close(forgetCalled)
+			return nil
+		})
+	}()
+	select {
+	case <-forgetCalled:
+		t.Fatal("forget ran while Open still held the node")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(nodes.release)
+	result := <-opened
+	if result.err != nil {
+		t.Fatalf("Open: %v", result.err)
+	}
+	if err := <-forgotten; err != nil {
+		t.Fatalf("ForgetNode: %v", err)
+	}
+	if len(mgr.Status()) != 0 {
+		t.Fatalf("session survived forget: %v", mgr.Status())
+	}
+	if _, err := net.DialTimeout("tcp", result.info.Local, time.Second); err == nil {
+		t.Fatal("forgotten node's listener still accepts connections")
+	}
+}
+
+func TestForgetNodeClosesOnlyThatNodesSessions(t *testing.T) {
+	s := newSetup(t)
+	hb, _ := fakeHost(t, preamble.StatusOK)
+	open := func(node string) friend.SessionInfo {
+		key := testkit.NewKey(t)
+		info, err := s.mgr.Open(context.Background(), node, s.ticket(t, hb, key), testkit.PKCS8(t, key), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	forgotten, kept := open("owner1"), open("owner2")
+	if err := s.mgr.ForgetNode("owner1", func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := net.DialTimeout("tcp", forgotten.Local, time.Second); err == nil {
+		t.Fatal("forgotten node's listener still accepts connections")
+	}
+	c, err := net.DialTimeout("tcp", kept.Local, time.Second)
+	if err != nil {
+		t.Fatalf("other node's listener was closed: %v", err)
+	}
+	c.Close()
+	status := s.mgr.Status()
+	if len(status) != 1 || status[0].SessionID != kept.SessionID {
+		t.Fatalf("status after forget = %v", status)
 	}
 }

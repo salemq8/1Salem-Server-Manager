@@ -20,12 +20,22 @@ import (
 // have been refused earlier.
 type countingNodes struct {
 	transport.NodeSet
-	enrolls int
+	enrolls   int
+	forgets   int
+	forgetErr error
 }
 
 func (c *countingNodes) Enroll(ctx context.Context, node, authKey, hostname string) (string, error) {
 	c.enrolls++
 	return c.NodeSet.Enroll(ctx, node, authKey, hostname)
+}
+
+func (c *countingNodes) Forget(node string) error {
+	c.forgets++
+	if c.forgetErr != nil {
+		return c.forgetErr
+	}
+	return c.NodeSet.Forget(node)
 }
 
 func newService(t *testing.T) (*friend.Service, *countingNodes) {
@@ -96,6 +106,40 @@ func TestEnrollAcceptsOnlyAuthKeys(t *testing.T) {
 	}
 }
 
+func TestForgetDropsTheFakeNodeAndCanBeRetriedAfterFailure(t *testing.T) {
+	s, nodes := newService(t)
+	if _, code := call(t, s, `{"id":1,"op":"enroll","node":"owner1","authKey":"tskey-auth-kXXXXXXCNTRL-abcdef","hostname":"friend-pc"}`); code != "" {
+		t.Fatal(code)
+	}
+
+	nodes.forgetErr = transport.ErrForgetFailed
+	if _, code := call(t, s, `{"id":2,"op":"forget","node":"owner1"}`); code != friend.CodeForgetFailed {
+		t.Fatalf("failed forget: code %q, want %q", code, friend.CodeForgetFailed)
+	}
+	// A failed attempt must release the Manager's operation gate so the app
+	// can retry after the held file or other transient condition is fixed.
+	nodes.forgetErr = transport.ErrNodeBusy
+	if _, code := call(t, s, `{"id":3,"op":"forget","node":"owner1"}`); code != friend.CodeNodeBusy {
+		t.Fatalf("busy forget: code %q, want %q", code, friend.CodeNodeBusy)
+	}
+	nodes.forgetErr = nil
+	if _, code := call(t, s, `{"id":4,"op":"forget","node":"owner1"}`); code != "" {
+		t.Fatalf("retry: %q", code)
+	}
+	if got := nodes.List(); len(got) != 0 {
+		t.Fatalf("nodes after forget = %v", got)
+	}
+	if _, code := call(t, s, `{"id":5,"op":"forget","node":"owner1"}`); code != friend.CodeNotEnrolled {
+		t.Fatalf("second successful forget: code %q, want %q", code, friend.CodeNotEnrolled)
+	}
+	if nodes.forgets != 4 {
+		t.Fatalf("node set Forget called %d times, want 4", nodes.forgets)
+	}
+	if _, code := call(t, s, `{"id":6,"op":"forget","node":"../escape"}`); code != friend.CodeBadNode {
+		t.Fatalf("invalid node: code %q, want %q", code, friend.CodeBadNode)
+	}
+}
+
 func TestNoOperationTakesADestination(t *testing.T) {
 	s, _ := newService(t)
 	// Every field that could name somewhere to connect is refused outright
@@ -108,6 +152,7 @@ func TestNoOperationTakesADestination(t *testing.T) {
 		`{"id":1,"op":"enroll","node":"owner1","authKey":"tskey-auth-k1","hostname":"h","controlUrl":"https://example.invalid"}`,
 		`{"id":1,"op":"status","addr":"127.0.0.1:1"}`,
 		`{"id":1,"op":"close","sessionId":"s","endpoint":"127.0.0.1:1"}`,
+		`{"id":1,"op":"forget","node":"owner1","destination":"100.64.0.1"}`,
 		`{"id":1,"op":"diag","target":"x"}`,
 		`{"id":1,"op":"hello","v":1,"dest":"x"}`,
 	}

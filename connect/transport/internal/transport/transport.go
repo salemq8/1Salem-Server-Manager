@@ -56,12 +56,18 @@ type NodeSet interface {
 	Get(ctx context.Context, node string) (Transport, error)
 	// List describes the known nodes.
 	List() []NodeInfo
+	// Forget stops an enrolled node and removes its state, so that the node
+	// can be enrolled again with a new key. A friend needs this once the owner
+	// has revoked it and deleted its device: the old identity can never log in
+	// again, and while its state exists Enroll refuses the node.
+	Forget(node string) error
 	// Close shuts every node down.
 	Close() error
 }
 
 var (
-	// ErrNotEnrolled is returned by Get for a node that has never enrolled.
+	// ErrNotEnrolled is returned by Get for a node that has never enrolled,
+	// and by Forget for a node that is not enrolled.
 	ErrNotEnrolled = errors.New("transport: node not enrolled")
 	// ErrAlreadyEnrolled is returned by Enroll for a node that finished an
 	// enrollment (its directory has the marker) or is enrolling in this process
@@ -78,6 +84,14 @@ var (
 	ErrInvalidAuthKey = errors.New("transport: invalid auth key")
 	// ErrEnrollFailed is returned when the node could not come up.
 	ErrEnrollFailed = errors.New("transport: enrollment failed")
+	// ErrNodeBusy is returned by Forget for a node that is enrolling in this
+	// process right now. The enrollment owns the node directory until it ends;
+	// forgetting the node then is a separate, later step.
+	ErrNodeBusy = errors.New("transport: node is enrolling")
+	// ErrForgetFailed is returned by Forget when the node's directory failed
+	// the reparse and owner checks, or could not be removed completely. The
+	// node is stopped either way, and nothing outside its directory is touched.
+	ErrForgetFailed = errors.New("transport: the node could not be forgotten")
 	// ErrDestination is returned by Dial for a destination the mode forbids.
 	ErrDestination = errors.New("transport: destination not permitted")
 	// ErrListenAddr is returned by Listen for an address the mode forbids.

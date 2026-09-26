@@ -30,6 +30,8 @@ const (
 	CodeNoFreePort     = "no_free_port"
 	CodeNoSession      = "no_session"
 	CodeShuttingDown   = "shutting_down"
+	CodeNodeBusy       = "node_busy"
+	CodeForgetFailed   = "forget_failed"
 )
 
 // Service serves the friend pipe (§11 "Friend UI ↔ friend transport"). No
@@ -93,6 +95,11 @@ type refreshReq struct {
 type closeReq struct {
 	pipe.Envelope
 	SessionID string `json:"sessionId"`
+}
+
+type forgetReq struct {
+	pipe.Envelope
+	Node string `json:"node"`
 }
 
 type diagResp struct {
@@ -171,6 +178,19 @@ func (s *Service) Handle(ctx context.Context, op string, line []byte) (any, erro
 		}
 		return nil, mapError(s.Manager.Close(req.SessionID))
 
+	case "forget":
+		var req forgetReq
+		if err := pipe.DecodeRequest(line, &req); err != nil {
+			return nil, err
+		}
+		// Checked before any session is touched; the node set checks it again.
+		if err := transport.ValidateNodeName(req.Node); err != nil {
+			return nil, mapError(err)
+		}
+		// The node's sessions end first, then the node itself: a session
+		// must never outlive the node it carries connections through.
+		return nil, mapError(s.Manager.ForgetNode(req.Node, func() error { return s.Nodes.Forget(req.Node) }))
+
 	case "diag":
 		if err := pipe.DecodeRequest(line, &emptyReq{}); err != nil {
 			return nil, err
@@ -207,6 +227,8 @@ func mapError(err error) error {
 		{transport.ErrAlreadyEnrolled, CodeAlreadyEnroll},
 		{transport.ErrNotEnrolled, CodeNotEnrolled},
 		{transport.ErrEnrollFailed, CodeEnrollFailed},
+		{transport.ErrNodeBusy, CodeNodeBusy},
+		{transport.ErrForgetFailed, CodeForgetFailed},
 		{ErrTicket, CodeTicket},
 		{ErrSessionKey, CodeSessionKey},
 		{ErrTicketMismatch, CodeTicketMismatch},

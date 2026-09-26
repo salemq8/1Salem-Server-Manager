@@ -227,5 +227,23 @@ func (n *FakeNodes) List() []NodeInfo {
 	return out
 }
 
+// Forget drops a node from the set. Fake mode keeps nothing on disk, so the
+// in-memory entry is all there is to remove; the shared loopback transport
+// stays, since every other node uses it too. The caller closes the node's
+// sessions first, as in tsnet mode. As with Get, nothing here requires an
+// Enroll: a later Get or Enroll of the same name simply adds it again.
+func (n *FakeNodes) Forget(node string) error {
+	if err := ValidateNodeName(node); err != nil {
+		return err
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if _, ok := n.nodes[node]; !ok {
+		return ErrNotEnrolled
+	}
+	delete(n.nodes, node)
+	return nil
+}
+
 // Close closes the shared transport.
 func (n *FakeNodes) Close() error { return n.t.Close() }

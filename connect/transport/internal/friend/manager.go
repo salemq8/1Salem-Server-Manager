@@ -86,6 +86,13 @@ type Manager struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	closed   bool
+	// opening counts, per node, the Opens between their node check and the
+	// registration of their session; forgetting marks the nodes a ForgetNode
+	// is working on. settled is signalled whenever either shrinks. Together
+	// they serialize ForgetNode with Open on the same node (see ForgetNode).
+	opening    map[string]int
+	forgetting map[string]bool
+	settled    *sync.Cond
 }
 
 // SessionInfo is one entry of the "status" response.
@@ -107,7 +114,14 @@ type SessionDiag struct {
 
 // NewManager returns a Manager.
 func NewManager(cfg Config) *Manager {
-	return &Manager{cfg: cfg, sessions: make(map[string]*session)}
+	m := &Manager{
+		cfg:        cfg,
+		sessions:   make(map[string]*session),
+		opening:    make(map[string]int),
+		forgetting: make(map[string]bool),
+	}
+	m.settled = sync.NewCond(&m.mu)
+	return m
 }
 
 func (m *Manager) now() time.Time {
@@ -137,6 +151,12 @@ func (m *Manager) Open(ctx context.Context, node, rawTicket, sessionKey string, 
 	if err != nil {
 		return SessionInfo{}, err
 	}
+	if err := m.beginOpen(node); err != nil {
+		return SessionInfo{}, err
+	}
+	// Deferred, so a session this Open registers is in m.sessions before a
+	// waiting ForgetNode looks for the node's sessions.
+	defer m.endOpen(node)
 	tr, err := m.cfg.Nodes.Get(ctx, node)
 	if err != nil {
 		return SessionInfo{}, err
@@ -217,6 +237,92 @@ func (m *Manager) CloseAll() {
 	m.mu.Unlock()
 	for _, s := range sessions {
 		s.close()
+	}
+}
+
+// ForgetNode ends every session on node, then runs forget (the node set's
+// Forget) while no session can open on the node. Each session ends as Close
+// ends it: its loopback listener closes, so a new local connection is refused,
+// and its live connections are cut.
+//
+// It is serialized with Open on the same node. It waits for the Opens of node
+// already past their node check, and ends their sessions too; an Open that
+// starts while it runs is refused as not enrolled. Otherwise an Open that had
+// fetched the node's transport just before could register a listener on the
+// stopped node just after. Two ForgetNode calls for one node run one after the
+// other. Every outcome is logged as one line.
+func (m *Manager) ForgetNode(node string, forget func() error) error {
+	ended, err := m.stopNode(node)
+	if err != nil {
+		m.logf("friend: node %s not forgotten (%d session(s) closed): %v", node, ended, err)
+		return err
+	}
+	// Always release the per-node operation gate, including after a failed
+	// filesystem cleanup. The node set fails Get closed in those cases, and a
+	// later forget must be able to retry instead of waiting forever.
+	defer func() {
+		m.mu.Lock()
+		delete(m.forgetting, node)
+		m.settled.Broadcast()
+		m.mu.Unlock()
+	}()
+	err = forget()
+	if err != nil {
+		m.logf("friend: node %s not forgotten (%d session(s) closed): %v", node, ended, err)
+		return err
+	}
+	m.logf("friend: node %s forgotten (%d session(s) closed)", node, ended)
+	return nil
+}
+
+// stopNode waits until no Open or ForgetNode of node is under way, marks the
+// node as being forgotten and ends its sessions. It returns how many it ended.
+func (m *Manager) stopNode(node string) (int, error) {
+	m.mu.Lock()
+	for m.forgetting[node] || m.opening[node] > 0 {
+		m.settled.Wait()
+	}
+	if m.closed {
+		m.mu.Unlock()
+		return 0, ErrClosed
+	}
+	m.forgetting[node] = true
+	var ended []*session
+	for id, s := range m.sessions {
+		if s.node == node {
+			ended = append(ended, s)
+			delete(m.sessions, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, s := range ended {
+		s.close()
+	}
+	return len(ended), nil
+}
+
+// beginOpen counts an Open of node in, unless the node is being forgotten: it
+// then has no enrollment to open a session on, whatever the node set would
+// still say at this instant.
+func (m *Manager) beginOpen(node string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.forgetting[node] {
+		return transport.ErrNotEnrolled
+	}
+	m.opening[node]++
+	return nil
+}
+
+// endOpen counts an Open of node out once its session is registered or it
+// failed.
+func (m *Manager) endOpen(node string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.opening[node]--
+	if m.opening[node] == 0 {
+		delete(m.opening, node)
+		m.settled.Broadcast()
 	}
 }
 

@@ -131,6 +131,28 @@ func TestTsnetNodesDirectoryPerNode(t *testing.T) {
 	}
 }
 
+func TestFakeNodesForgetAndReenroll(t *testing.T) {
+	n, err := NewFakeNodes("nFAKE0001CNTRL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := n.Enroll(context.Background(), "owner-a", testAuthKey, testHostname); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Forget("owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := n.List(); len(got) != 0 {
+		t.Fatalf("List after forget = %v", got)
+	}
+	if err := n.Forget("owner-a"); !errors.Is(err, ErrNotEnrolled) {
+		t.Fatalf("second forget: %v", err)
+	}
+	if _, err := n.Enroll(context.Background(), "owner-a", testAuthKey, testHostname); err != nil {
+		t.Fatalf("re-enroll after forget: %v", err)
+	}
+}
+
 func TestProtectedStateDirectory(t *testing.T) {
 	root := t.TempDir()
 	n, _ := NewTsnetNodes(filepath.Join(root, "state"), nil, nil)
@@ -326,6 +348,103 @@ func TestFirstEnrollChecksTheDirectoryBeforeTheMarker(t *testing.T) {
 	}
 	if len(n.nodes) != 0 {
 		t.Fatalf("refused enrollments reserved %v", n.nodes)
+	}
+}
+
+func TestForgetRemovesOnlyTheRequestedTsnetNode(t *testing.T) {
+	n, _ := NewTsnetNodes(filepath.Join(t.TempDir(), "state"), t.Logf, t.Logf)
+	for node, id := range map[string]string{"owner-a": "nOWNERA0001CNTRL", "owner-b": "nOWNERB0001CNTRL"} {
+		dir := n.nodeDir(node)
+		if err := n.prepareDirs(dir); err != nil {
+			t.Fatal(err)
+		}
+		writeMarker(t, dir, id)
+		writeFile(t, filepath.Join(dir, "tailscaled.state"), `{"node":"`+node+`"}`)
+	}
+	if err := n.Forget("owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(n.nodeDir("owner-a")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("forgotten directory still exists: %v", err)
+	}
+	if _, err := readMarker(n.nodeDir("owner-b")); err != nil {
+		t.Fatalf("other node marker was changed: %v", err)
+	}
+	if got := n.List(); !slices.Equal(got, []NodeInfo{{Node: "owner-b", NodeID: "nOWNERB0001CNTRL", State: "enrolled"}}) {
+		t.Fatalf("List after forget = %v", got)
+	}
+	if _, _, err := n.beginEnroll("owner-a", testAuthKey, testHostname); err != nil {
+		t.Fatalf("fresh enrollment after forget: %v", err)
+	}
+}
+
+func TestForgetTsnetNodeFailsClosedOnUntrustedOrIncompleteState(t *testing.T) {
+	n, _ := NewTsnetNodes(filepath.Join(t.TempDir(), "state"), t.Logf, t.Logf)
+	if err := n.Forget("missing"); !errors.Is(err, ErrNotEnrolled) {
+		t.Fatalf("missing node: %v", err)
+	}
+	if _, err := os.Lstat(n.root); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("forget created the state root: %v", err)
+	}
+
+	partial := n.nodeDir("partial")
+	if err := n.prepareDirs(partial); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(partial, "tailscaled.state"), "kept")
+	if err := n.Forget("partial"); !errors.Is(err, ErrNotEnrolled) {
+		t.Fatalf("marker-less node: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(partial, "tailscaled.state")); err != nil {
+		t.Fatalf("marker-less state was changed: %v", err)
+	}
+
+	outside := t.TempDir()
+	writeMarker(t, outside, "nOUTSIDE0001CNTRL")
+	targetMarker := filepath.Join(outside, markerFile)
+	testkit.Junction(t, n.nodeDir("junction"), outside)
+	if err := n.Forget("junction"); !errors.Is(err, ErrForgetFailed) {
+		t.Fatalf("junction node: %v", err)
+	}
+	if _, err := os.Stat(targetMarker); err != nil {
+		t.Fatalf("junction target was changed: %v", err)
+	}
+}
+
+func TestForgetTsnetNodeCanRecoverAfterAFileIsReleased(t *testing.T) {
+	n, _ := NewTsnetNodes(filepath.Join(t.TempDir(), "state"), t.Logf, t.Logf)
+	dir := n.nodeDir("owner-a")
+	if err := n.prepareDirs(dir); err != nil {
+		t.Fatal(err)
+	}
+	writeMarker(t, dir, "nOWNERA0001CNTRL")
+	held := filepath.Join(dir, "tailscaled.log1.txt")
+	writeFile(t, held, "log")
+	f, err := os.Open(held)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = n.Forget("owner-a")
+	f.Close()
+	if !errors.Is(err, ErrForgetFailed) {
+		t.Fatalf("forget with held file: %v", err)
+	}
+	if markerExists(dir) {
+		t.Fatal("failed cleanup left the enrollment marker in place")
+	}
+	if _, _, err := n.beginEnroll("owner-a", testAuthKey, testHostname); err != nil {
+		t.Fatalf("fresh enrollment after the file was released: %v", err)
+	}
+}
+
+func TestForgetRefusesANodeWhileItIsEnrolling(t *testing.T) {
+	n, _ := NewTsnetNodes(filepath.Join(t.TempDir(), "state"), t.Logf, t.Logf)
+	n.nodes["owner-a"] = &tsnetNode{state: "enrolling"}
+	if err := n.Forget("owner-a"); !errors.Is(err, ErrNodeBusy) {
+		t.Fatalf("Forget while enrolling: %v", err)
+	}
+	if n.nodes["owner-a"] == nil {
+		t.Fatal("Forget removed an enrollment in progress")
 	}
 }
 
