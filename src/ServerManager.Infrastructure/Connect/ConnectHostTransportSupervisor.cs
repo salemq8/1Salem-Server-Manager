@@ -32,6 +32,10 @@ public sealed class ConnectHostTransportSupervisor : IAsyncDisposable
     private readonly CancellationTokenSource _stopping = new();
     private Task? _run;
     private int _stopped;
+    private int _runningProcessId;
+
+    /// <summary>The sidecar currently held by the supervisor, or null between runs.</summary>
+    public int? RunningProcessId => Volatile.Read(ref _runningProcessId) is var id && id != 0 ? id : null;
 
     public ConnectHostTransportSupervisor(
         ConnectHostTransportOptions options,
@@ -102,6 +106,7 @@ public sealed class ConnectHostTransportSupervisor : IAsyncDisposable
         List<string> arguments =
         [
             "--mode", _options.Mode == ConnectTransportMode.Tsnet ? "tsnet" : "fake",
+            "--pipe", @"\\.\pipe\" + _options.ControlPipeName,
             "--authz-pipe", @"\\.\pipe\" + _options.AuthorizationPipeName,
             "--expected-authz-owner", ConnectPipeSecurity.CurrentUser.Value
         ];
@@ -169,6 +174,7 @@ public sealed class ConnectHostTransportSupervisor : IAsyncDisposable
 
         using (process)
         {
+            Volatile.Write(ref _runningProcessId, process.Id);
             _logger.LogInformation(
                 "1Salem Connect host transport started as process {ProcessId} in {Mode} mode.",
                 process.Id,
@@ -183,6 +189,10 @@ public sealed class ConnectHostTransportSupervisor : IAsyncDisposable
             {
                 await StopProcessAsync(process).ConfigureAwait(false);
                 return false;
+            }
+            finally
+            {
+                Interlocked.CompareExchange(ref _runningProcessId, 0, process.Id);
             }
         }
     }

@@ -29,6 +29,7 @@ namespace ServerManager.Infrastructure.Connect;
 public sealed class TailscaleApiProvisioner : IConnectProvisioner
 {
     public const string FriendTag = "tag:onesalem-client";
+    public const string HostTag = "tag:onesalem-host";
     public const long FriendKeyExpirySeconds = 86_400;
     public const int MaxDescriptionLength = 50;
 
@@ -76,6 +77,20 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
         return await ReadJsonAsync(response, operation, ReadFriendKey, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<EnrollmentSecret> CreateHostAuthKeyAsync(CancellationToken cancellationToken)
+    {
+        var credential = RequireCredential();
+        var body = BuildAuthKeyRequest(HostTag, "1salem connect host");
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(ApiBase, "tailnet/-/keys"))
+        {
+            Content = JsonContent(body)
+        };
+        const string operation = "create the host auth key";
+        using var response = await SendAsync(credential, request, operation, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, operation, cancellationToken).ConfigureAwait(false);
+        return await ReadJsonAsync(response, operation, ReadFriendKey, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<bool> DeleteAuthKeyAsync(string keyId, CancellationToken cancellationToken)
     {
         var credential = RequireCredential();
@@ -105,10 +120,13 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
         }
 
         await EnsureSuccessAsync(response, operation, cancellationToken).ConfigureAwait(false);
-        return await ReadJsonAsync(response, operation, ReadDevice, cancellationToken).ConfigureAwait(false);
+        var device = await ReadJsonAsync(response, operation, ReadDevice, cancellationToken).ConfigureAwait(false);
+        return string.Equals(device.NodeId, nodeId, StringComparison.Ordinal)
+            ? device
+            : throw new ConnectProvisioningException("The tailnet API returned an unexpected response while trying to read a device.");
     }
 
-    public async Task<bool> DeleteDeviceAsync(string nodeId, CancellationToken cancellationToken)
+    internal async Task<bool> DeleteDeviceAsync(string nodeId, CancellationToken cancellationToken)
     {
         var credential = RequireCredential();
         RequireId(nodeId, nameof(nodeId));
@@ -122,6 +140,50 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
 
         await EnsureSuccessAsync(response, operation, cancellationToken).ConfigureAwait(false);
         return true;
+    }
+
+    public async Task<byte[]> GetPolicyAsync(CancellationToken cancellationToken)
+    {
+        var credential = RequireCredential();
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(ApiBase, "tailnet/-/acl"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        const string operation = "read the tailnet policy";
+        using var response = await SendAsync(credential, request, operation, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            throw new ConnectPolicyNotPermittedException();
+        }
+
+        await EnsureSuccessAsync(response, operation, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        if (body.Length is 0 or > 1024 * 1024)
+        {
+            Array.Clear(body);
+            throw new ConnectProvisioningException("The tailnet API returned an unexpected policy response.");
+        }
+
+        return body;
+    }
+
+    public async Task<bool> DeleteFriendDeviceAsync(string nodeId, string hostNodeId, CancellationToken cancellationToken)
+    {
+        RequireId(nodeId, nameof(nodeId));
+        RequireId(hostNodeId, nameof(hostNodeId));
+        var device = await GetDeviceAsync(nodeId, cancellationToken).ConfigureAwait(false);
+        if (device is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(nodeId, hostNodeId, StringComparison.Ordinal) ||
+            string.Equals(device.NodeId, hostNodeId, StringComparison.Ordinal) ||
+            device.HasTag(HostTag) ||
+            !device.HasTag(FriendTag))
+        {
+            throw new ConnectUnsafeDeviceDeletionException();
+        }
+
+        return await DeleteDeviceAsync(nodeId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -139,7 +201,10 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
         return DescriptionPrefix + prefix;
     }
 
-    internal static byte[] BuildFriendKeyRequest(string membershipId)
+    internal static byte[] BuildFriendKeyRequest(string membershipId) =>
+        BuildAuthKeyRequest(FriendTag, FriendKeyDescription(membershipId));
+
+    internal static byte[] BuildAuthKeyRequest(string tag, string description)
     {
         var buffer = new ArrayBufferWriter<byte>(256);
         using (var writer = new Utf8JsonWriter(buffer))
@@ -152,13 +217,13 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
             writer.WriteBoolean("ephemeral", false);
             writer.WriteBoolean("preauthorized", true);
             writer.WriteStartArray("tags");
-            writer.WriteStringValue(FriendTag);
+            writer.WriteStringValue(tag);
             writer.WriteEndArray();
             writer.WriteEndObject();
             writer.WriteEndObject();
             writer.WriteEndObject();
             writer.WriteNumber("expirySeconds", FriendKeyExpirySeconds);
-            writer.WriteString("description", FriendKeyDescription(membershipId));
+            writer.WriteString("description", description);
             writer.WriteEndObject();
         }
 
@@ -373,7 +438,20 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
             created.TryGetDateTimeOffset(out var parsedCreated)
                 ? parsedCreated
                 : null;
-        return new ConnectTailnetDevice(nodeId, tags, createdAt);
+        var addresses = root.TryGetProperty("addresses", out var addressArray) && addressArray.ValueKind == JsonValueKind.Array
+            ? addressArray.EnumerateArray()
+                .Where(address => address.ValueKind == JsonValueKind.String)
+                .Select(address => address.GetString()!)
+                .ToArray()
+            : [];
+        var hostname = root.TryGetProperty("hostname", out var hostnameValue) && hostnameValue.ValueKind == JsonValueKind.String
+            ? hostnameValue.GetString()
+            : null;
+        var isEphemeral = root.TryGetProperty("isEphemeral", out var ephemeral) && ephemeral.ValueKind == JsonValueKind.True;
+        var tailnetLockError = root.TryGetProperty("tailnetLockError", out var lockError) && lockError.ValueKind == JsonValueKind.String
+            ? lockError.GetString()
+            : null;
+        return new ConnectTailnetDevice(nodeId, tags, createdAt, hostname, addresses, isEphemeral, tailnetLockError);
     }
 
     /// <summary>A freshly issued access token. Its <see cref="ToString"/> never prints the token.</summary>

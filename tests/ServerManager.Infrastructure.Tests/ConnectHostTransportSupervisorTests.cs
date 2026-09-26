@@ -36,6 +36,7 @@ public sealed class ConnectHostTransportSupervisorTests : IDisposable
             new[]
             {
                 "--mode", "fake",
+                "--pipe", @"\\.\pipe\1Salem.Connect.Host.Transport.Agent.v1",
                 "--authz-pipe", @"\\.\pipe\1Salem.Connect.HostAuthz.v1",
                 "--expected-authz-owner", ConnectPipeSecurity.CurrentUser.Value,
                 "--bridge-listen", "127.0.0.1:17780"
@@ -61,6 +62,7 @@ public sealed class ConnectHostTransportSupervisorTests : IDisposable
             new[]
             {
                 "--mode", "tsnet",
+                "--pipe", @"\\.\pipe\1Salem.Connect.Host.Transport.Agent.v1",
                 "--authz-pipe", @"\\.\pipe\1Salem.Connect.Test.Authz",
                 "--expected-authz-owner", ConnectPipeSecurity.CurrentUser.Value,
                 "--state-dir", stateDirectory,
@@ -148,6 +150,7 @@ public sealed class ConnectHostTransportSupervisorTests : IDisposable
 
         supervisor.Start();
         await WaitUntilAsync(() => runner.StartCount == 1);
+        Assert.Equal(1, supervisor.RunningProcessId);
         await supervisor.StopAsync();
         await supervisor.StopAsync();
         await Task.Delay(100);
@@ -156,6 +159,7 @@ public sealed class ConnectHostTransportSupervisorTests : IDisposable
         Assert.True(process.Stopped);
         Assert.True(process.Disposed);
         Assert.Equal(1, runner.StartCount);
+        Assert.Null(supervisor.RunningProcessId);
         Assert.Throws<ObjectDisposedException>(supervisor.Start);
     }
 

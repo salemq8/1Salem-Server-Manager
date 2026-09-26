@@ -64,6 +64,22 @@ public sealed class ConnectTailscaleApiProvisionerTests
             });
     }
 
+    [Fact]
+    public async Task AHostKey_IsOneOffPreauthorizedPersistentAndHasOnlyTheHostTag()
+    {
+        var handler = new RecordingHandler(TailnetApi);
+        var provisioner = CreateProvisioner(handler);
+
+        var secret = await provisioner.CreateHostAuthKeyAsync(CancellationToken.None);
+
+        Assert.Equal(KeyId, secret.KeyId);
+        var create = handler.Requests[^1];
+        Assert.Equal(
+            "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"tag:onesalem-host\"]}}}," +
+            "\"expirySeconds\":86400,\"description\":\"1salem connect host\"}",
+            create.Body);
+    }
+
     [Theory]
     [InlineData("mem_test0001")]
     [InlineData("a")]
@@ -108,9 +124,73 @@ public sealed class ConnectTailscaleApiProvisionerTests
         Assert.Equal(NodeId, device.NodeId);
         Assert.True(device.HasTag(TailscaleApiProvisioner.FriendTag));
         Assert.Equal(DateTimeOffset.Parse("2026-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture), device.CreatedAt);
+        Assert.Equal("friend-pc", device.Hostname);
+        Assert.Equal(["100.100.10.20", "fd7a:115c:a1e0::20"], device.Addresses);
+        Assert.False(device.IsEphemeral);
+        Assert.Null(device.TailnetLockError);
         var read = handler.Requests[^1];
         Assert.Equal(HttpMethod.Get, read.Method);
         Assert.Equal("https://api.tailscale.com/api/v2/device/" + NodeId, read.Uri.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task PolicyRead_RequestsJson_AndForbiddenIsDistinct()
+    {
+        var forbidden = false;
+        var handler = new RecordingHandler((request, body) =>
+            forbidden && request.RequestUri!.AbsolutePath.EndsWith("/tailnet/-/acl", StringComparison.Ordinal)
+                ? Respond(HttpStatusCode.Forbidden, "{\"message\":\"scope\"}")
+                : TailnetApi(request, body));
+        var provisioner = CreateProvisioner(handler);
+
+        var policy = await provisioner.GetPolicyAsync(CancellationToken.None);
+        Assert.Contains("tagOwners", Encoding.UTF8.GetString(policy), StringComparison.Ordinal);
+        Assert.Contains("application/json", handler.Requests[^1].Accept);
+
+        forbidden = true;
+        await Assert.ThrowsAsync<ConnectPolicyNotPermittedException>(() => provisioner.GetPolicyAsync(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("tag:onesalem-host", "nTestHost1CNTRL")]
+    [InlineData("tag:other", "nTestHost1CNTRL")]
+    [InlineData("tag:onesalem-client", NodeId)]
+    public async Task DeviceDeletion_RefusesHostUntaggedAndTheKnownHostNode(string tag, string hostNodeId)
+    {
+        var handler = new RecordingHandler((request, body) =>
+            request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.EndsWith(NodeId, StringComparison.Ordinal)
+                ? Respond(HttpStatusCode.OK, $"{{\"nodeId\":\"{NodeId}\",\"tags\":[\"{tag}\"]}}")
+                : TailnetApi(request, body));
+        var provisioner = CreateProvisioner(handler);
+
+        await Assert.ThrowsAsync<ConnectUnsafeDeviceDeletionException>(() =>
+            provisioner.DeleteFriendDeviceAsync(NodeId, hostNodeId, CancellationToken.None));
+        Assert.DoesNotContain(handler.Requests, request => request.Method == HttpMethod.Delete);
+    }
+
+    [Fact]
+    public async Task VerifiedFriendDeletion_ReReadsBeforeDeleting()
+    {
+        var handler = new RecordingHandler(TailnetApi);
+        var provisioner = CreateProvisioner(handler);
+
+        Assert.True(await provisioner.DeleteFriendDeviceAsync(NodeId, "nTestHost1CNTRL", CancellationToken.None));
+
+        Assert.Equal([HttpMethod.Get, HttpMethod.Delete], handler.Requests.Skip(1).Select(request => request.Method));
+    }
+
+    [Fact]
+    public async Task DeviceRead_RefusesAResponseForAnotherNode_AndNeverDeletes()
+    {
+        var handler = new RecordingHandler((request, body) =>
+            request.Method == HttpMethod.Get
+                ? Respond(HttpStatusCode.OK, "{\"nodeId\":\"nDifferent1CNTRL\",\"tags\":[\"tag:onesalem-client\"]}")
+                : TailnetApi(request, body));
+        var provisioner = CreateProvisioner(handler);
+
+        await Assert.ThrowsAsync<ConnectProvisioningException>(() =>
+            provisioner.DeleteFriendDeviceAsync(NodeId, "nTestHost1CNTRL", CancellationToken.None));
+        Assert.DoesNotContain(handler.Requests, request => request.Method == HttpMethod.Delete);
     }
 
     [Fact]
@@ -179,6 +259,7 @@ public sealed class ConnectTailscaleApiProvisionerTests
             NullLogger<TailscaleApiProvisioner>.Instance);
 
         await Assert.ThrowsAsync<ConnectNotConfiguredException>(() => provisioner.CreateFriendAuthKeyAsync("mem_test0001", CancellationToken.None));
+        await Assert.ThrowsAsync<ConnectNotConfiguredException>(() => provisioner.CreateHostAuthKeyAsync(CancellationToken.None));
         await Assert.ThrowsAsync<ConnectNotConfiguredException>(() => provisioner.DeleteAuthKeyAsync(KeyId, CancellationToken.None));
         await Assert.ThrowsAsync<ConnectNotConfiguredException>(() => provisioner.GetDeviceAsync(NodeId, CancellationToken.None));
         await Assert.ThrowsAsync<ConnectNotConfiguredException>(() => provisioner.DeleteDeviceAsync(NodeId, CancellationToken.None));
@@ -290,7 +371,13 @@ public sealed class ConnectTailscaleApiProvisionerTests
         {
             return Respond(
                 HttpStatusCode.OK,
-                "{\"nodeId\":\"" + NodeId + "\",\"tags\":[\"tag:onesalem-client\"],\"created\":\"2026-01-01T00:00:00Z\"}");
+                "{\"nodeId\":\"" + NodeId + "\",\"tags\":[\"tag:onesalem-client\"],\"created\":\"2026-01-01T00:00:00Z\"," +
+                "\"hostname\":\"friend-pc\",\"addresses\":[\"100.100.10.20\",\"fd7a:115c:a1e0::20\"],\"isEphemeral\":false,\"tailnetLockError\":null}");
+        }
+
+        if (request.Method == HttpMethod.Get && path == "/api/v2/tailnet/-/acl")
+        {
+            return Respond(HttpStatusCode.OK, "{\"tagOwners\":{\"tag:onesalem-host\":[\"autogroup:admin\"],\"tag:onesalem-client\":[\"tag:onesalem-host\"]}}");
         }
 
         if (request.Method == HttpMethod.Delete)
@@ -311,7 +398,7 @@ public sealed class ConnectTailscaleApiProvisionerTests
                 pair => Uri.UnescapeDataString(pair[0].Replace('+', ' ')),
                 pair => Uri.UnescapeDataString(pair[1].Replace('+', ' ')));
 
-    private sealed record RecordedRequest(HttpMethod Method, Uri Uri, string? Authorization, string? ContentType, string? Body);
+    private sealed record RecordedRequest(HttpMethod Method, Uri Uri, string? Authorization, string? ContentType, IReadOnlyList<string> Accept, string? Body);
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, string?, HttpResponseMessage> respond) : HttpMessageHandler
     {
@@ -338,6 +425,7 @@ public sealed class ConnectTailscaleApiProvisionerTests
                     request.RequestUri!,
                     request.Headers.Authorization?.ToString(),
                     request.Content?.Headers.ContentType?.MediaType,
+                    request.Headers.Accept.Select(value => value.MediaType ?? string.Empty).ToArray(),
                     body));
             }
 

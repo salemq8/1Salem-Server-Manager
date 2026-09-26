@@ -21,7 +21,8 @@ public sealed class ConnectHostAuthorizationOptions
     public ConnectHostAuthorizationOptions(
         string ownerId,
         TicketKeySet ticketKeys,
-        string pipeName = ConnectPipeNames.HostAuthorization)
+        string pipeName = ConnectPipeNames.HostAuthorization,
+        ConnectRevocationSeed? initialRevocations = null)
     {
         if (!ConnectKeyIds.IsOwnerId(ownerId))
         {
@@ -32,6 +33,11 @@ public sealed class ConnectHostAuthorizationOptions
         OwnerId = ownerId;
         TicketKeys = ticketKeys ?? throw new ArgumentNullException(nameof(ticketKeys));
         PipeName = pipeName;
+        InitialRevocations = initialRevocations ?? ConnectRevocationSeed.Empty;
+        ArgumentNullException.ThrowIfNull(InitialRevocations.Devices);
+        ArgumentNullException.ThrowIfNull(InitialRevocations.Memberships);
+        ArgumentNullException.ThrowIfNull(InitialRevocations.Tickets);
+        ArgumentNullException.ThrowIfNull(InitialRevocations.AuthorizationFloors);
     }
 
     public string OwnerId { get; }
@@ -40,6 +46,9 @@ public sealed class ConnectHostAuthorizationOptions
 
     /// <summary>The bare pipe name, without <c>\\.\pipe\</c>.</summary>
     public string PipeName { get; }
+
+    /// <summary>Persisted revocations applied before the first pipe instance is served.</summary>
+    public ConnectRevocationSeed InitialRevocations { get; }
 
     /// <summary>
     /// How often a close the host transport has not confirmed is sent again. The
@@ -67,6 +76,27 @@ public sealed class ConnectHostAuthorizationOptions
             : throw new ArgumentOutOfRangeException(nameof(value), "The server check interval must be positive.");
     }
 }
+
+public sealed record ConnectRevocationSeed(
+    IReadOnlyList<string> Devices,
+    IReadOnlyList<string> Memberships,
+    IReadOnlyList<string> Tickets,
+    IReadOnlyList<ConnectAuthorizationFloor> AuthorizationFloors)
+{
+    public static ConnectRevocationSeed Empty { get; } = new([], [], [], []);
+
+    public static ConnectRevocationSeed FromState(ConnectRevocationState state, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return new ConnectRevocationSeed(
+            state.Devices,
+            state.Memberships,
+            state.Tickets.Where(ticket => ticket.ExpiresAt > now).Select(ticket => ticket.TicketId).ToArray(),
+            state.AuthorizationFloors);
+    }
+}
+
+public sealed record ConnectHostAuthorizationStatus(bool SubscriberPresent, int LiveConnections);
 
 /// <summary>
 /// The Agent's side of <c>\\.\pipe\1Salem.Connect.HostAuthz.v1</c> (contract §11). The host
@@ -163,11 +193,43 @@ public sealed class ConnectHostAuthorizationPipeServer : IAsyncDisposable
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _revocations = new RevocationSet(clock);
+        foreach (var deviceId in options.InitialRevocations.Devices)
+        {
+            _revocations.RevokeDevice(deviceId);
+        }
+
+        foreach (var membershipId in options.InitialRevocations.Memberships)
+        {
+            _revocations.RevokeMembership(membershipId);
+        }
+
+        foreach (var ticketId in options.InitialRevocations.Tickets)
+        {
+            _revocations.RevokeTicket(ticketId);
+        }
+
+        foreach (var floor in options.InitialRevocations.AuthorizationFloors)
+        {
+            _revocations.RaiseAuthorizationFloor(floor.MembershipId, floor.MinimumVersion);
+        }
+
         _replayCache = new ReplayCache(clock, replayCacheCapacity);
         _authorizer = new HostAuthorizer(
             new TicketVerifier(options.TicketKeys, options.OwnerId, catalog, _revocations, clock),
             _replayCache);
         _liveConnections = new ConnectLiveConnections(liveConnectionCapacity);
+    }
+
+    /// <summary>A lock-consistent, read-only health snapshot for the Agent and UI.</summary>
+    public ConnectHostAuthorizationStatus Status
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return new ConnectHostAuthorizationStatus(_subscribers.Count > 0, _liveConnections.Count);
+            }
+        }
     }
 
     /// <summary>
@@ -394,7 +456,11 @@ public sealed class ConnectHostAuthorizationPipeServer : IAsyncDisposable
                 {
                     await _catalog.RefreshAsync(stopping).ConfigureAwait(false);
                 }
-                catch (Exception exception) when (!stopping.IsCancellationRequested)
+                catch (Exception) when (stopping.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception exception)
                 {
                     _logger.LogWarning(
                         "1Salem Connect could not re-read the server list for its live connections: {Error}",

@@ -18,7 +18,20 @@ namespace ServerManager.Infrastructure.Security;
 /// </summary>
 public sealed class WindowsDpapiSecretStore : ISecretStore
 {
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("1Salem.ServerManager.v1");
+    private static readonly byte[] DefaultEntropy = Encoding.UTF8.GetBytes("1Salem.ServerManager.v1");
+    private readonly byte[] _entropy;
+
+    public WindowsDpapiSecretStore()
+    {
+        _entropy = DefaultEntropy;
+    }
+
+    /// <summary>Creates an isolated DPAPI namespace for a particular kind of secret.</summary>
+    internal WindowsDpapiSecretStore(string entropyPurpose)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entropyPurpose);
+        _entropy = Encoding.UTF8.GetBytes(entropyPurpose);
+    }
 
     public string Protect(string plaintext)
     {
@@ -26,7 +39,7 @@ public sealed class WindowsDpapiSecretStore : ISecretStore
         EnsureWindows();
         var inputBytes = Encoding.UTF8.GetBytes(plaintext);
         var input = CreateBlob(inputBytes);
-        var entropy = CreateBlob(Entropy);
+        var entropy = CreateBlob(_entropy);
         try
         {
             if (!CryptProtectData(
@@ -66,7 +79,7 @@ public sealed class WindowsDpapiSecretStore : ISecretStore
         EnsureWindows();
         var protectedBytes = Convert.FromBase64String(protectedValue);
         var input = CreateBlob(protectedBytes);
-        var entropy = CreateBlob(Entropy);
+        var entropy = CreateBlob(_entropy);
         try
         {
             if (!CryptUnprotectData(

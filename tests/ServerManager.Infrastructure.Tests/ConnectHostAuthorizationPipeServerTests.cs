@@ -99,6 +99,21 @@ public sealed class ConnectHostAuthorizationPipeServerTests
         Assert.Equal("allow", subscribed.GetProperty("decision").GetString());
     }
 
+    [Fact]
+    public async Task PersistedRevocations_AreAppliedBeforeServing_AndStatusIsReadOnly()
+    {
+        await using var host = new Harness(seedFactory: broker => new ConnectRevocationSeed(
+            [broker.DeviceId], [], [], []));
+        Assert.Equal(new ConnectHostAuthorizationStatus(false, 0), host.Server.Status);
+
+        await using var transport = await host.SubscribeAsync();
+        await using var requests = await host.ConnectAsync();
+        var response = await requests.AuthorizeAsync(host.FreshAuthorizeBody());
+
+        AssertBareDeny(response);
+        Assert.Equal(new ConnectHostAuthorizationStatus(true, 0), host.Server.Status);
+    }
+
     [Theory]
     [InlineData("wrong-peer-node")]
     [InlineData("unknown-server")]
@@ -622,11 +637,16 @@ public sealed class ConnectHostAuthorizationPipeServerTests
             TimeSpan? closeRepeatInterval = null,
             TimeSpan? serverCheckInterval = null,
             int liveConnectionCapacity = ConnectLiveConnections.DefaultCapacity,
-            int replayCacheCapacity = ReplayCache.DefaultCapacity)
+            int replayCacheCapacity = ReplayCache.DefaultCapacity,
+            Func<ConnectTestBroker, ConnectRevocationSeed>? seedFactory = null)
         {
             Enabled.Enable(ConnectTestServerStore.Minecraft);
             Enabled.Enable(ConnectTestServerStore.Palworld);
-            var options = new ConnectHostAuthorizationOptions(Broker.OwnerId, Broker.KeySet, PipeName)
+            var options = new ConnectHostAuthorizationOptions(
+                Broker.OwnerId,
+                Broker.KeySet,
+                PipeName,
+                seedFactory?.Invoke(Broker))
             {
                 // Long by default so a repeat or a server check never interleaves with what a
                 // test reads.

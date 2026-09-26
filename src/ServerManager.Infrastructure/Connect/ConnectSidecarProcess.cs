@@ -59,6 +59,9 @@ public sealed class SystemConnectSidecarProcessRunner : IConnectSidecarProcessRu
             processStartInfo.Environment[name] = value;
         }
 
+        // Create the job before the process: if Windows cannot provide the crash-containment
+        // boundary, no uncontained sidecar is started.
+        var job = ConnectKillOnCloseJob.Create();
         var process = new Process { StartInfo = processStartInfo };
         process.OutputDataReceived += (_, line) => Forward(line.Data, outputLine);
         process.ErrorDataReceived += (_, line) => Forward(line.Data, outputLine);
@@ -69,12 +72,25 @@ public sealed class SystemConnectSidecarProcessRunner : IConnectSidecarProcessRu
                 throw new InvalidOperationException("The Connect sidecar process could not be started.");
             }
 
+            try
+            {
+                job.Assign(process);
+            }
+            catch
+            {
+                job.Dispose();
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+                throw;
+            }
+
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            return new SystemConnectSidecarProcess(process);
+            return new SystemConnectSidecarProcess(process, job);
         }
         catch
         {
+            job.Dispose();
             process.Dispose();
             throw;
         }
@@ -88,7 +104,7 @@ public sealed class SystemConnectSidecarProcessRunner : IConnectSidecarProcessRu
         }
     }
 
-    private sealed class SystemConnectSidecarProcess(Process process) : IConnectSidecarProcess
+    private sealed class SystemConnectSidecarProcess(Process process, ConnectKillOnCloseJob job) : IConnectSidecarProcess
     {
         public int Id => process.Id;
 
@@ -116,6 +132,10 @@ public sealed class SystemConnectSidecarProcessRunner : IConnectSidecarProcessRu
             await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
         }
 
-        public void Dispose() => process.Dispose();
+        public void Dispose()
+        {
+            job.Dispose();
+            process.Dispose();
+        }
     }
 }

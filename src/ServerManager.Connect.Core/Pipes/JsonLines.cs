@@ -38,10 +38,17 @@ public static class JsonLines
         }
 
         var line = new byte[utf8Json.Length + 1];
-        utf8Json.CopyTo(line);
-        line[^1] = (byte)'\n';
-        await stream.WriteAsync(line, cancellationToken).ConfigureAwait(false);
-        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            utf8Json.CopyTo(line);
+            line[^1] = (byte)'\n';
+            await stream.WriteAsync(line, cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(line);
+        }
     }
 
     /// <summary>

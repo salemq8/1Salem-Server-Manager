@@ -36,7 +36,8 @@ public sealed class ConnectHostTransportOptions
         ConnectTransportMode mode,
         string bridgeListen,
         string? stateDirectory = null,
-        string authorizationPipeName = ConnectPipeNames.HostAuthorization)
+        string authorizationPipeName = ConnectPipeNames.HostAuthorization,
+        string? controlPipeName = null)
     {
         if (string.IsNullOrWhiteSpace(executablePath) || !Path.IsPathFullyQualified(executablePath))
         {
@@ -49,6 +50,14 @@ public sealed class ConnectHostTransportOptions
             throw new ArgumentException(
                 "Expected a bare pipe name of letters, digits, '.', '_' and '-'.",
                 nameof(authorizationPipeName));
+        }
+
+        controlPipeName ??= ConnectPipeNames.HostTransportAgent;
+        if (!IsSidecarPipeName(controlPipeName))
+        {
+            throw new ArgumentException(
+                "Expected a bare pipe name of letters, digits, '.', '_' and '-'.",
+                nameof(controlPipeName));
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(bridgeListen);
@@ -88,6 +97,7 @@ public sealed class ConnectHostTransportOptions
         BridgeListen = bridgeListen;
         StateDirectory = stateDirectory;
         AuthorizationPipeName = authorizationPipeName;
+        ControlPipeName = controlPipeName;
     }
 
     public string ExecutablePath { get; }
@@ -100,6 +110,9 @@ public sealed class ConnectHostTransportOptions
 
     /// <summary>The bare name of the Agent's authorization pipe.</summary>
     public string AuthorizationPipeName { get; }
+
+    /// <summary>The bare control pipe name the sidecar must create.</summary>
+    public string ControlPipeName { get; }
 
     public TimeSpan InitialRestartDelay { get; init; } = TimeSpan.FromSeconds(1);
 
