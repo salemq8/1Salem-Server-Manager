@@ -1,6 +1,6 @@
 // Session tickets (§9, §10). A ticket is issued only for an approved membership of the calling
-// device whose tailnet node is bound; it binds that node id, the session public key and the
-// membership's current authorization version.
+// device whose tailnet node binding the owner has confirmed (§21 D-1); it binds that node id, the
+// session public key and the membership's current authorization version.
 
 import type { Caller, RequestContext } from "../context";
 import { importP256Spki, randomToken128 } from "../crypto";
@@ -40,13 +40,15 @@ export async function createSession(ctx: RequestContext, device: Caller): Promis
       `SELECT m.owner_id, m.server_id, m.node_id, m.av, s.protocol, s.host_bridge
        FROM memberships m
        JOIN servers s ON s.owner_id = m.owner_id AND s.server_id = m.server_id
-       WHERE m.id = ?1 AND m.device_id = ?2 AND m.state = 'approved' AND m.node_id IS NOT NULL`,
+       WHERE m.id = ?1 AND m.device_id = ?2 AND m.state = 'approved'
+         AND m.node_id IS NOT NULL AND m.node_state = 'confirmed'`,
     )
     .bind(membershipId, device.id)
     .first<Issuable>();
-  // Missing, foreign, pending, rejected, revoked and not-yet-bound all look the same from outside.
-  // The bridge is checked again so a loopback address stored by a development broker is never
-  // signed into a ticket once that setting is off.
+  // Missing, foreign, pending, rejected, revoked, not yet bound and not yet confirmed (or
+  // rejected) by the owner all look the same from outside. The bridge is checked again so a
+  // loopback address stored by a development broker is never signed into a ticket once that
+  // setting is off.
   if (
     membership === null ||
     membership.protocol !== "tcp" ||
@@ -61,14 +63,15 @@ export async function createSession(ctx: RequestContext, device: Caller): Promis
   const iat = ctx.now;
   const exp = iat + TICKET_LIFETIME_SECONDS;
 
-  // Re-checks state, av and node inside the INSERT: a revocation that landed after the SELECT
-  // bumps av or changes state, and then no session row (and no ticket) is produced.
+  // Re-checks state, av and the confirmed node inside the INSERT: a revocation that landed after
+  // the SELECT bumps av or changes state, and then no session row (and no ticket) is produced.
   const inserted = await db
     .prepare(
       `INSERT INTO sessions (jti, membership_id, owner_id, device_id, server_id, av, issued_at, exp)
        SELECT ?1, id, owner_id, device_id, server_id, av, ?2, ?3
        FROM memberships
-       WHERE id = ?4 AND device_id = ?5 AND state = 'approved' AND av = ?6 AND node_id = ?7`,
+       WHERE id = ?4 AND device_id = ?5 AND state = 'approved' AND av = ?6
+         AND node_id = ?7 AND node_state = 'confirmed'`,
     )
     .bind(jti, iat, exp, membershipId, device.id, membership.av, membership.node_id)
     .run();

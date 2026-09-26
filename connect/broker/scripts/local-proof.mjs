@@ -4,8 +4,8 @@
 // Usage: node scripts/local-proof.mjs [--base-url http://127.0.0.1:8787]
 //
 // Runs one full friend lifecycle (docs/CONNECT_ARCHITECTURE.md §5-§14): published keys, owner and
-// device registration, server, invite, redemption, approval, enrollment relay, node binding,
-// session ticket, replay and tamper checks, revocation and the revocation feed. It prints one JSON
+// device registration, server, invite, redemption, approval, enrollment relay, candidate node
+// binding, owner confirmation, session ticket, replay and tamper checks, revocation and the feed. It prints one JSON
 // summary with the published keyset and the single ticket it was issued (revoked before the proof
 // ends), and exits 0 only when every check passed.
 //
@@ -257,8 +257,14 @@ async function run() {
 
   const nodeId = `fake-proof-${Buffer.from(random(6)).toString("hex")}`;
   r = await call(device, "POST", `/v1/memberships/${membershipId}/node`, { nodeId });
-  must("device binds its fake node id", r.status === 200 && r.json?.nodeId === nodeId, describe(r));
+  must("device reports its fake node id as a candidate", r.status === 200 && r.json?.nodeId === nodeId, describe(r));
   summary.ids.nodeId = nodeId;
+
+  r = await call(device, "POST", "/v1/sessions", { membershipId, sessionSpki: session.spki });
+  must("candidate node gets no session ticket", r.status === 404, describe(r));
+
+  r = await call(owner, "POST", `/v1/memberships/${membershipId}/node/confirm`, { nodeId });
+  must("owner confirms the candidate node", r.status === 200 && r.json?.nodeState === "confirmed", describe(r));
 
   r = await call(device, "POST", "/v1/sessions", { membershipId, sessionSpki: session.spki });
   must("device receives a session ticket", r.status === 201 && typeof r.json?.ticket === "string", describe(r));

@@ -5,6 +5,7 @@ import {
   approve,
   bindNode,
   call,
+  confirmNode,
   expectGeneric404,
   expectJson,
   generateKey,
@@ -54,6 +55,7 @@ describe("host bridge addresses", () => {
     await expectJson(await worker.fetch(put, devEnv), 200);
     await approve(friend);
     await bindNode(friend);
+    await confirmNode(friend);
     const session = await generateKey();
 
     // The production-shaped broker (no setting) refuses to issue, with the generic 404 ...

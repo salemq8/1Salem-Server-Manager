@@ -230,11 +230,19 @@ export async function bindNode(friend: Friend): Promise<void> {
   );
 }
 
-/** Registered owner and device, invite redeemed, approved and node bound: ready for sessions. */
+export async function confirmNode(friend: Friend): Promise<void> {
+  await expectJson(
+    await call(friend.owner, "POST", `/v1/memberships/${friend.membershipId}/node/confirm`, { nodeId: friend.nodeId }),
+    200,
+  );
+}
+
+/** Registered owner/device, invite redeemed, approved, node bound and owner-confirmed. */
 export async function readyFriend(owner?: Identity, device?: Identity, serverId?: string): Promise<Friend> {
   const friend = await pendingFriend(owner, device, serverId);
   await approve(friend);
   await bindNode(friend);
+  await confirmNode(friend);
   return friend;
 }
 

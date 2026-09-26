@@ -1,4 +1,4 @@
-# 1Salem Connect broker (Phase 1, local only)
+# 1Salem Connect broker (Phase 2, production-ready; not deployed)
 
 The control plane of 1Salem Connect: a Cloudflare Worker with a D1 database that registers owner
 and device keys, relays invites, approvals and enrollment ciphertext, signs short-lived session
@@ -6,10 +6,10 @@ tickets and publishes revocations. It never carries game traffic and holds no Ta
 credential. The binding contract is [`docs/CONNECT_ARCHITECTURE.md`](../../docs/CONNECT_ARCHITECTURE.md)
 (§5 signed requests, §6 invites, §9 tickets, §12 revocation, §13 API, §14 abuse protection).
 
-**Nothing is deployed.** Phase 1 runs only under `wrangler dev --local` (workerd + Miniflare,
-D1 in a local SQLite file). `wrangler.jsonc` sets `workers_dev: false` and `preview_urls: false`,
-and its `database_id` is a placeholder of zeros, because `wrangler d1 create` is never run. Do not
-run `wrangler deploy`, `wrangler secret put` or anything with `--remote`.
+**Nothing is deployed.** The top-level configuration runs only under `wrangler dev --local`
+(workerd + Miniflare, D1 in a local SQLite file). `env.production` is an operator-reviewed
+deployment template with a placeholder D1 id. Do not run `wrangler deploy`, `wrangler secret put`
+or anything with `--remote` during implementation or tests.
 
 ## Prerequisites
 
@@ -111,6 +111,68 @@ ciphertext. Registration is limited to 30 per hour per client network, and local
 one bucket, so the proof (2 registrations per run) can run about 15 times an hour against the
 same state.
 
+## Production deployment runbook (requires separate approval)
+
+This runbook is documentation only. Running any command in this section creates or changes remote
+Cloudflare state and requires Salem's explicit approval. The intended API route is
+`connect.1salem.app/v1/*`; the invite landing page at `connect.1salem.app/i#...` is not handled by
+this Worker.
+
+1. Confirm the `1salem.app` zone already has the intended `connect.1salem.app` DNS record. Do not
+   let Worker deployment create or replace DNS unexpectedly.
+2. Pick a positive integer `ratelimits[].namespace_id` not used by another rate-limiter binding in
+   the Cloudflare account, and replace `1001` in `env.production` if it is already in use. Bindings
+   sharing a namespace also share counters.
+3. Create a dedicated production D1 database and copy its printed id into the production
+   `d1_databases` entry:
+
+   ```powershell
+   npx wrangler d1 create onesalem-connect-production
+   ```
+
+4. Apply all migrations, including additive migration `0003_node_confirmation.sql`:
+
+   ```powershell
+   npm run migrate:remote
+   ```
+
+5. Set both required secrets through Wrangler's interactive prompt. Never put their values on a
+   command line, in chat, in this file or in source control:
+
+   ```powershell
+   npx wrangler secret put TICKET_SIGNING_KEY --env production
+   npx wrangler secret put INVITE_PEPPER --env production
+   ```
+
+6. In Cloudflare Network settings, leave **Pseudo IPv4** off or set it to **Add header**. Do not
+   use **Overwrite headers**, which would defeat the broker's IPv6 /64 grouping. Optionally add a
+   zone-level WAF rate-limiting rule on `connect.1salem.app/v1/*` as another coarse flood layer.
+7. Validate without deploying:
+
+   ```powershell
+   npm run typecheck
+   npm test
+   npm run deploy:check
+   ```
+
+8. Review the dry-run bundle and configuration. Only then, in the separately approved deployment
+   step, run `npx wrangler deploy --env production`. Verify that `workers.dev` and preview URLs are
+   disabled, the route is only `/v1/*`, the `FLOOD` binding is present, and invocation logs are
+   disabled. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing limiter fail closed with 503.
+
+### D1 restore procedure
+
+Keep the Worker closed to traffic immediately after a privileged D1 restore. Before reopening it,
+advance the revocation sequence exactly once:
+
+```sql
+UPDATE sqlite_sequence SET seq = seq + 1000000000 WHERE name = 'revocations';
+```
+
+Then verify that a pre-restore cursor receives `409 cursor_ahead` and that a host can replay the
+owner's idempotent revocation feed from `after=0`. Skipping this step can let a host retain a cursor
+that silently skips restored revocation events.
+
 ## Layout
 
 | Path | Role |
@@ -126,6 +188,7 @@ same state.
 | `src/routes/*.ts` | Identities, servers, invites, memberships, enrollment relay, sessions, revocation |
 | `migrations/0001_init.sql` | D1 schema. No private key, auth key, OAuth secret or plaintext invite is stored |
 | `migrations/0002_feed_cursor_and_node_index.sql` | Indexes for the seq-paged revocation feed and the node binding check |
+| `migrations/0003_node_confirmation.sql` | Additive candidate / confirmed / rejected node state; existing bindings become candidates |
 | `scripts/new-dev-secrets.mjs` | Local secrets, written only to `--out` |
 | `scripts/local-proof.mjs` | Loopback-only lifecycle proof |
 
@@ -134,7 +197,8 @@ same state.
 - Every "not found" is the identical body `{"error":"not_found"}`. That covers missing, foreign,
   malformed-id and invalid-invite cases. Other errors are bare codes: `bad_request`,
   `unauthorized`, `payload_too_large` (bodies over 16 KiB), `rate_limited` (with `Retry-After`),
-  `invalid_state`, `already_member`, `already_bound`, `node_in_use`, `cursor_ahead`,
+  `invalid_state`, `already_member`, `already_bound`, `node_in_use`, `node_mismatch`,
+  `node_rejected`, `cursor_ahead`,
   `not_configured`, `internal`.
 - Rate limits, all fixed windows:
 
@@ -189,25 +253,25 @@ same state.
   `after=0`. Comparing with the table's highest `seq` would not do: other owners' events can pass
   a stale cursor. A database restore needs one extra step so that cursors kept across it are
   refused too; see "Requirements outside the broker".
-- `POST /v1/memberships/{id}/node` refuses a node id that a *different* device holds on a live
-  (pending or approved) membership of the same owner with a bare 409 `node_in_use`. One device
-  may bind the same node on all its memberships with that owner, since there is one node per owner
-  tailnet. Other owners' bindings are never consulted. The node id is still self-reported by the
-  friend's device; see the Agent requirement below.
+- `POST /v1/memberships/{id}/node` records a **candidate** and refuses a node id that a different
+  device holds as a candidate or confirmed binding on a live membership of the same owner, with a
+  bare 409 `node_in_use`. One device may reuse its node across that owner's memberships. The
+  owner-signed `/node/confirm` route makes a verified candidate usable; `/node/reject` keeps a
+  failed candidate unusable and frees its node. Sessions are issued only for confirmed bindings.
 
 ## Requirements outside the broker
 
 The broker cannot enforce these itself.
 
-- **Before any deployment: an outer, non-D1 rate limit.** Every request that reaches the Worker
+- **Before any deployment: verify the outer, non-D1 rate limit.** Every request that reaches the Worker
   costs at least one D1 read. A request under its budget also costs D1 writes (its counter and its
   nonce), and a validly signed request over its key's budget still costs its nonce write. The D1
   counters are exact, but they are D1 traffic themselves, so they cannot bound the
-  cost of a flood. Put a Cloudflare WAF rate-limiting rule on the broker's route, or a Workers Rate
-  Limiting binding checked first in `fetch`, in front of it. Key it per client IP, and set it well
-  above the budgets in the table so it only ever catches floods. It is per location and eventually
-  consistent, so it complements the D1 counters and does not replace them. It is deployment
-  configuration and is deliberately not part of `wrangler.jsonc` while Phase 1 is local only.
+  cost of a flood. `env.production` declares a Workers Rate Limiting binding named `FLOOD`, keyed
+  by the normalized client network and checked before route lookup, body reads or D1. It is set well
+  above the exact D1 budgets so it catches floods only. It is per location and eventually
+  consistent, so it complements the D1 counters and does not replace them. A zone-level WAF rule
+  may be added as another outer layer.
 - **After any database restore (for example D1 Time Travel), raise the revocation sequence before
   reopening the broker.** A restore rolls back `sqlite_sequence` too, so new revocations would
   reuse seq numbers issued before the restore. A host holding one of those as its cursor would pass
@@ -222,9 +286,8 @@ The broker cannot enforce these itself.
 - **Leave Cloudflare's Pseudo IPv4 off, or at "Add header".** "Overwrite headers" replaces
   `CF-Connecting-IP` with an address derived from the full IPv6 address. That gives every
   address in a /64 its own bucket again.
-- **The Agent must never `DELETE` a tailnet device id taken from the broker without checking its
-  tags first.** A membership's `nodeId` is whatever the friend's device reported. Before
-  revocation step 3 (`DELETE /api/v2/device/{id}`, §12), the Agent must read that device from the
-  Tailscale API. It may delete the device only when it carries `tag:onesalem-client` and is not one
-  of the owner's own nodes. Otherwise a friend who bound the id of the owner's own machine would
-  have it removed from the owner's tailnet when the friend is revoked.
+- **The Agent must verify before confirming or deleting.** A membership's candidate `nodeId` is
+  whatever the friend's device reported. The Agent confirms it only after the checks in the Phase
+  2 plan. Before revocation step 3 (`DELETE /api/v2/device/{id}`, §12), it must re-read the device
+  and delete only an exact `tag:onesalem-client` device that is not the host node and is no longer
+  shared by another live membership.

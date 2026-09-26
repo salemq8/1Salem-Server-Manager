@@ -12,9 +12,11 @@ import { getKeys } from "./routes/keys";
 import {
   approveMembership,
   bindNode,
+  confirmNode,
   listDeviceMemberships,
   listOwnerMemberships,
   rejectMembership,
+  rejectNode,
 } from "./routes/memberships";
 import { revocationFeed, revokeDevice, revokeMembership, revokeSession } from "./routes/revocation";
 import { putServer } from "./routes/servers";
@@ -57,6 +59,9 @@ const ROUTES: Route[] = [
   { method: "POST", path: path(`/v1/memberships/(${MEMBERSHIP_ID})/enrollment`), auth: "owner", limit: ownerWrites, handler: putEnrollment },
   { method: "GET", path: path(`/v1/memberships/(${MEMBERSHIP_ID})/enrollment`), auth: "device", limit: deviceCalls, handler: takeEnrollment },
   { method: "POST", path: path(`/v1/memberships/(${MEMBERSHIP_ID})/node`), auth: "device", limit: deviceCalls, handler: bindNode },
+  // The owner's decision on the device-reported candidate node (§21 D-1).
+  { method: "POST", path: path(`/v1/memberships/(${MEMBERSHIP_ID})/node/confirm`), auth: "owner", limit: ownerWrites, handler: confirmNode },
+  { method: "POST", path: path(`/v1/memberships/(${MEMBERSHIP_ID})/node/reject`), auth: "owner", limit: ownerWrites, handler: rejectNode },
 
   { method: "POST", path: path("/v1/sessions"), auth: "device", limit: sessionsPerDevice, handler: createSession },
   { method: "POST", path: path(`/v1/sessions/(${JTI})/revoke`), auth: "owner", limit: ownerWrites, handler: revokeSession },

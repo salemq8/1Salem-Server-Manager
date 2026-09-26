@@ -6,6 +6,7 @@ import {
   BASE,
   bindNode,
   call,
+  confirmNode,
   expectGeneric404,
   expectJson,
   fromB64u,
@@ -51,11 +52,13 @@ describe("session issuance", () => {
     await expectGeneric404((await requestSession(friend)).response);
   });
 
-  it("is refused before the node is bound", async () => {
+  it("is refused before the node is bound and while the binding is only a candidate", async () => {
     const friend = await pendingFriend();
     await approve(friend);
     await expectGeneric404((await requestSession(friend)).response);
     await bindNode(friend);
+    await expectGeneric404((await requestSession(friend)).response);
+    await confirmNode(friend);
     expect((await requestSession(friend)).response.status).toBe(201);
   });
 

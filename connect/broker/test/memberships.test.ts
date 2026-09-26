@@ -2,7 +2,9 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import {
   approve,
+  bindNode,
   call,
+  confirmNode,
   expectGeneric404,
   expectJson,
   pendingFriend,
@@ -22,6 +24,13 @@ async function nodeOf(membershipId: string): Promise<string | null> {
     .bind(membershipId)
     .first<{ node_id: string | null }>();
   return row!.node_id;
+}
+
+async function nodeStateOf(membershipId: string): Promise<string | null> {
+  const row = await env.DB.prepare(`SELECT node_state FROM memberships WHERE id = ?1`)
+    .bind(membershipId)
+    .first<{ node_state: string | null }>();
+  return row!.node_state;
 }
 
 describe("approval", () => {
@@ -64,6 +73,9 @@ describe("approval", () => {
         state: "pending",
         av: 1,
         nodeId: null,
+        nodeState: null,
+        nodeBoundAt: null,
+        nodeConfirmedAt: null,
       }),
     ]);
     const stranger = await registerOwner();
@@ -113,6 +125,7 @@ describe("node binding", () => {
     await approve(second);
     const reused = await bindNodeAs(second.device, second.membershipId, first.nodeId);
     expect(await expectJson(reused, 200)).toEqual({ membershipId: second.membershipId, nodeId: first.nodeId });
+    await confirmNode({ ...second, nodeId: first.nodeId });
     expect((await requestSession(second)).response.status).toBe(201);
   });
 
@@ -164,5 +177,69 @@ describe("node binding", () => {
     expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
     const holders = [await nodeOf(a.membershipId), await nodeOf(b.membershipId)].filter((n) => n !== null);
     expect(holders).toEqual([contested]);
+  });
+});
+
+describe("owner-confirmed node binding", () => {
+  it("lists a candidate to both sides and issues no ticket until its owner confirms it", async () => {
+    const friend = await pendingFriend();
+    await approve(friend);
+    await bindNode(friend);
+
+    const ownerList = await expectJson(await call(friend.owner, "GET", "/v1/owners/me/memberships"), 200);
+    expect(ownerList.memberships[0]).toEqual(expect.objectContaining({
+      membershipId: friend.membershipId,
+      nodeId: friend.nodeId,
+      nodeState: "candidate",
+      nodeBoundAt: expect.any(Number),
+      nodeConfirmedAt: null,
+    }));
+    const deviceList = await expectJson(await call(friend.device, "GET", "/v1/devices/me/memberships"), 200);
+    expect(deviceList.memberships[0]).toEqual(expect.objectContaining({ nodeState: "candidate" }));
+    expect((await requestSession(friend)).response.status).toBe(404);
+
+    await confirmNode(friend);
+    await confirmNode(friend); // idempotent
+    expect(await nodeStateOf(friend.membershipId)).toBe("confirmed");
+    expect((await requestSession(friend)).response.status).toBe(201);
+  });
+
+  it("scopes confirmation to the owner and distinguishes missing, mismatched and invalid state", async () => {
+    const friend = await pendingFriend();
+    await approve(friend);
+    await bindNode(friend);
+    const stranger = await registerOwner();
+    const path = `/v1/memberships/${friend.membershipId}/node/confirm`;
+
+    await expectGeneric404(await call(stranger, "POST", path, { nodeId: friend.nodeId }));
+    await expectGeneric404(
+      await call(friend.owner, "POST", "/v1/memberships/mem_aaaaaaaaaaaaaaaaaaaaaaaaaa/node/confirm", { nodeId: friend.nodeId }),
+    );
+    expect(await expectJson(await call(friend.owner, "POST", path, { nodeId: "different-node" }), 409))
+      .toEqual({ error: "node_mismatch" });
+    await confirmNode(friend);
+    expect(await expectJson(
+      await call(friend.owner, "POST", `/v1/memberships/${friend.membershipId}/node/reject`, { nodeId: friend.nodeId }),
+      409,
+    )).toEqual({ error: "invalid_state" });
+  });
+
+  it("keeps a rejected candidate unusable and frees its node for another device", async () => {
+    const rejected = await pendingFriend();
+    const successor = await pendingFriend(rejected.owner, undefined, rejected.serverId);
+    await approve(rejected);
+    await approve(successor);
+    await bindNode(rejected);
+
+    const path = `/v1/memberships/${rejected.membershipId}/node/reject`;
+    const decision = await expectJson(await call(rejected.owner, "POST", path, { nodeId: rejected.nodeId }), 200);
+    expect(decision).toEqual({ membershipId: rejected.membershipId, nodeId: rejected.nodeId, nodeState: "rejected" });
+    await expectJson(await call(rejected.owner, "POST", path, { nodeId: rejected.nodeId }), 200); // idempotent
+    expect((await requestSession(rejected)).response.status).toBe(404);
+    expect(await expectJson(await bindNodeAs(rejected.device, rejected.membershipId, rejected.nodeId), 409))
+      .toEqual({ error: "node_rejected" });
+
+    await expectJson(await bindNodeAs(successor.device, successor.membershipId, rejected.nodeId), 200);
+    expect(await nodeStateOf(successor.membershipId)).toBe("candidate");
   });
 });

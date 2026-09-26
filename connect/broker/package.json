@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "wrangler dev --local",
     "migrate:local": "wrangler d1 migrations apply onesalem-connect --local",
+    "migrate:remote": "wrangler d1 migrations apply onesalem-connect-production --remote --env production",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "deploy:check": "wrangler deploy --dry-run --env production",
     "dev-secrets": "node scripts/new-dev-secrets.mjs",
     "local-proof": "node scripts/local-proof.mjs"
   },

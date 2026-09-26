@@ -11,4 +11,15 @@ export interface Env {
    * transport mode. Unset (the only valid state in Cloudflare) means tailnet addresses only.
    */
   CONNECT_DEV_LOOPBACK_BRIDGE?: string;
+  /**
+   * The outer flood limiter (§21 D-2): a Workers Rate Limiting binding, checked per client network
+   * before the body is read or D1 is touched. Declared only in env.production; local development
+   * and the tests run without it.
+   */
+  FLOOD?: RateLimit;
+  /**
+   * "true" in production: a deployment whose FLOOD binding is missing refuses every request (503
+   * not_configured) instead of silently running without its outer limiter.
+   */
+  CONNECT_REQUIRE_FLOOD_LIMIT?: string;
 }
