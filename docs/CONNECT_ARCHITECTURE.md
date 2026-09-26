@@ -23,7 +23,7 @@ Only that connection crosses the private transport. The friend's PC is not put o
  ┌──────────────────────────────┐                      ┌───────────────────────────────────────┐
  │ Minecraft ──TCP──► 127.0.0.1:18211                   │                                       │
  │                     │                                │   1Salem.Connect.Host.Transport.exe  │
- │ 1Salem.Connect.Transport.exe (Go, tsnet)             │   (Go, tsnet, tag:1salem-host)        │
+ │ 1Salem.Connect.Transport.exe (Go, tsnet)             │   (Go, tsnet, tag:onesalem-host)      │
  │   local listener ── preamble+ticket ──► tailnet ───► │   bridge listener  tailnet:7780       │
  │ 1Salem.Connect.exe (WPF)  ◄─named pipe─►             │        │  named pipe  ▲               │
  └──────────────┬───────────────┘   WireGuard, direct   │        ▼             │               │
@@ -77,8 +77,9 @@ tailnets. The design has to pick where each owner's tailnet credential lives:
 | O4 Self-hosted coordination server | 1Salem's control plane | 1Salem infrastructure | Out of scope; future alternative |
 
 **O1 (recommended).** Each owner connects their **own** Tailscale account once. They create an
-OAuth client with scopes `auth_keys` and `devices:core`, tagged `tag:1salem-host` and
-`tag:1salem-client`, and paste its id and secret into Server Manager. The Agent keeps the secret
+OAuth client with scopes `auth_keys` and `devices:core`, tagged only `tag:onesalem-host` (which
+owns `tag:onesalem-client`, so the client can mint both key kinds), and paste its id and secret
+into Server Manager. The Agent keeps the secret
 DPAPI-protected on the owner's PC. It mints **one-off, pre-authorized, tagged** keys for
 approved friends, and it deletes friend nodes on revocation **[verified T2-01, T2-04, T2-05,
 T3-08, T3-09, T3-10]**. The broker never sees an OAuth secret or an auth key: the Agent encrypts
@@ -266,7 +267,7 @@ Owner approves friend (Server Manager)
         POST /api/v2/tailnet/-/keys
         { capabilities: { devices: { create: {
               reusable: false, ephemeral: false, preauthorized: true,
-              tags: ["tag:1salem-client"] } } },
+              tags: ["tag:onesalem-client"] } } },
           expirySeconds: 86400, description: "1salem connect <membership prefix>" }
   → Agent encrypts {authKey, keyId} to the friend's device public key (ECDH-ES P-256 +
     HKDF-SHA256 + AES-256-GCM, AAD = membershipId|deviceId|ownerId)
@@ -277,7 +278,7 @@ Friend app
   → transport starts tsnet with a fresh Dir for this owner's tailnet, reports Self.ID
   → POST /v1/memberships/{id}/node {nodeId}                         (device-signed, once)
 Agent                                                               (Phase 2, §21 D-1)
-  → GET /api/v2/device/{nodeId}: confirm tag:1salem-client and created-after-key; then
+  → GET /api/v2/device/{nodeId}: confirm tag:onesalem-client and created-after-key; then
     DELETE /api/v2/tailnet/-/keys/{keyId} if still unused (it is auto-revoked once used)
 ```
 
@@ -304,7 +305,7 @@ Facts this relies on:
   Tagged devices do not expire on their own **[verified T2-13]**, so revocation always deletes
   the device (§12).
 
-The host node is enrolled the same way, tagged `tag:1salem-host`, with the key handed to the
+The host node is enrolled the same way, tagged `tag:onesalem-host`, with the key handed to the
 host transport over its pipe.
 
 ---
@@ -321,19 +322,19 @@ only peers they can reach **[verified T4-17]**.
 // Example only — not applied to any real tailnet in Phase 1.
 {
   "tagOwners": {
-    "tag:1salem-host":   ["autogroup:admin"],
-    "tag:1salem-client": ["tag:1salem-host"],
+    "tag:onesalem-host":   ["autogroup:admin"],
+    "tag:onesalem-client": ["tag:onesalem-host"],
   },
   "grants": [
     // Friends may open TCP connections to the 1Salem host bridge port, and to nothing else.
-    { "src": ["tag:1salem-client"], "dst": ["tag:1salem-host"], "ip": ["tcp:7780"] },
+    { "src": ["tag:onesalem-client"], "dst": ["tag:onesalem-host"], "ip": ["tcp:7780"] },
     // The owner's own devices keep whatever access the owner already grants them. No rule
-    // gives tag:1salem-client access to autogroup:member devices or to other clients.
+    // gives tag:onesalem-client access to autogroup:member devices or to other clients.
   ],
   "tests": [
-    { "src": "tag:1salem-client", "accept": ["tag:1salem-host:7780"],
-      "deny":   ["tag:1salem-host:25565", "tag:1salem-host:8211", "tag:1salem-host:5251",
-                 "tag:1salem-host:3389",  "tag:1salem-host:445"] },
+    { "src": "tag:onesalem-client", "accept": ["tag:onesalem-host:7780"],
+      "deny":   ["tag:onesalem-host:25565", "tag:onesalem-host:8211", "tag:onesalem-host:5251",
+                 "tag:onesalem-host:3389",  "tag:onesalem-host:445"] },
   ],
 }
 ```
@@ -798,7 +799,7 @@ contract that the Agent wiring must meet (§21 D-4).
    exactly which step is pending. We never claim full revocation because a database row changed.
 
 Before step 3 the Agent must read that device from the Tailscale API and delete it **only if it
-carries `tag:1salem-client` and is not one of the owner's own nodes**. A membership's `nodeId`
+carries `tag:onesalem-client` and is not one of the owner's own nodes**. A membership's `nodeId`
 is reported by the friend's device (§21, D-1); without this check a friend who bound the id of
 the owner's machine would have that machine removed from the owner's tailnet on revocation.
 
@@ -1104,14 +1105,14 @@ does, so none is mistaken for complete.
     friend's own connections.
   - The broker binds once and never lets the friend change it (`already_bound`).
   - The Agent's revocation must read the device from the Tailscale API and delete it only if it
-    carries `tag:1salem-client` and is not an owner node (§12). No Agent code deletes devices yet.
+    carries `tag:onesalem-client` and is not an owner node (§12). No Agent code deletes devices yet.
 - **Remaining risk.** Until confirmation exists, a friend who learns another friend's node id
   before that friend binds it can take the binding first (a denial of service against that
   friend, not an access gain). The owner cannot yet see or clear a wrong binding.
 - **Exact Phase 2 action.** Split binding into a device-reported *candidate* and an
   owner-signed *confirmation*: after the friend reports its node, the Agent calls
   `GET /api/v2/device/{nodeId}` in the owner's tailnet and checks that the device carries
-  `tag:1salem-client`, was created after the enrollment key was minted, and is not bound
+  `tag:onesalem-client`, was created after the enrollment key was minted, and is not bound
   elsewhere; then it calls a new owner-signed `POST /v1/memberships/{id}/node/confirm`.
   `POST /v1/sessions` issues tickets only for a confirmed binding, and the owner can reject or
   clear a candidate. The tag check before any `DELETE` stays mandatory. The existing primitive

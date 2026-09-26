@@ -225,6 +225,6 @@ The broker cannot enforce these itself.
 - **The Agent must never `DELETE` a tailnet device id taken from the broker without checking its
   tags first.** A membership's `nodeId` is whatever the friend's device reported. Before
   revocation step 3 (`DELETE /api/v2/device/{id}`, §12), the Agent must read that device from the
-  Tailscale API. It may delete the device only when it carries `tag:1salem-client` and is not one
+  Tailscale API. It may delete the device only when it carries `tag:onesalem-client` and is not one
   of the owner's own nodes. Otherwise a friend who bound the id of the owner's own machine would
   have it removed from the owner's tailnet when the friend is revoked.

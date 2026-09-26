@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Development-only driver of the real tsnet smoke test (connect/proof/TSNET_SMOKE.md). Not part
+    of the solution and never shipped. It runs the production Connect components (local broker,
+    the Agent-side host authorization pipe and catalog, the Go host and friend transports in tsnet
+    mode, the friend app's own services, TailscaleApiProvisioner) on the owner's REAL tailnet with
+    temporary tagged nodes, and deletes them again. It touches a tailnet only with live mode
+    (connect/proof/Run-TsnetSmoke.ps1 -Live) and an OAuth client stored by
+    Set-TsnetSmokeCredential.ps1; otherwise it only checks its arguments. The friend app is a WPF
+    project; its framework reference flows here, but the driver never opens a window.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>TsnetSmoke</AssemblyName>
+    <RootNamespace>TsnetSmoke</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\ServerManager.Connect.Core\ServerManager.Connect.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\ServerManager.Infrastructure\ServerManager.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\ServerManager.Connect.App\ServerManager.Connect.App.csproj" />
+  </ItemGroup>
+
+</Project>

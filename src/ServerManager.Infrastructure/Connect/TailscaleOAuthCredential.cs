@@ -2,7 +2,8 @@ namespace ServerManager.Infrastructure.Connect;
 
 /// <summary>
 /// The owner's Tailscale OAuth client (contract §2 O1): scopes <c>auth_keys</c> and
-/// <c>devices:core</c>, tagged <c>tag:1salem-host</c> and <c>tag:1salem-client</c>. It is only
+/// <c>devices:core</c>, tagged only <c>tag:onesalem-host</c>, which owns <c>tag:onesalem-client</c>
+/// in the tailnet policy, so one client can mint both host and friend keys. It is only
 /// ever constructed from something the owner explicitly entered; nothing reads it from the
 /// environment. The secret never appears in <see cref="ToString"/> or in an exception.
 /// </summary>

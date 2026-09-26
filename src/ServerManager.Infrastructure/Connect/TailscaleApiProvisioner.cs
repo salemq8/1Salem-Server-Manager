@@ -16,7 +16,7 @@ namespace ServerManager.Infrastructure.Connect;
 /// <item><c>POST /api/v2/oauth/token</c>: client-credentials grant; the token is cached until
 /// five minutes before it expires (tokens last one hour).</item>
 /// <item><c>POST /api/v2/tailnet/-/keys</c>: one friend key, exactly
-/// <c>{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":false,"preauthorized":true,"tags":["tag:1salem-client"]}}},"expirySeconds":86400,"description":…}</c>.</item>
+/// <c>{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":false,"preauthorized":true,"tags":["tag:onesalem-client"]}}},"expirySeconds":86400,"description":…}</c>.</item>
 /// <item><c>DELETE /api/v2/tailnet/-/keys/{keyId}</c>, <c>GET</c> and
 /// <c>DELETE /api/v2/device/{nodeId}</c>.</item>
 /// </list>
@@ -28,7 +28,7 @@ namespace ServerManager.Infrastructure.Connect;
 /// </summary>
 public sealed class TailscaleApiProvisioner : IConnectProvisioner
 {
-    public const string FriendTag = "tag:1salem-client";
+    public const string FriendTag = "tag:onesalem-client";
     public const long FriendKeyExpirySeconds = 86_400;
     public const int MaxDescriptionLength = 50;
 

@@ -133,7 +133,7 @@ instead.
   (`node_in_use`), binds once, and tickets only work from the WhoIs-verified node, so a wrong
   binding gives no access. The owner cannot yet confirm, see or clear a binding.
 - **Future behaviour:** the Agent checks the reported node through the Tailscale API
-  (`tag:1salem-client`, created after the enrollment key, not bound elsewhere) and confirms it with
+  (`tag:onesalem-client`, created after the enrollment key, not bound elsewhere) and confirms it with
   an owner-signed call; tickets are issued only for a confirmed binding. Revocation never deletes a
   device without that tag check.
 

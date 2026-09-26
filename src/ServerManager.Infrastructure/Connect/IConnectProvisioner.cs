@@ -11,7 +11,7 @@ namespace ServerManager.Infrastructure.Connect;
 public interface IConnectProvisioner
 {
     /// <summary>
-    /// A one-off, pre-authorized, non-ephemeral key tagged <c>tag:1salem-client</c>, valid for one
+    /// A one-off, pre-authorized, non-ephemeral key tagged <c>tag:onesalem-client</c>, valid for one
     /// day. Hold the result only as long as it takes to encrypt it to the friend's device key.
     /// </summary>
     Task<EnrollmentSecret> CreateFriendAuthKeyAsync(string membershipId, CancellationToken cancellationToken);

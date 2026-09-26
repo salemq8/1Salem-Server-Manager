@@ -132,7 +132,7 @@ export async function listDeviceMemberships(ctx: RequestContext, device: Caller)
  * nothing across owners.
  *
  * The id is still self-reported. Until the Agent has confirmed through the Tailscale API that the
- * node carries tag:1salem-client (§7), it proves nothing about which machine the friend runs.
+ * node carries tag:onesalem-client (§7), it proves nothing about which machine the friend runs.
  */
 export async function bindNode(ctx: RequestContext, device: Caller): Promise<Response> {
   const membershipId = ctx.params[0]!;

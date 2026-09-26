@@ -58,7 +58,7 @@ public sealed class ConnectTailscaleApiProvisionerTests
                 Assert.Equal("Bearer " + AccessToken, create.Authorization);
                 Assert.Equal("application/json", create.ContentType);
                 Assert.Equal(
-                    "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"tag:1salem-client\"]}}}," +
+                    "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"tag:onesalem-client\"]}}}," +
                     "\"expirySeconds\":86400,\"description\":\"1salem connect mem-0123456789ab\"}",
                     create.Body);
             });
@@ -290,7 +290,7 @@ public sealed class ConnectTailscaleApiProvisionerTests
         {
             return Respond(
                 HttpStatusCode.OK,
-                "{\"nodeId\":\"" + NodeId + "\",\"tags\":[\"tag:1salem-client\"],\"created\":\"2026-01-01T00:00:00Z\"}");
+                "{\"nodeId\":\"" + NodeId + "\",\"tags\":[\"tag:onesalem-client\"],\"created\":\"2026-01-01T00:00:00Z\"}");
         }
 
         if (request.Method == HttpMethod.Delete)
