@@ -33,6 +33,11 @@ public sealed class EnrollmentTests
         Assert.Equal(membership.OwnerId, enrolled.Node);
         Assert.Matches(new Regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"), enrolled.Hostname);
         Assert.Equal((membership.MembershipId, app.Transport.NextNodeId), Assert.Single(app.Broker.Bound));
+        Assert.Equal("Waiting for the owner to finish setting up this PC", Assert.Single(servers.Servers).StatusText);
+        Assert.False(Assert.Single(servers.Servers).CanOpen);
+
+        app.Broker.SetNodeState(membership.MembershipId, MembershipNodeState.Confirmed);
+        await servers.RefreshAsync(CancellationToken.None);
         Assert.Equal("Ready", Assert.Single(servers.Servers).StatusText);
 
         await servers.RefreshAsync(CancellationToken.None);
@@ -60,6 +65,10 @@ public sealed class EnrollmentTests
         Assert.Single(app.Transport.Enrollments);
         Assert.Equal(1, app.Broker.TakeEnrollmentCalls);
         Assert.Single(app.Broker.Bound);
+        Assert.Equal("Waiting for the owner to finish setting up this PC", Assert.Single(servers.Servers).StatusText);
+
+        app.Broker.SetNodeState(membership.MembershipId, MembershipNodeState.Confirmed);
+        await servers.RefreshAsync(CancellationToken.None);
         Assert.Equal("Ready", Assert.Single(servers.Servers).StatusText);
     }
 
@@ -152,17 +161,27 @@ public sealed class EnrollmentTests
             Assert.Equal(EnrollmentOutcome.Failed, (await restarted.TryCompleteAsync(membership, CancellationToken.None)).Outcome);
             Assert.Equal(EnrollmentOutcome.Pending, (await restarted.TryCompleteAsync(untouched, CancellationToken.None)).Outcome);
 
-            // Membership ids and nothing else, never the auth key; written whole, nothing left beside it.
+            // Membership ids and replacement flags only, never the auth key; written whole,
+            // nothing left beside it.
             var saved = File.ReadAllText(path);
             Assert.DoesNotContain(AuthKey, saved, StringComparison.Ordinal);
-            Assert.Equal([membership.MembershipId], JsonSerializer.Deserialize<string[]>(saved)!);
+            using (var document = JsonDocument.Parse(saved))
+            {
+                Assert.Equal(
+                    [membership.MembershipId],
+                    document.RootElement.GetProperty("memberships").EnumerateArray().Select(value => value.GetString()));
+                Assert.Empty(document.RootElement.GetProperty("replacements").EnumerateArray());
+            }
             Assert.Equal([path], Directory.GetFiles(directory));
 
             // The owner approves again, the new blob enrolls, and the mark is gone.
             app.Broker.Enrollments[membership.MembershipId] = app.EnrollmentFor(membership, "tskey-auth-kTest2CNTRL-abcdef0123456789", "kTest2CNTRL");
 
             Assert.Equal(EnrollmentOutcome.Completed, (await restarted.TryCompleteAsync(membership, CancellationToken.None)).Outcome);
-            Assert.Empty(JsonSerializer.Deserialize<string[]>(File.ReadAllText(path))!);
+            using (var document = JsonDocument.Parse(File.ReadAllText(path)))
+            {
+                Assert.Empty(document.RootElement.GetProperty("memberships").EnumerateArray());
+            }
         }
         finally
         {
@@ -196,7 +215,8 @@ public sealed class EnrollmentTests
     {
         using var app = new AppHarness();
         app.Transport.Nodes.Add(new Transport.TransportNode(app.OwnerId, "nEXISTING1CNTRL", "running"));
-        var membership = app.AddMembership(MembershipState.Approved);
+        app.AddMembership(MembershipState.Approved, "nEXISTING1CNTRL", idLetter: 'a', MembershipNodeState.Confirmed);
+        var membership = app.AddMembership(MembershipState.Approved, idLetter: 'b');
         app.Main.ShowServers();
         var servers = Assert.IsType<ServersViewModel>(app.Main.CurrentPage);
 
@@ -205,6 +225,99 @@ public sealed class EnrollmentTests
         Assert.Empty(app.Transport.Enrollments);
         Assert.Equal(0, app.Broker.TakeEnrollmentCalls);
         Assert.Equal((membership.MembershipId, "nEXISTING1CNTRL"), Assert.Single(app.Broker.Bound));
+        Assert.Empty(app.Transport.Forgotten);
+    }
+
+    [Fact]
+    public async Task A_revoked_owners_stale_node_is_forgotten_before_fresh_enrollment()
+    {
+        using var app = new AppHarness();
+        app.Transport.Nodes.Add(new Transport.TransportNode(app.OwnerId, "nSTALE1CNTRL", "running"));
+        var membership = app.AddMembership(MembershipState.Approved);
+        app.Broker.Enrollments[membership.MembershipId] = app.EnrollmentFor(membership, AuthKey, "kTest1CNTRL");
+        var coordinator = Coordinator(app, consumedPath: null);
+
+        var result = await coordinator.TryCompleteAsync(membership, app.Broker.Memberships, CancellationToken.None);
+
+        Assert.Equal(EnrollmentOutcome.Completed, result.Outcome);
+        Assert.Equal([app.OwnerId], app.Transport.Forgotten);
+        Assert.Equal(app.Transport.NextNodeId, result.NodeId);
+        Assert.Equal((membership.MembershipId, app.Transport.NextNodeId), Assert.Single(app.Broker.Bound));
+    }
+
+    [Fact]
+    public async Task An_ambiguous_forget_never_rebinds_the_stale_node_even_after_restart()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "1salem-connect-app-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, ConsumedEnrollments.FileName);
+        try
+        {
+            using var app = new AppHarness();
+            app.Transport.Nodes.Add(new Transport.TransportNode(app.OwnerId, "nSTALE1CNTRL", "running"));
+            var membership = app.AddMembership(MembershipState.Approved);
+            app.Broker.Enrollments[membership.MembershipId] = app.EnrollmentFor(membership, AuthKey, "kTest1CNTRL");
+            app.Transport.NextForgetFailure = new TransportException(TransportErrorCodes.NoAnswer);
+
+            await Assert.ThrowsAsync<TransportException>(() =>
+                Coordinator(app, path).TryCompleteAsync(membership, CancellationToken.None));
+            var afterRestart = await Coordinator(app, path).TryCompleteAsync(membership, CancellationToken.None);
+
+            Assert.Equal(EnrollmentOutcome.Failed, afterRestart.Outcome);
+            Assert.Empty(app.Broker.Bound);
+            Assert.Empty(app.Transport.Enrollments);
+            Assert.Equal([app.OwnerId], app.Transport.Forgotten);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Build7_consumed_enrollment_array_remains_readable()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "1salem-connect-app-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, ConsumedEnrollments.FileName);
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var membershipId = TestIds.MembershipId();
+            File.WriteAllText(path, JsonSerializer.Serialize(new[] { membershipId }));
+            using var app = new AppHarness();
+            var consumed = new ConsumedEnrollments(path, app.Log);
+
+            Assert.True(consumed.Contains(membershipId));
+            Assert.True(consumed.CanReuseNode(membershipId));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(MembershipNodeState.Candidate, "Waiting for the owner to finish setting up this PC")]
+    [InlineData(MembershipNodeState.Rejected, "Setting up this PC failed — ask the owner to invite you again")]
+    public async Task Candidate_and_rejected_nodes_are_never_offered_as_connectable(
+        MembershipNodeState nodeState,
+        string expectedStatus)
+    {
+        using var app = new AppHarness();
+        app.AddMembership(MembershipState.Approved, "nFAKE1CNTRL", nodeState: nodeState);
+        app.Main.ShowServers();
+        var servers = Assert.IsType<ServersViewModel>(app.Main.CurrentPage);
+
+        await servers.RefreshAsync(CancellationToken.None);
+
+        var item = Assert.Single(servers.Servers);
+        Assert.Equal(expectedStatus, item.StatusText);
+        Assert.False(item.CanOpen);
+        Assert.False(item.Membership.CanConnect);
+        app.Main.ShowConnection(item.Membership);
+        var connection = Assert.IsType<ConnectionViewModel>(app.Main.CurrentPage);
+        Assert.False(connection.CanConnect);
+        await connection.ConnectAsync();
+        Assert.Empty(app.Broker.SessionSpkis);
     }
 
     /// <summary>A coordinator of its own, as a fresh run of the app would build one.</summary>

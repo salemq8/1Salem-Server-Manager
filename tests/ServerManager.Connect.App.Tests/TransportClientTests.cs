@@ -23,10 +23,11 @@ public sealed class TransportClientTests
             TransportRequests.Hello(1),
             TransportRequests.Status(2),
             TransportRequests.Enroll(3, "own_node", "tskey-auth-k1", "1salem-x"),
-            TransportRequests.Open(4, "own_node", "eyJ.t.s", "key", 0),
-            TransportRequests.Refresh(5, "ses_1", "eyJ.t.s", "key"),
-            TransportRequests.Close(6, "ses_1"),
-            TransportRequests.Diag(7)
+            TransportRequests.Forget(4, "own_node"),
+            TransportRequests.Open(5, "own_node", "eyJ.t.s", "key", 0),
+            TransportRequests.Refresh(6, "ses_1", "eyJ.t.s", "key"),
+            TransportRequests.Close(7, "ses_1"),
+            TransportRequests.Diag(8)
         };
 
         var fields = requests.SelectMany(FieldNames).ToHashSet();
@@ -53,6 +54,7 @@ public sealed class TransportClientTests
         await client.HelloAsync(CancellationToken.None);
         await client.StatusAsync(CancellationToken.None);
         await client.EnrollAsync("own_node", "tskey-auth-k1", "1salem-x", CancellationToken.None);
+        await client.ForgetAsync("own_node", CancellationToken.None);
         var opened = await client.OpenAsync("own_node", "eyJ.t.s", "key", 0, CancellationToken.None);
         await client.RefreshAsync(opened.SessionId, "eyJ.t.s", "key", CancellationToken.None);
         await client.CloseAsync(opened.SessionId, CancellationToken.None);
@@ -60,8 +62,8 @@ public sealed class TransportClientTests
 
         var lines = pipes.SelectMany(pipe => pipe.Lines).ToList();
         var requests = lines.Select(Parse).OrderBy(request => request.GetProperty("id").GetInt64()).ToList();
-        Assert.Equal(["hello", "status", "enroll", "open", "refresh", "close", "diag"], requests.Select(request => request.GetProperty("op").GetString()));
-        Assert.Equal([1L, 2, 3, 4, 5, 6, 7], requests.Select(request => request.GetProperty("id").GetInt64()));
+        Assert.Equal(["hello", "status", "enroll", "forget", "open", "refresh", "close", "diag"], requests.Select(request => request.GetProperty("op").GetString()));
+        Assert.Equal([1L, 2, 3, 4, 5, 6, 7, 8], requests.Select(request => request.GetProperty("id").GetInt64()));
         Assert.Subset(PermittedFields, lines.SelectMany(line => FieldNames(Encoding.UTF8.GetBytes(line))).ToHashSet());
         Assert.Equal("127.0.0.1:18211", opened.Local);
     }

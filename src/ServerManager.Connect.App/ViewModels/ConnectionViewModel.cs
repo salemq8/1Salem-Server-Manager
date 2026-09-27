@@ -102,7 +102,8 @@ public sealed class ConnectionViewModel : ObservableObject
     public bool HasMessage => Message is not null;
 
     /// <summary>Not after a revocation: a new ticket would be refused, and the button would only pretend otherwise.</summary>
-    public bool CanConnect => _state is ConnectionState.Disconnected or ConnectionState.AccessExpired;
+    public bool CanConnect => _membership.CanConnect &&
+        _state is ConnectionState.Disconnected or ConnectionState.AccessExpired;
 
     public bool CanDisconnect => _state is ConnectionState.Connected or ConnectionState.ServerOffline;
 

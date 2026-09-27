@@ -104,6 +104,7 @@ public sealed partial class BrokerClient : IBrokerClient, IDisposable
             var membershipId = RequiredString(item, "membershipId", operation);
             var ownerId = RequiredString(item, "ownerId", operation);
             var nodeId = OptionalString(item, "nodeId", operation);
+            var nodeState = ParseNodeState(OptionalString(item, "nodeState", operation));
             if (!BrokerFormats.IsMembershipId(membershipId) ||
                 !ConnectKeyIds.IsOwnerId(ownerId) ||
                 (nodeId is not null && !BrokerFormats.IsNodeId(nodeId)))
@@ -117,7 +118,8 @@ public sealed partial class BrokerClient : IBrokerClient, IDisposable
                 RequiredString(item, "serverId", operation),
                 RequiredString(item, "serverLabel", operation),
                 ParseState(RequiredString(item, "state", operation)),
-                nodeId));
+                nodeId,
+                nodeState));
         }
 
         return memberships;
@@ -297,12 +299,12 @@ public sealed partial class BrokerClient : IBrokerClient, IDisposable
         var message = code is null ? $"{operation}: HTTP {status}." : $"{operation}: HTTP {status} {code}.";
         return status switch
         {
-            404 => new BrokerException(BrokerFailure.NotFound, message),
-            401 => new BrokerException(BrokerFailure.Unauthorized, message),
-            409 => new BrokerException(BrokerFailure.Conflict, message),
-            429 => new BrokerException(BrokerFailure.RateLimited, message) { RetryAfter = RetryAfter(response) },
-            >= 500 => new BrokerException(BrokerFailure.Unavailable, message),
-            _ => new BrokerException(BrokerFailure.Rejected, message)
+            404 => new BrokerException(BrokerFailure.NotFound, message) { ErrorCode = code },
+            401 => new BrokerException(BrokerFailure.Unauthorized, message) { ErrorCode = code },
+            409 => new BrokerException(BrokerFailure.Conflict, message) { ErrorCode = code },
+            429 => new BrokerException(BrokerFailure.RateLimited, message) { ErrorCode = code, RetryAfter = RetryAfter(response) },
+            >= 500 => new BrokerException(BrokerFailure.Unavailable, message) { ErrorCode = code },
+            _ => new BrokerException(BrokerFailure.Rejected, message) { ErrorCode = code }
         };
     }
 
@@ -389,6 +391,15 @@ public sealed partial class BrokerClient : IBrokerClient, IDisposable
         "rejected" => MembershipState.Rejected,
         "revoked" => MembershipState.Revoked,
         _ => MembershipState.Unknown
+    };
+
+    private static MembershipNodeState ParseNodeState(string? state) => state switch
+    {
+        null => MembershipNodeState.None,
+        "candidate" => MembershipNodeState.Candidate,
+        "confirmed" => MembershipNodeState.Confirmed,
+        "rejected" => MembershipNodeState.Rejected,
+        _ => MembershipNodeState.Unknown
     };
 
     private static void RequireMembershipId(string membershipId)

@@ -23,8 +23,9 @@ public sealed record EnrollmentResult(EnrollmentOutcome Outcome, string? NodeId)
 /// Turns an approved membership into a bound tailnet node (contract §7): fetch the one-time blob,
 /// open it with the device key, hand the auth key to the transport once, report the node id.
 /// <list type="bullet">
-/// <item>If this owner's node already exists (a second server of the same owner, or a bind that
-/// failed after enrolling), it is bound directly and no auth key is used at all.</item>
+/// <item>If this owner's node already exists, it is reused only when this membership previously
+/// enrolled it or another approved membership of the same owner still binds that exact node as a
+/// candidate or confirmed node. Otherwise a waiting blob replaces the stale node before enrolling.</item>
 /// <item>Each auth key goes over the pipe at most once per run, recorded before the call, so a
 /// retry after an ambiguous failure or a broker that serves the same blob twice cannot make the
 /// transport see the key again.</item>
@@ -63,7 +64,13 @@ public sealed class EnrollmentCoordinator
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
-    public async Task<EnrollmentResult> TryCompleteAsync(Membership membership, CancellationToken cancellationToken)
+    public Task<EnrollmentResult> TryCompleteAsync(Membership membership, CancellationToken cancellationToken) =>
+        TryCompleteAsync(membership, memberships: null, cancellationToken);
+
+    public async Task<EnrollmentResult> TryCompleteAsync(
+        Membership membership,
+        IReadOnlyList<Membership>? memberships,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(membership);
         if (!membership.NeedsEnrollment)
@@ -77,17 +84,26 @@ public sealed class EnrollmentCoordinator
             await _process.EnsureRunningAsync(cancellationToken).ConfigureAwait(false);
             var node = TransportNodeNames.ForOwner(membership.OwnerId);
             var nodeId = await EnrolledNodeIdAsync(node, cancellationToken).ConfigureAwait(false);
-            if (nodeId is null)
+            if (nodeId is not null &&
+                (_consumed.CanReuseNode(membership.MembershipId) ||
+                 await CanReuseExistingNodeAsync(membership, nodeId, memberships, cancellationToken).ConfigureAwait(false)))
             {
-                var enrolled = await EnrollFromBlobAsync(membership, node, cancellationToken).ConfigureAwait(false);
-                if (enrolled.Outcome != EnrollmentOutcome.Completed)
-                {
-                    return enrolled;
-                }
-
-                nodeId = enrolled.NodeId!;
+                await _broker.BindNodeAsync(membership.MembershipId, nodeId, cancellationToken).ConfigureAwait(false);
+                _consumed.Remove(membership.MembershipId);
+                return new EnrollmentResult(EnrollmentOutcome.Completed, nodeId);
             }
 
+            var enrolled = await EnrollFromBlobAsync(
+                membership,
+                node,
+                forgetExisting: nodeId is not null,
+                cancellationToken).ConfigureAwait(false);
+            if (enrolled.Outcome != EnrollmentOutcome.Completed)
+            {
+                return enrolled;
+            }
+
+            nodeId = enrolled.NodeId!;
             await _broker.BindNodeAsync(membership.MembershipId, nodeId, cancellationToken).ConfigureAwait(false);
             _consumed.Remove(membership.MembershipId);
             return new EnrollmentResult(EnrollmentOutcome.Completed, nodeId);
@@ -98,7 +114,11 @@ public sealed class EnrollmentCoordinator
         }
     }
 
-    private async Task<EnrollmentResult> EnrollFromBlobAsync(Membership membership, string node, CancellationToken cancellationToken)
+    private async Task<EnrollmentResult> EnrollFromBlobAsync(
+        Membership membership,
+        string node,
+        bool forgetExisting,
+        CancellationToken cancellationToken)
     {
         var package = await _broker.TakeEnrollmentAsync(membership.MembershipId, cancellationToken).ConfigureAwait(false);
         if (package is null)
@@ -110,7 +130,7 @@ public sealed class EnrollmentCoordinator
         }
 
         // Before anything else can end this attempt: the broker no longer has the blob.
-        _consumed.Add(membership.MembershipId);
+        _consumed.Add(membership.MembershipId, replacingStaleNode: forgetExisting);
         EnrollmentSecret secret;
         try
         {
@@ -136,15 +156,34 @@ public sealed class EnrollmentCoordinator
         // already marked used.
         try
         {
+            if (forgetExisting)
+            {
+                try
+                {
+                    await _transport.ForgetAsync(node, cancellationToken).ConfigureAwait(false);
+                }
+                catch (TransportException exception) when (exception.Code == TransportErrorCodes.NotEnrolled)
+                {
+                    // It disappeared after status was read. The desired state is already true.
+                }
+            }
+
             var nodeId = await _transport.EnrollAsync(node, secret.AuthKey, TransportNodeNames.Hostname(_identity.DeviceId), cancellationToken)
                 .ConfigureAwait(false);
+            _consumed.MarkFreshNode(membership.MembershipId);
             return new EnrollmentResult(EnrollmentOutcome.Completed, nodeId);
         }
         catch (TransportException exception) when (exception.Code == TransportErrorCodes.AlreadyEnrolled)
         {
             // This owner's node came up in the meantime; it serves this membership too.
             var existing = await EnrolledNodeIdAsync(node, cancellationToken).ConfigureAwait(false);
-            return existing is null ? Failed() : new EnrollmentResult(EnrollmentOutcome.Completed, existing);
+            if (existing is null || forgetExisting)
+            {
+                return Failed();
+            }
+
+            _consumed.MarkFreshNode(membership.MembershipId);
+            return new EnrollmentResult(EnrollmentOutcome.Completed, existing);
         }
         catch (TransportException exception) when (exception.Code is not (TransportErrorCodes.Unavailable
                                                                           or TransportErrorCodes.NoAnswer
@@ -161,6 +200,21 @@ public sealed class EnrollmentCoordinator
         var status = await _transport.StatusAsync(cancellationToken).ConfigureAwait(false);
         var nodeId = status.Nodes.FirstOrDefault(entry => entry.Node == node)?.NodeId;
         return BrokerFormats.IsNodeId(nodeId) ? nodeId : null;
+    }
+
+    private async Task<bool> CanReuseExistingNodeAsync(
+        Membership membership,
+        string nodeId,
+        IReadOnlyList<Membership>? memberships,
+        CancellationToken cancellationToken)
+    {
+        memberships ??= await _broker.GetMembershipsAsync(cancellationToken).ConfigureAwait(false);
+        return memberships.Any(other =>
+            other.MembershipId != membership.MembershipId &&
+            other.OwnerId == membership.OwnerId &&
+            other.State == MembershipState.Approved &&
+            other.NodeId == nodeId &&
+            other.NodeState is MembershipNodeState.Candidate or MembershipNodeState.Confirmed);
     }
 
     private static EnrollmentResult Failed() => new(EnrollmentOutcome.Failed, null);

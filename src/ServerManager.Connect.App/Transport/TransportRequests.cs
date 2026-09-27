@@ -26,6 +26,9 @@ internal static class TransportRequests
             writer.WriteString("hostname", hostname);
         });
 
+    public static byte[] Forget(long id, string node) =>
+        Build(id, "forget", writer => writer.WriteString("node", node));
+
     public static byte[] Open(long id, string node, string ticket, string sessionKey, int preferredPort) =>
         Build(id, "open", writer =>
         {

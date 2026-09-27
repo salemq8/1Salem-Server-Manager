@@ -64,6 +64,9 @@ public sealed partial class PipeTransportClient : ITransportClient, IDisposable
         TransportResponses.EnrolledNodeId(
             await CallAsync(_enrollments, id => TransportRequests.Enroll(id, node, authKey, hostname), _enrollTimeout, cancellationToken).ConfigureAwait(false));
 
+    public Task ForgetAsync(string node, CancellationToken cancellationToken) =>
+        CallAsync(_calls, id => TransportRequests.Forget(id, node), _callTimeout, cancellationToken);
+
     public async Task<TransportOpened> OpenAsync(string node, string ticket, string sessionKey, int preferredPort, CancellationToken cancellationToken) =>
         TransportResponses.Opened(
             await CallAsync(_calls, id => TransportRequests.Open(id, node, ticket, sessionKey, preferredPort), _callTimeout, cancellationToken).ConfigureAwait(false));

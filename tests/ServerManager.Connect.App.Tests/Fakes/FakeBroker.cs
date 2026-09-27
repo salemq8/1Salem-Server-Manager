@@ -83,7 +83,7 @@ internal sealed class FakeBroker : IBrokerClient
 
         Bound.Add((membershipId, nodeId));
         var index = Memberships.FindIndex(membership => membership.MembershipId == membershipId);
-        Memberships[index] = Memberships[index] with { NodeId = nodeId };
+        Memberships[index] = Memberships[index] with { NodeId = nodeId, NodeState = MembershipNodeState.Candidate };
         return Task.CompletedTask;
     }
 
@@ -102,5 +102,11 @@ internal sealed class FakeBroker : IBrokerClient
     {
         var index = Memberships.FindIndex(membership => membership.MembershipId == membershipId);
         Memberships[index] = Memberships[index] with { State = state };
+    }
+
+    public void SetNodeState(string membershipId, MembershipNodeState state)
+    {
+        var index = Memberships.FindIndex(membership => membership.MembershipId == membershipId);
+        Memberships[index] = Memberships[index] with { NodeState = state };
     }
 }

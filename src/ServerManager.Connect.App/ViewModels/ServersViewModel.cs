@@ -87,7 +87,7 @@ public sealed class ServersViewModel : ObservableObject, IPageLifetime
         var items = new List<ServerItemViewModel>(memberships.Count);
         foreach (var membership in memberships)
         {
-            items.Add(await BuildItemAsync(membership, cancellationToken));
+            items.Add(await BuildItemAsync(membership, memberships, cancellationToken));
         }
 
         Servers.Clear();
@@ -102,9 +102,13 @@ public sealed class ServersViewModel : ObservableObject, IPageLifetime
     }
 
     private bool HasPendingWork =>
-        Servers.Any(item => item.Membership.State == MembershipState.Pending || item.Membership.NeedsEnrollment);
+        Servers.Any(item => item.Membership.State == MembershipState.Pending ||
+            item.Membership.NeedsEnrollment || item.Membership.ConfirmationPending);
 
-    private async Task<ServerItemViewModel> BuildItemAsync(Membership membership, CancellationToken cancellationToken)
+    private async Task<ServerItemViewModel> BuildItemAsync(
+        Membership membership,
+        IReadOnlyList<Membership> memberships,
+        CancellationToken cancellationToken)
     {
         if (!membership.NeedsEnrollment)
         {
@@ -113,10 +117,11 @@ public sealed class ServersViewModel : ObservableObject, IPageLifetime
 
         try
         {
-            var result = await _enrollment.TryCompleteAsync(membership, cancellationToken);
+            var result = await _enrollment.TryCompleteAsync(membership, memberships, cancellationToken);
             return result.Outcome switch
             {
-                EnrollmentOutcome.Completed => new ServerItemViewModel(membership with { NodeId = result.NodeId }, null, _navigator),
+                EnrollmentOutcome.Completed => new ServerItemViewModel(
+                    membership with { NodeId = result.NodeId, NodeState = MembershipNodeState.Candidate }, null, _navigator),
                 EnrollmentOutcome.Failed => new ServerItemViewModel(membership, Text.ErrorSetupFailed, _navigator),
                 _ => new ServerItemViewModel(membership, null, _navigator)
             };

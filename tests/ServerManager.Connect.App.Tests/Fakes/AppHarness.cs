@@ -57,7 +57,11 @@ internal sealed class AppHarness : IDisposable
 
     public MainViewModel Main { get; }
 
-    public Membership AddMembership(MembershipState state, string? nodeId = null, char idLetter = 'a')
+    public Membership AddMembership(
+        MembershipState state,
+        string? nodeId = null,
+        char idLetter = 'a',
+        MembershipNodeState? nodeState = null)
     {
         var membership = new Membership(
             TestIds.MembershipId(idLetter),
@@ -65,7 +69,8 @@ internal sealed class AppHarness : IDisposable
             "5b0f7f2e-3c1a-4d57-9a7e-2f1d8c0b6a41",
             ServerLabel,
             state,
-            nodeId);
+            nodeId,
+            nodeState ?? (nodeId is null ? MembershipNodeState.None : MembershipNodeState.Confirmed));
         Broker.Memberships.Add(membership);
         return membership;
     }

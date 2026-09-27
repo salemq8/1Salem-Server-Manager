@@ -35,9 +35,12 @@ public sealed class ServerItemViewModel : ObservableObject
     private static string Describe(Membership membership, ConnectionViewModel? connection) => membership.State switch
     {
         MembershipState.Pending => Text.StatusWaitingForApproval,
-        MembershipState.Approved when membership.NodeId is null => Text.StatusEnrollmentPending,
+        MembershipState.Approved when membership.NodeState == MembershipNodeState.Candidate => Text.StatusConfirmationPending,
+        MembershipState.Approved when membership.NodeState == MembershipNodeState.Rejected => Text.StatusConfirmationFailed,
+        MembershipState.Approved when membership.NeedsEnrollment => Text.StatusEnrollmentPending,
         MembershipState.Approved when connection is { State: not ConnectionState.Disconnected } => connection.StateText,
-        MembershipState.Approved => Text.StatusReady,
+        MembershipState.Approved when membership.CanConnect => Text.StatusReady,
+        MembershipState.Approved => Text.StatusUnavailable,
         MembershipState.Rejected => Text.StatusDeclined,
         MembershipState.Revoked => Text.StateAccessRevoked,
         _ => Text.StatusUnavailable

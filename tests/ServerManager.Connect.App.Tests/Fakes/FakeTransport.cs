@@ -31,11 +31,15 @@ internal sealed class FakeTransport : ITransportClient
     /// <summary>Thrown by the next enroll, after it has been recorded (the key did reach the pipe).</summary>
     public Exception? NextEnrollFailure { get; set; }
 
+    public Exception? NextForgetFailure { get; set; }
+
     public List<TransportNode> Nodes { get; } = [];
 
     public List<TransportSession> Sessions { get; } = [];
 
     public List<EnrollCall> Enrollments { get; } = [];
+
+    public List<string> Forgotten { get; } = [];
 
     public List<OpenCall> Opens { get; } = [];
 
@@ -70,6 +74,20 @@ internal sealed class FakeTransport : ITransportClient
 
         Nodes.Add(new TransportNode(node, NextNodeId, "running"));
         return Task.FromResult(NextNodeId);
+    }
+
+    public Task ForgetAsync(string node, CancellationToken cancellationToken)
+    {
+        Forgotten.Add(node);
+        if (NextForgetFailure is { } failure)
+        {
+            NextForgetFailure = null;
+            return Task.FromException(failure);
+        }
+
+        Nodes.RemoveAll(item => item.Node == node);
+        Sessions.Clear();
+        return Task.CompletedTask;
     }
 
     public Task<TransportOpened> OpenAsync(string node, string ticket, string sessionKey, int preferredPort, CancellationToken cancellationToken)

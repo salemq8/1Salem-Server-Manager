@@ -38,6 +38,11 @@ public sealed class SessionService
     public async Task<OpenedSession> OpenAsync(Membership membership, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(membership);
+        if (!membership.CanConnect)
+        {
+            throw new InvalidOperationException("A session can be opened only for an owner-confirmed node.");
+        }
+
         await _process.EnsureRunningAsync(cancellationToken).ConfigureAwait(false);
         using var key = SessionKey.Create();
         var ticket = await _broker.CreateSessionAsync(membership.MembershipId, key.PublicKeySpki, cancellationToken).ConfigureAwait(false);

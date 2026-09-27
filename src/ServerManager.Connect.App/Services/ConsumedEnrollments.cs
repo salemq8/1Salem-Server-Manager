@@ -9,8 +9,9 @@ namespace ServerManager.Connect.App.Services;
 /// these "nothing to take" means the blob is used up, not that the owner has yet to send it.
 /// <para>
 /// Kept across runs, because an app restart must not turn a failed enrollment back into
-/// "Enrollment pending" for good. The file holds membership ids and nothing else (never anything
-/// from the blob, the auth key above all), and is written whole to a temporary file that is then
+/// "Enrollment pending" for good. The file holds membership ids plus a flag saying that an old
+/// owner node still had to be replaced, and nothing else (never anything from the blob, the auth key
+/// above all), and is written whole to a temporary file that is then
 /// moved over it, so a crash never leaves half a list. A file that cannot be read or written is
 /// recorded in Diagnostics and the list carries on in memory for this run: the worst that can
 /// come of it after a restart is "pending" where "failed" would be right.
@@ -23,7 +24,7 @@ public sealed class ConsumedEnrollments
     private readonly string? _path;
     private readonly DiagnosticsLog _log;
     private readonly object _gate = new();
-    private HashSet<string>? _ids;
+    private PersistedState? _state;
 
     /// <param name="path">The file; null keeps the list for this run only.</param>
     public ConsumedEnrollments(string? path, DiagnosticsLog log)
@@ -40,11 +41,20 @@ public sealed class ConsumedEnrollments
     {
         lock (_gate)
         {
-            return Ids.Contains(membershipId);
+            return State.Ids.Contains(membershipId);
         }
     }
 
-    public void Add(string membershipId)
+    /// <summary>True only when a local node can be known to have come from this membership's blob.</summary>
+    public bool CanReuseNode(string membershipId)
+    {
+        lock (_gate)
+        {
+            return State.Ids.Contains(membershipId) && !State.Replacements.Contains(membershipId);
+        }
+    }
+
+    public void Add(string membershipId, bool replacingStaleNode = false)
     {
         if (!BrokerFormats.IsMembershipId(membershipId))
         {
@@ -53,7 +63,25 @@ public sealed class ConsumedEnrollments
 
         lock (_gate)
         {
-            if (Ids.Add(membershipId))
+            var changed = State.Ids.Add(membershipId);
+            if (replacingStaleNode)
+            {
+                changed |= State.Replacements.Add(membershipId);
+            }
+
+            if (changed)
+            {
+                Save();
+            }
+        }
+    }
+
+    /// <summary>The replacement enrollment returned a new node; a failed broker bind may safely retry it.</summary>
+    public void MarkFreshNode(string membershipId)
+    {
+        lock (_gate)
+        {
+            if (State.Replacements.Remove(membershipId))
             {
                 Save();
             }
@@ -64,7 +92,9 @@ public sealed class ConsumedEnrollments
     {
         lock (_gate)
         {
-            if (Ids.Remove(membershipId))
+            var changed = State.Ids.Remove(membershipId);
+            changed |= State.Replacements.Remove(membershipId);
+            if (changed)
             {
                 Save();
             }
@@ -72,28 +102,51 @@ public sealed class ConsumedEnrollments
     }
 
     // Read on first use rather than at startup: a copy that never enrolls never touches the file.
-    private HashSet<string> Ids => _ids ??= Load();
+    private PersistedState State => _state ??= Load();
 
-    private HashSet<string> Load()
+    private PersistedState Load()
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
+        var replacements = new HashSet<string>(StringComparer.Ordinal);
         if (_path is null || !File.Exists(_path))
         {
-            return ids;
+            return new PersistedState(ids, replacements);
         }
 
         try
         {
-            // Well-formed ids only: anything else in the file means nothing here.
-            var saved = JsonSerializer.Deserialize<string?[]>(File.ReadAllBytes(_path)) ?? [];
-            ids.UnionWith(saved.Where(BrokerFormats.IsMembershipId).Select(id => id!));
+            if (new FileInfo(_path).Length > 64 * 1024)
+            {
+                throw new JsonException("The consumed enrollment state is too large.");
+            }
+
+            var content = File.ReadAllBytes(_path);
+            using var document = JsonDocument.Parse(content);
+            if (document.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                // Build 7 compatibility: its file was an array of membership ids.
+                AddValid(document.RootElement, ids);
+            }
+            else if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                     document.RootElement.TryGetProperty("version", out var version) && version.GetInt32() == 2 &&
+                     document.RootElement.TryGetProperty("memberships", out var savedIds) &&
+                     document.RootElement.TryGetProperty("replacements", out var savedReplacements))
+            {
+                AddValid(savedIds, ids);
+                AddValid(savedReplacements, replacements);
+                replacements.IntersectWith(ids);
+            }
+            else
+            {
+                throw new JsonException("The consumed enrollment state has an unknown format.");
+            }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
         {
             _log.Record("enrollment", exception);
         }
 
-        return ids;
+        return new PersistedState(ids, replacements);
     }
 
     private void Save()
@@ -103,7 +156,12 @@ public sealed class ConsumedEnrollments
             return;
         }
 
-        var content = JsonSerializer.SerializeToUtf8Bytes(_ids!.Order(StringComparer.Ordinal).ToArray());
+        var content = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 2,
+            memberships = State.Ids.Order(StringComparer.Ordinal).ToArray(),
+            replacements = State.Replacements.Order(StringComparer.Ordinal).ToArray()
+        });
         var temporary = $"{_path}.{Guid.NewGuid():N}.tmp";
         try
         {
@@ -128,4 +186,22 @@ public sealed class ConsumedEnrollments
             _log.Record("enrollment", exception);
         }
     }
+
+    private static void AddValid(JsonElement array, HashSet<string> target)
+    {
+        if (array.ValueKind != JsonValueKind.Array)
+        {
+            throw new JsonException("Expected an array of membership ids.");
+        }
+
+        foreach (var value in array.EnumerateArray())
+        {
+            if (value.ValueKind == JsonValueKind.String && value.GetString() is { } id && BrokerFormats.IsMembershipId(id))
+            {
+                target.Add(id);
+            }
+        }
+    }
+
+    private sealed record PersistedState(HashSet<string> Ids, HashSet<string> Replacements);
 }

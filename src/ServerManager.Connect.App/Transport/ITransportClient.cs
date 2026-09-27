@@ -15,6 +15,9 @@ public interface ITransportClient
     /// <summary>Hands a one-off <c>tskey-auth-</c> key to the transport. Returns the new node id.</summary>
     Task<string> EnrollAsync(string node, string authKey, string hostname, CancellationToken cancellationToken);
 
+    /// <summary>Stops an owner's stale node and safely removes only that node's state directory.</summary>
+    Task ForgetAsync(string node, CancellationToken cancellationToken);
+
     /// <summary>Opens a loopback listener for a ticket. <paramref name="preferredPort"/> 0 means 18211.</summary>
     Task<TransportOpened> OpenAsync(string node, string ticket, string sessionKey, int preferredPort, CancellationToken cancellationToken);
 

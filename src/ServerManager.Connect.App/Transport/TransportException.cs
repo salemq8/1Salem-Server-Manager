@@ -38,6 +38,7 @@ public static class TransportErrorCodes
     public const string ModeMismatch = "mode_mismatch";
 
     public const string AlreadyEnrolled = "already_enrolled";
+    public const string NotEnrolled = "not_enrolled";
     public const string NoSession = "no_session";
     public const string TicketRejected = "ticket_rejected";
     public const string SessionKeyRejected = "session_key_rejected";

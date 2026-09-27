@@ -42,6 +42,9 @@ public sealed class BrokerException : Exception
 
     public BrokerFailure Failure { get; }
 
+    /// <summary>The broker's sanitized machine-readable error, when it sent one.</summary>
+    public string? ErrorCode { get; init; }
+
     public TimeSpan? RetryAfter { get; init; }
 }
 

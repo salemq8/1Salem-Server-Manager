@@ -11,6 +11,17 @@ public enum MembershipState
     Unknown
 }
 
+public enum MembershipNodeState
+{
+    None,
+    Candidate,
+    Confirmed,
+    Rejected,
+
+    /// <summary>A node state this version does not know. It never grants access.</summary>
+    Unknown
+}
+
 /// <summary>One of this device's servers, as <c>GET /v1/devices/me/memberships</c> reports it.</summary>
 public sealed record Membership(
     string MembershipId,
@@ -18,12 +29,18 @@ public sealed record Membership(
     string ServerId,
     string ServerLabel,
     MembershipState State,
-    string? NodeId)
+    string? NodeId,
+    MembershipNodeState NodeState = MembershipNodeState.None)
 {
     /// <summary>Approved, but no tailnet node is bound yet: the enrollment blob is still to come.</summary>
-    public bool NeedsEnrollment => State == MembershipState.Approved && NodeId is null;
+    public bool NeedsEnrollment => State == MembershipState.Approved && NodeId is null && NodeState == MembershipNodeState.None;
 
-    public bool CanConnect => State == MembershipState.Approved && NodeId is not null;
+    /// <summary>A reported node remains unusable until the owner has verified and confirmed it.</summary>
+    public bool CanConnect =>
+        State == MembershipState.Approved && NodeId is not null && NodeState == MembershipNodeState.Confirmed;
+
+    public bool ConfirmationPending =>
+        State == MembershipState.Approved && NodeState == MembershipNodeState.Candidate;
 }
 
 public sealed record InviteRedemption(string MembershipId, string ServerLabel);

@@ -80,7 +80,9 @@ public sealed class BrokerClientTests
         var throttled = await Assert.ThrowsAsync<BrokerException>(() => second.GetMembershipsAsync(CancellationToken.None));
 
         Assert.Equal(BrokerFailure.NotFound, missing.Failure);
+        Assert.Equal("not_found", missing.ErrorCode);
         Assert.Equal(BrokerFailure.RateLimited, throttled.Failure);
+        Assert.Equal("rate_limited", throttled.ErrorCode);
         Assert.Equal(TimeSpan.FromSeconds(30), throttled.RetryAfter);
     }
 
@@ -96,6 +98,31 @@ public sealed class BrokerClientTests
         Assert.Null(await first.TakeEnrollmentAsync(TestIds.MembershipId(), CancellationToken.None));
         var invalid = await Assert.ThrowsAsync<BrokerException>(() => second.GetMembershipsAsync(CancellationToken.None));
         Assert.Equal(BrokerFailure.InvalidResponse, invalid.Failure);
+    }
+
+    [Theory]
+    [InlineData("candidate", MembershipNodeState.Candidate, false)]
+    [InlineData("confirmed", MembershipNodeState.Confirmed, true)]
+    [InlineData("rejected", MembershipNodeState.Rejected, false)]
+    [InlineData("future_state", MembershipNodeState.Unknown, false)]
+    public async Task Membership_node_state_is_parsed_and_only_confirmed_can_connect(
+        string wireState,
+        MembershipNodeState expected,
+        bool canConnect)
+    {
+        using var identity = TestIds.NewDevice();
+        var ownerId = TestIds.NewOwnerId();
+        var handler = new RecordingHandler(HttpStatusCode.OK, $$"""
+            {"memberships":[{"membershipId":"mem_aaaaaaaaaaaaaaaaaaaaaaaaaa","ownerId":"{{ownerId}}",
+             "serverId":"5b0f7f2e-3c1a-4d57-9a7e-2f1d8c0b6a41","serverLabel":"Home","state":"approved",
+             "nodeId":"nFAKE1CNTRL","nodeState":"{{wireState}}"}]}
+            """);
+        using var client = new BrokerClient(new Uri("https://broker.test/"), false, identity, handler);
+
+        var membership = Assert.Single(await client.GetMembershipsAsync(CancellationToken.None));
+
+        Assert.Equal(expected, membership.NodeState);
+        Assert.Equal(canConnect, membership.CanConnect);
     }
 
     [Fact]

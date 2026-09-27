@@ -47,6 +47,8 @@ public static class Text
 
     public static string StatusWaitingForApproval => Get(nameof(StatusWaitingForApproval));
     public static string StatusEnrollmentPending => Get(nameof(StatusEnrollmentPending));
+    public static string StatusConfirmationPending => Get(nameof(StatusConfirmationPending));
+    public static string StatusConfirmationFailed => Get(nameof(StatusConfirmationFailed));
     public static string StatusReady => Get(nameof(StatusReady));
     public static string StatusDeclined => Get(nameof(StatusDeclined));
     public static string StatusUnavailable => Get(nameof(StatusUnavailable));
