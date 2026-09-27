@@ -11,7 +11,7 @@ export async function putServer(ctx: RequestContext, owner: Caller): Promise<Res
   const protocol = stringField(body, "protocol");
   const hostBridge = stringField(body, "hostBridge");
   if (!isLabel(label)) throw badRequest("label must be 1-64 printable characters");
-  // "udp" is reserved in the ticket format but has no bridge in Phase 1 (§18).
+  // "udp" is reserved in the ticket format but has no bridge in Build 8 (§18).
   if (protocol !== "tcp") throw badRequest("protocol must be tcp");
   if (!isHostBridge(hostBridge, loopbackBridgeAllowed(ctx.env))) throw badRequest("hostBridge must be a tailnet ip:port");
 

@@ -31,7 +31,7 @@ public partial class ServerSettingsTab : UserControl
     private ServerConnectResponse? _connectStatus;
     private ConnectServerViewModel? _connectView;
     private string? _connectError;
-    private Guid _connectServerId;
+    private readonly ConnectServerRequestTracker _connectRequests = new();
 
     public ServerSettingsTab()
     {
@@ -44,10 +44,9 @@ public partial class ServerSettingsTab : UserControl
         _connectTimer.Tick += async (_, _) => await LoadConnectAsync();
         _context.Changed += (_, _) => Dispatcher.Invoke(() =>
         {
-            if (_connectServerId != _context.ServerId)
+            if (_connectRequests.Select(_context.ServerId))
             {
                 // Never render one server's access state while switching to another server.
-                _connectServerId = _context.ServerId;
                 _connectStatus = null;
                 _connectError = null;
             }
@@ -267,21 +266,33 @@ public partial class ServerSettingsTab : UserControl
         }
 
         _connectLoading = true;
+        var request = _connectRequests.Capture(_context.ServerId);
         _connectError = null;
         RenderConnectCard();
         try
         {
-            _connectStatus = await _connectClient.GetServerAsync(_context.ServerId);
+            var status = await _connectClient.GetServerAsync(request.ServerId);
+            if (_connectRequests.IsCurrent(request) && (status is null || status.ServerId == request.ServerId))
+            {
+                _connectStatus = status;
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            _connectStatus = null;
-            _connectError = DiagnosticsService.Redact(exception.Message);
+            if (_connectRequests.IsCurrent(request))
+            {
+                _connectStatus = null;
+                _connectError = LocalizationService.Get("Connect.State.ErrorDetail");
+            }
         }
         finally
         {
             _connectLoading = false;
             RenderConnectCard();
+            if (!_connectRequests.IsCurrent(request))
+            {
+                _ = LoadConnectAsync();
+            }
         }
     }
 
@@ -292,9 +303,10 @@ public partial class ServerSettingsTab : UserControl
             return;
         }
 
-        await RunConnectActionAsync(() => _connectView.PrimaryAction == ConnectServerAction.Enable
-            ? _connectClient.EnableAsync(_context.ServerId)
-            : _connectClient.DisableAsync(_context.ServerId));
+        var action = _connectView.PrimaryAction;
+        await RunConnectActionAsync(serverId => action == ConnectServerAction.Enable
+            ? _connectClient.EnableAsync(serverId)
+            : _connectClient.DisableAsync(serverId));
     }
 
     private async void ConnectInvite_Click(object sender, RoutedEventArgs e)
@@ -309,7 +321,7 @@ public partial class ServerSettingsTab : UserControl
         await LoadConnectAsync();
     }
 
-    private async Task RunConnectActionAsync(Func<Task> action)
+    private async Task RunConnectActionAsync(Func<Guid, Task> action)
     {
         if (_connectLoading)
         {
@@ -317,21 +329,33 @@ public partial class ServerSettingsTab : UserControl
         }
 
         _connectLoading = true;
+        var request = _connectRequests.Capture(_context.ServerId);
         _connectError = null;
         RenderConnectCard();
         try
         {
-            await action();
-            _connectStatus = await _connectClient.GetServerAsync(_context.ServerId);
+            await action(request.ServerId);
+            var status = await _connectClient.GetServerAsync(request.ServerId);
+            if (_connectRequests.IsCurrent(request) && (status is null || status.ServerId == request.ServerId))
+            {
+                _connectStatus = status;
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            _connectError = DiagnosticsService.Redact(exception.Message);
+            if (_connectRequests.IsCurrent(request))
+            {
+                _connectError = LocalizationService.Get("Connect.State.ErrorDetail");
+            }
         }
         finally
         {
             _connectLoading = false;
             RenderConnectCard();
+            if (!_connectRequests.IsCurrent(request))
+            {
+                _ = LoadConnectAsync();
+            }
         }
     }
 

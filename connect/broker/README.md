@@ -281,8 +281,8 @@ The broker cannot enforce these itself.
   afterwards is above every seq issued before, so every kept cursor gets `cursor_ahead` and its
   host starts again from `after=0` (events are idempotent). The host authorization component's
   local revocation set and immediate enforcement (architecture §12) do not depend on the feed. The
-  Agent service hosts that component in Phase 2 (architecture §21 D-4); in Phase 1 it runs only in
-  tests and the disposable proof, and nothing consumes the feed yet.
+  Agent service hosts that component, persists the cursor and consumes the feed (architecture
+  §12 and §21 D-4).
 - **Leave Cloudflare's Pseudo IPv4 off, or at "Add header".** "Overwrite headers" replaces
   `CF-Connecting-IP` with an address derived from the full IPv6 address. That gives every
   address in a /64 its own bucket again.

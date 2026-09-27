@@ -16,6 +16,9 @@ public sealed class ConnectOwnerUiTests
         "Connect.State.NotSetUp",
         "Connect.State.Checking",
         "Connect.State.Policy",
+        "Connect.State.PolicyIncomplete",
+        "Connect.State.PolicyNotPermitted",
+        "Connect.State.PolicyUnverifiable",
         "Connect.State.TailnetLock",
         "Connect.State.HostStarting",
         "Connect.State.Ready",
@@ -152,6 +155,81 @@ public sealed class ConnectOwnerUiTests
     }
 
     [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void UnreadyOrIneligibleServer_KeepsCleanupActions(bool accountReady, bool eligible)
+    {
+        var response = Server(eligible: eligible, enabled: true,
+            friends: [Friend(ConnectFriendState.Approved)]) with { AccountReady = accountReady };
+        var view = ConnectPresentation.Server(GameType.Minecraft, response);
+        Assert.Equal(ConnectServerAction.Disable, view.PrimaryAction);
+        Assert.True(view.CanRunPrimaryAction);
+        Assert.True(view.CanManageFriends);
+        Assert.False(view.CanInvite);
+
+        var disabled = ConnectPresentation.Server(GameType.Minecraft, response with { Enabled = false });
+        Assert.False(disabled.CanRunPrimaryAction);
+        Assert.True(disabled.CanManageFriends);
+    }
+
+    [Theory]
+    [InlineData(ConnectPolicyState.Unsafe)]
+    [InlineData(ConnectPolicyState.Incomplete)]
+    [InlineData(ConnectPolicyState.NotPermitted)]
+    [InlineData(ConnectPolicyState.Unverifiable)]
+    public void PolicyDetails_AreLocalizedInsteadOfShowingRawAnalyzerEnglish(ConnectPolicyState policy)
+    {
+        WithCulture("ar-SA", () =>
+        {
+            var status = Status(ConnectSetupState.NeedsAttention, true, policy) with
+            {
+                PolicyReasons = ["Raw English analyzer diagnostic"]
+            };
+            var view = ConnectPresentation.Setup(status);
+            Assert.DoesNotContain("Raw English", view.Detail, StringComparison.Ordinal);
+            Assert.Contains(view.Detail, character => character is >= '\u0600' and <= '\u06ff');
+        });
+    }
+
+    [Fact]
+    public void ServerRequestTracker_DiscardsRepliesAfterSelectionChanges()
+    {
+        var tracker = new ConnectServerRequestTracker();
+        var firstServer = Guid.NewGuid();
+        var firstRequest = tracker.Capture(firstServer);
+        Assert.True(tracker.IsCurrent(firstRequest));
+        Assert.False(tracker.Select(firstServer));
+        Assert.True(tracker.IsCurrent(firstRequest));
+
+        Assert.True(tracker.Select(Guid.NewGuid()));
+        Assert.False(tracker.IsCurrent(firstRequest));
+        var secondVisit = tracker.Capture(firstServer);
+        Assert.False(tracker.IsCurrent(firstRequest));
+        Assert.True(tracker.IsCurrent(secondVisit));
+    }
+
+    [Fact]
+    public void NicknameDraft_SurvivesRefreshAndSaveWhileTyping()
+    {
+        var drafts = new ConnectNicknameDrafts();
+        drafts.Set("member", "My friend");
+        Assert.Equal("My friend", drafts.Get("member", "Old saved name"));
+        drafts.Retain(["member"]);
+        Assert.Equal("My friend", drafts.Get("member", "Server refresh"));
+
+        drafts.Set("member", "My friend updated");
+        drafts.Saved("member", "My friend");
+        Assert.Equal("My friend updated", drafts.Get("member", "My friend"));
+        drafts.Saved("member", "My friend updated");
+        Assert.Equal("New server value", drafts.Get("member", "New server value"));
+
+        drafts.Set("removed", "Unsaved name");
+        drafts.Retain(["member"]);
+        Assert.Equal("Fallback", drafts.Get("removed", "Fallback"));
+    }
+
+    [Theory]
     [InlineData("tskey-client-a1b2c3d4", "tskey-client-[REDACTED]")]
     [InlineData("{\"clientSecret\":\"owner-secret\"}", "{\"clientSecret\":\"[REDACTED]\"}")]
     [InlineData("https://connect.1salem.app/i#invite_secret_123", "https://connect.1salem.app/i#[REDACTED]")]
@@ -169,10 +247,17 @@ public sealed class ConnectOwnerUiTests
 
         Assert.Contains("<PasswordBox x:Name=\"ClientSecretBox\"", setup, StringComparison.Ordinal);
         Assert.Contains("ClientSecretBox.Clear();", setupCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClientIdBox.Text = _status.ClientIdHint", setupCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClientIdBox.Text = _status?.ClientIdHint", setupCode, StringComparison.Ordinal);
         Assert.Contains("FlowDirection=\"LeftToRight\"", invite, StringComparison.Ordinal);
         Assert.Contains("TrySetSensitiveText", inviteCode, StringComparison.Ordinal);
+        Assert.Contains("AddCopyingHandler(LinkBox, SensitiveText_Copying)", inviteCode, StringComparison.Ordinal);
+        Assert.Contains("AddCopyingHandler(CodeBox, SensitiveText_Copying)", inviteCode, StringComparison.Ordinal);
+        Assert.Contains("e.CancelCommand();", inviteCode, StringComparison.Ordinal);
         Assert.Contains("CanIncludeInClipboardHistory", clipboard, StringComparison.Ordinal);
         Assert.Contains("CanUploadToCloudClipboard", clipboard, StringComparison.Ordinal);
+        Assert.Contains("new byte[sizeof(uint)]", clipboard, StringComparison.Ordinal);
+        Assert.Contains("autoConvert: false", clipboard, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -181,13 +266,18 @@ public sealed class ConnectOwnerUiTests
         var settings = ReadSource("src", "ServerManager.Client", "Controls", "ServerSettingsTab.xaml.cs");
         var setup = ReadSource("src", "ServerManager.Client", "ConnectSetupWindow.xaml.cs");
         var friends = ReadSource("src", "ServerManager.Client", "ConnectFriendsWindow.xaml.cs");
+        var network = ReadSource("src", "ServerManager.Client", "Controls", "NetworkPageControl.xaml.cs");
 
         Assert.Contains("!IsVisible || CurrentGroup != \"Network\"", settings, StringComparison.Ordinal);
         Assert.Contains("_connectTimer.Stop();", settings, StringComparison.Ordinal);
-        Assert.Contains("_busy || !IsVisible", setup, StringComparison.Ordinal);
+        Assert.Contains("_loading", setup, StringComparison.Ordinal);
+        Assert.Contains("!IsVisible", setup, StringComparison.Ordinal);
         Assert.Contains("_timer.Stop();", setup, StringComparison.Ordinal);
         Assert.Contains("_busy || !IsVisible", friends, StringComparison.Ordinal);
         Assert.Contains("_timer.Stop();", friends, StringComparison.Ordinal);
+        Assert.Contains("!IsVisible", network, StringComparison.Ordinal);
+        Assert.Contains("IsVisibleChanged", network, StringComparison.Ordinal);
+        Assert.Contains("_timer.Stop();", network, StringComparison.Ordinal);
     }
 
     [Fact]

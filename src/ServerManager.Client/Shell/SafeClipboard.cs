@@ -29,8 +29,11 @@ public static class SafeClipboard
                 {
                     var data = new System.Windows.DataObject();
                     data.SetData(System.Windows.DataFormats.UnicodeText, text);
-                    data.SetData("CanIncludeInClipboardHistory", 0);
-                    data.SetData("CanUploadToCloudClipboard", 0);
+                    // Windows expects raw serialized DWORDs, not managed Int32 objects.
+                    using var history = new System.IO.MemoryStream(new byte[sizeof(uint)]);
+                    using var cloud = new System.IO.MemoryStream(new byte[sizeof(uint)]);
+                    data.SetData("CanIncludeInClipboardHistory", history, autoConvert: false);
+                    data.SetData("CanUploadToCloudClipboard", cloud, autoConvert: false);
                     System.Windows.Clipboard.SetDataObject(data, true);
                 }
                 else

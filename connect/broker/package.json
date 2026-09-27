@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "1Salem Connect control-plane broker (Cloudflare Worker + D1). Phase 1: local only.",
+  "description": "1Salem Connect control-plane broker (Cloudflare Worker + D1; not deployed).",
   "scripts": {
     "dev": "wrangler dev --local",
     "migrate:local": "wrangler d1 migrations apply onesalem-connect --local",

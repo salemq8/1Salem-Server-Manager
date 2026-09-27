@@ -1,9 +1,10 @@
-# 1Salem Connect — Architecture (Build 8, Phase 1)
+# 1Salem Connect — Architecture (Build 8, Phase 2)
 
-Status: **Phase 1 design and local foundation, security-reviewed.** Nothing here has enrolled a
-real tailnet device, deployed a Cloudflare resource, or touched production. The contracts below
-describe the Phase 1 code as built and after its security review; what is still missing is
-listed in §19 and §21.
+Status: **Phase 2 implemented and locally verified; not deployed.** The broker, Agent host,
+owner UI, friend UI, candidate-node confirmation and revocation path are wired end to end. The
+fake proof is automated. No command in this build task enrolled a real tailnet device, deployed a
+Cloudflare resource, or touched production. Real-tailnet and deployment gates remain in §19 and
+§21.
 
 Everything marked **[verified]** is backed by an official source recorded in
 `docs/CONNECT_PROVIDER_RESEARCH.md` (fact ids such as `T2-05` refer to that file; `P1-xx` ids
@@ -43,7 +44,7 @@ Game bytes travel **Friend ↔ Tailscale data plane ↔ Host** only. The broker 
 
 ---
 
-## 2. The multi-owner question — DECISION REQUIRED
+## 2. Multi-owner model — O1 selected
 
 1Salem Connect must work for many unrelated Server Manager owners. The research settles what
 Tailscale allows:
@@ -109,12 +110,13 @@ sales. In a single shared tailnet, owners would also share one policy, so isolat
 owners would rest on the application layer alone. Blocked pending a Tailscale agreement.
 
 **O4** (for example, running Headscale) removes the Terms question but makes 1Salem a network
-operator: control server, DERP, and on-call. Not for Phase 1.
+operator: control server, DERP, and on-call. Out of scope for Build 8.
 
-> **Decision needed from Salem:** confirm O1. The Phase 1 code implements O1's shape: the broker
-> holds no Tailscale credential, and a provisioning interface on the Agent has a fake
-> implementation. It does not implement the "Worker holds the OAuth secret" model, because that
-> model is either O2 or O3.
+Build 8 implements **O1**. The broker holds no Tailscale credential. The Agent stores each
+owner's OAuth client secret with DPAPI CurrentUser under the Agent's SYSTEM account, validates policy and Tailnet Lock, mints and
+cleans one-off keys, verifies candidate devices, and removes eligible friend devices on
+revocation. It does not implement the "Worker holds the OAuth secret" model, because that model
+is either O2 or O3.
 
 ---
 
@@ -126,7 +128,7 @@ operator: control server, DERP, and on-call. Not for Phase 1.
 | `ServerManager.Connect.Core` | C# | `src/ServerManager.Connect.Core` | Shared: tickets, proofs, identities, pipe security, port selection, redaction, enrollment crypto |
 | `1Salem.Connect.Transport.exe` | Go + tsnet | `connect/transport/cmd/connect-transport` | Friend data plane |
 | `1Salem.Connect.Host.Transport.exe` | Go + tsnet | `connect/transport/cmd/connect-host-transport` | Host bridge data plane |
-| Host authorization + supervision | C# | `src/ServerManager.Infrastructure/Connect` | Agent-side: verify tickets, map ServerId → endpoint, supervise host transport. Built as libraries; the Agent service hosts them in Phase 2 (§21 D-4) |
+| Host authorization + supervision | C# | `src/ServerManager.Infrastructure/Connect`, `src/ServerManager.Agent` | Agent-side: verify tickets, map ServerId → endpoint, supervise host transport, consume revocations and run owner workflows |
 | Broker | TypeScript Worker + D1 | `connect/broker` | Control plane |
 | Proof harness | PowerShell + C# | `connect/proof` | Disposable end-to-end proof, isolation snapshot |
 
@@ -277,16 +279,18 @@ Friend app
   → decrypts with the device key, hands authKey to the transport ONCE over the pipe
   → transport starts tsnet with a fresh Dir for this owner's tailnet, reports Self.ID
   → POST /v1/memberships/{id}/node {nodeId}                         (device-signed, once)
-Agent                                                               (Phase 2, §21 D-1)
+Agent
   → GET /api/v2/device/{nodeId}: confirm tag:onesalem-client and created-after-key; then
-    DELETE /api/v2/tailnet/-/keys/{keyId} if still unused (it is auto-revoked once used)
+    POST /v1/memberships/{id}/node/confirm                          (owner-signed)
+  DELETE /api/v2/tailnet/-/keys/{keyId} if still unused (it is auto-revoked once used)
 ```
 
-**Phase 1 status of this flow.** The broker, enrollment crypto, relay, pipe `enroll` and node
-binding exist and are exercised end to end in fake mode. The Agent-side steps that call the
-Tailscale API (mint, confirm, key cleanup) exist only as a mock-tested provisioner with no
-callers, and the broker has no confirmation step yet: the binding is the device's report, with
-the Phase 1 safeguards listed in §21, D-1.
+**Phase 2 status of this flow.** This complete flow is wired through `ConnectOwnerWorkflow` and
+the Agent's local-only owner API. A device report creates a candidate only. The Agent verifies the
+candidate through Tailscale before the owner-signed confirmation, and the broker refuses to issue
+a session while the binding is candidate, rejected or unknown. Enrollment keys are cleaned after
+confirmation and after expiry. The fake broker proof covers the confirmation gate; the real-tsnet
+harness compiles with the same gate but was not run during this build task (§19).
 
 Facts this relies on:
 
@@ -296,8 +300,8 @@ Facts this relies on:
   in seconds **[T2-06, T3-13; open question]**. We request 1 day and delete the key as soon as
   the node is confirmed, or when the enrollment blob expires unused (15 minutes).
 - Nothing in the API maps an auth key to the device it created **[verified T2-19]**. The friend
-  reports `Status.Self.ID`, and (Phase 2) the Agent checks it through the API before the
-  binding is confirmed.
+  reports `Status.Self.ID`, and the Agent checks it through the API before the binding is
+  confirmed.
 - A tsnet node ignores `AuthKey` once state exists **[verified T1-10, T2-20]**. The friend
   transport therefore keeps **one state directory per owner tailnet** and never reuses a
   directory for a different tailnet.
@@ -307,6 +311,17 @@ Facts this relies on:
 
 The host node is enrolled the same way, tagged `tag:onesalem-host`, with the key handed to the
 host transport over its pipe.
+
+### Owner controls
+
+All owner endpoints are served only to the desktop client on the local Agent transport. The
+Network page shows setup, policy, Tailnet Lock and host readiness and opens a credential window;
+the OAuth secret is entered in a `PasswordBox`, sent once, cleared, and never returned. Per-server
+Settings exposes Connect only for eligible Minecraft servers. Invitation links and codes are
+shown once, rendered left-to-right and copied with Windows clipboard-history and cloud-clipboard
+exclusion markers. The friends window exposes pending approval/rejection, confirmed setup state,
+local nicknames and the per-step revocation result. These surfaces are localized in English and
+Arabic and poll only while visible.
 
 ---
 
@@ -319,7 +334,7 @@ destination **[verified T4-07]**. Reply traffic needs no reverse rule **[T4-08]*
 only peers they can reach **[verified T4-17]**.
 
 ```hujson
-// Example only — not applied to any real tailnet in Phase 1.
+// Example only — not applied to any real tailnet by this build task.
 {
   "tagOwners": {
     "tag:onesalem-host":   ["autogroup:admin"],
@@ -368,7 +383,7 @@ Payload:
 | `sub` | device id (`dev_…`) |
 | `mid` | membership id |
 | `sid` | ServerId, lowercase GUID |
-| `proto` | `"tcp"` (Phase 1). `"udp"` is reserved |
+| `proto` | `"tcp"` (Build 8). `"udp"` is reserved |
 | `nid` | Tailscale StableNodeID of the friend node (fake id in fake mode) |
 | `skp` | base64url SPKI of the session public key |
 | `hb` | host bridge address `ip:port` on the tailnet |
@@ -451,7 +466,7 @@ the catalog and its tickets are denied as `UnknownServer`:
   configured with, passed through the three-argument constructor);
 - no other registered server of any game uses that port.
 
-Palworld servers are never bridgeable in Phase 1. A REST or RCON port moved away from its default
+Palworld servers are never bridgeable in Build 8. A REST or RCON port moved away from its default
 is not known to the catalog (its definition carries only the game port); the owner's own tailnet
 policy still exposes only the bridge port (§8).
 
@@ -486,6 +501,7 @@ app also checks which process serves its pipe (below, "Friend app and its transp
 | `hello` | `{v:1}` | `{v:1, mode:"fake"\|"tsnet", version}` |
 | `status` | — | `{nodes:[…], sessions:[{sessionId, sid, local, state}]}` |
 | `enroll` | `{node, authKey, hostname}` | `{nodeId}` — key used once, then wiped |
+| `forget` | `{node}` | `{}` — close that node's sessions, stop it and safely remove only its verified state directory |
 | `open` | `{node, ticket, sessionKey, preferredPort}` | `{sessionId, local:"127.0.0.1:18211"}` |
 | `refresh` | `{sessionId, ticket, sessionKey}` | `{}` |
 | `close` | `{sessionId}` | `{}` |
@@ -704,10 +720,17 @@ owner, or a bind that failed after enrolling), it is bound directly and no auth 
 
 Otherwise the one-time blob is taken. The broker deletes it on read, so the membership is marked
 used **before** anything else can end the attempt. The mark is saved in
-`%LOCALAPPDATA%\1Salem Connect\consumed-enrollments.json`. That file holds membership ids only,
-never anything from the blob; it is written to a temporary file that is then moved into place; and
-a membership's mark is removed once its node is bound. A key id is handed to the transport at most
-once per run.
+`%LOCALAPPDATA%\1Salem Connect\consumed-enrollments.json`. Version 2 holds membership ids and a
+replacement-in-progress flag only, never anything from the blob; Build 7's array format still
+loads. It is written to a temporary file that is then moved into place, and a membership's mark is
+removed once its node is bound. A key id is handed to the transport at most once per run.
+
+An existing owner node is reused only when the broker shows the same owner and a live candidate or
+confirmed binding to that node. If an enrollment blob is waiting but that proof is absent, the app
+marks a replacement before calling `forget`, closes that node's sessions, removes the stale state,
+and enrolls fresh. If forgetting or the process fails, the persisted replacement flag prevents a
+restart from silently reusing the ambiguous old node; setup fails closed until a fresh enrollment
+completes.
 
 - **A definite refusal** (`bad_auth_key`, `enroll_failed`, a blob that cannot be opened) puts
   "Setting up this server failed. Ask the server owner to approve this PC again." under the
@@ -779,29 +802,28 @@ every start **[verified T1-11, as corrected]**. Both sidecars are therefore buil
 
 ## 12. Revocation
 
-**Phase 1 status.** Step 1 below (broker) is built. The host side of step 2 is built as a library,
-`ConnectHostAuthorizationPipeServer` (`RevokeDeviceAsync`, `RevokeMembershipAsync`,
-`RevokeTicketAsync`: refuse the principal, drop its replay-cache entries, close its live
-connections), and is exercised by tests and the disposable proof, but the Agent service does not
-host it yet. Nothing consumes the revocation feed, no code outside tests deletes a device (step 3;
-§21 D-1), and the owner's Connect card is a disabled preview. The rest of this section is the
-contract that the Agent wiring must meet (§21 D-4).
+**Phase 2 status.** All steps below are hosted by the Agent. `ConnectOwnerWorkflow` performs an
+immediate broker revoke, applies the local revocation and closes live connections, re-reads and
+safely deletes an eligible Tailscale friend device, and returns a per-step result to the owner UI.
+`ConnectHostService` also consumes the sequence-paged revocation feed, persists its cursor, and
+replays from zero on `cursor_ahead`. The UI says "Access revoked" only when every applicable step
+is `Done`, `NotNeeded`, or `KeptInUse`.
 
 **Revoke friend** (owner, in Server Manager):
 
 1. Broker: membership → `revoked`, `av` + 1, all its session tickets revoked (owner-signed).
-2. Agent: adds the device and membership to its local revocation set **immediately** and closes
-   the friend's live bridged connections.
+2. Agent: adds this membership to its local revocation set **immediately** and closes its live
+   bridged connections. Other memberships sharing that friend's node remain usable.
 3. Agent: `DELETE /api/v2/device/{nodeId}` in the owner's tailnet (`devices:core`) **[verified
    T2-17, T3-09]**. Deleting or revoking the auth key alone would leave the node connected
    **[verified T2-07]**.
 4. The UI reports "access revoked" only when all three steps have succeeded. Otherwise it says
    exactly which step is pending. We never claim full revocation because a database row changed.
 
-Before step 3 the Agent must read that device from the Tailscale API and delete it **only if it
-carries `tag:onesalem-client` and is not one of the owner's own nodes**. A membership's `nodeId`
-is reported by the friend's device (§21, D-1); without this check a friend who bound the id of
-the owner's machine would have that machine removed from the owner's tailnet on revocation.
+Before step 3 the Agent reads that device from the Tailscale API and deletes it **only if it
+carries exactly the expected friend tag, is not the host node, matches the confirmed binding, and
+is not still shared by another live membership**. A candidate or rejected id is never a deletion
+authority.
 
 Tickets are short-lived (10 min). The Agent also pulls the revocation feed
 (`GET /v1/owners/me/revocations?after=<seq>`, §13) so that revocations made elsewhere take effect.
@@ -818,8 +840,10 @@ idempotent.
 
 ## 13. Broker (control plane only)
 
-Cloudflare Worker + D1. In Phase 1 it runs **locally only** (`wrangler dev --local`, Miniflare
-on workerd, D1 in `.wrangler/state`) **[verified T5-19, T5-20]**.
+Cloudflare Worker + D1. It has local development configuration and a production environment with
+the outer `FLOOD` rate-limit binding. It remains **not deployed**; local tests and the loopback-only
+proof use `wrangler dev --local` (Miniflare on workerd, D1 in `.wrangler/state`) **[verified
+T5-19, T5-20]**.
 
 Responsibilities: owner/device registration, invites, redemption, approval, enrollment relay
 (ciphertext only, one-time pickup), session tickets, revocation. It never receives Minecraft or
@@ -849,7 +873,9 @@ Nothing sensitive goes in `vars` or `wrangler.jsonc`.
 | `POST /v1/memberships/{id}/reject` | owner | Reject |
 | `POST /v1/memberships/{id}/enrollment` | owner | Store ciphertext for the friend |
 | `GET /v1/memberships/{id}/enrollment` | device | Fetch and delete ciphertext |
-| `POST /v1/memberships/{id}/node` | device | Bind the friend's node id (once; 409 `node_in_use` if a *different* device holds it on a live membership of the same owner) |
+| `POST /v1/memberships/{id}/node` | device | Report a candidate node id (409 `node_in_use` if a different device holds it for this owner) |
+| `POST /v1/memberships/{id}/node/confirm` | owner | Confirm the exact candidate after the Agent verifies it through Tailscale |
+| `POST /v1/memberships/{id}/node/reject` | owner | Reject the exact candidate and keep it unusable |
 | `GET /v1/devices/me/memberships` | device | The friend's servers and their state |
 | `POST /v1/sessions` | device | `{membershipId, sessionSpki}` → `{ticket, expiresAt, hostBridge}` |
 | `POST /v1/sessions/{jti}/revoke` | owner | Revoke one ticket |
@@ -882,21 +908,22 @@ cursor then gets `cursor_ahead` and its host replays from `after=0`. This is in 
 README's pre-deployment requirements and pinned by a test that simulates a restore with and
 without the step (local D1 simulation).
 
-Node binding: first write wins per membership (a different node later is 409 `already_bound`;
-the same node again is 200). The same device may bind one node on all its memberships with an
-owner, since there is one node per owner tailnet. A node id that a **different** device holds on
-a live (pending or approved) membership of the same owner is refused with 409 `node_in_use`;
-other owners' bindings are never consulted. The check runs inside the single conditional
-`UPDATE`, so it is race-safe. The node id is still self-reported; see §21, D-1.
+Node binding has three explicit states: candidate, confirmed and rejected. A device report can
+only create or repeat its candidate; it cannot confirm itself. The same device may reuse one node
+across its memberships with an owner. A node id that a **different** device holds as a candidate
+or confirmed binding on a live membership of the same owner is refused with 409 `node_in_use`;
+other owners' bindings are never consulted. Confirmation and rejection require the owner
+signature and the exact candidate id. Sessions require `confirmed`. The conditional updates are
+race-safe.
 
 ### Data (D1)
 
 `owners`, `devices`, `servers`, `invites` (secret HMAC only), `memberships` (state, `av`,
-`node_id`), `enrollments` (ciphertext, 15 min), `sessions` (jti, exp, revoked), `revocations`
+`node_id`, `node_state`), `enrollments` (ciphertext, 15 min), `sessions` (jti, exp, revoked), `revocations`
 (`seq` feed), `request_nonces`, `rate_counters` (HMAC pseudonyms, never addresses), `audit`.
 There is no private key, OAuth secret, auth key or plaintext invite anywhere in D1. Migrations:
-`0001_init.sql`; `0002_feed_cursor_and_node_index.sql` (indexes only: `revocations(owner_id, seq)`
-for the feed and a partial `memberships(owner_id, node_id)` index for the binding check).
+`0001_init.sql`; `0002_feed_cursor_and_node_index.sql`; and additive
+`0003_node_confirmation.sql` (existing bindings become candidates, never confirmed implicitly).
 
 D1 has no interactive transactions. `batch()` is atomic, and single-use steps are conditional
 `UPDATE … WHERE state=…` statements **[verified T5-08]**.
@@ -971,12 +998,12 @@ WinINet proxy, WinHTTP proxy, or any other application's traffic.
 | Friend app crashes or is killed | The transport it started ends with it (kill-on-close job, §11), unless Windows refused the job (recorded in Diagnostics). Sessions it had opened in a reused transport stay open until that transport stops (§21, D-3) |
 | Friend transport dies or restarts | Its sessions end as "Disconnected". The next Connect starts a new transport, or reuses a verified running one (§11) |
 | Host offline | Friend sees "Server offline". The ticket may still issue, but connections are refused |
-| Owner revokes | Contract; the Agent wiring is Phase 2 (§12 status, §21 D-4). Live connections close. New tickets are refused. The node is deleted from the tailnet after the tag check (§12, §21 D-1) |
+| Owner revokes | The Agent revokes at the broker, updates the local deny set, closes live connections, and deletes only a re-verified eligible friend device. The owner UI shows each step; partial completion is never called fully revoked (§12) |
 | Ticket expired | The UI refreshes it 2 minutes before expiry. If refresh keeps failing, "Access expired" and the session is closed |
 | Local port busy | The next free loopback port is chosen and shown. Nothing is killed |
 | Direct path impossible | Tailscale falls back to DERP relays: slower, still end-to-end encrypted **[verified T4-25, T4-27]** |
-| Tailnet Lock enabled | Phase 2; no check exists yet. Connect reports it unsupported instead of enrolling nodes that end up locked out **[T4-30]** |
-| Owner policy still allow-all | Phase 2; no check exists yet. Connect refuses to enable and says why |
+| Tailnet Lock enabled | Setup stops before enrollment and reports Tailnet Lock as unsupported **[T4-30]** |
+| Owner policy still allow-all | The Agent's fail-closed policy analyzer refuses setup or enablement and explains the required tag/grant changes |
 | DPAPI key unreadable (new PC or profile) | Re-pair; never treat as corruption **[T6-21]** |
 
 ---
@@ -1003,7 +1030,7 @@ WinINet proxy, WinHTTP proxy, or any other application's traffic.
 
 ---
 
-## 17a. Minecraft specifics (Phase 1 target)
+## 17a. Minecraft specifics (Build 8 target)
 
 - Java Edition uses one TCP connection per login, and a separate short TCP connection for each
   server-list ping **[verified T8-04, T8-05]**. The friend listener must accept many sequential
@@ -1038,27 +1065,30 @@ both sides (we pin v1.102.4), and must be re-tested whenever tsnet is updated.
 A UDP bridge will need a per-source session table, idle expiry, and WhoIs lookups per source.
 Whether the game client accepts `127.0.0.1` and behaves through a relay has to be measured in a
 lab. The `proto` claim and the transport interface already leave room for it. **Not implemented
-in Phase 1.**
+in Build 8.**
 
 ---
 
 ## 19. Unresolved questions
 
-1. **Multi-owner model (§2).** O1 recommended, Salem to confirm.
-2. Minimum `expirySeconds` for auth keys. The docs say 1 day; we delete keys early instead.
-3. Is `Status.Self.ID` always the API's `nodeId`? The formats match; the docs do not say
+The accepted Phase 1 real-tsnet evidence remains `4bfb9a8` (58/58). It is not rerun in Phase 2.
+The harness updates in this phase are compile-checked only; live acceptance of the new
+Agent-hosted provisioning and policy path remains a separate, authorized step.
+
+1. Minimum `expirySeconds` for auth keys. The docs say 1 day; we delete keys early instead.
+2. Is `Status.Self.ID` always the API's `nodeId`? The formats match; the docs do not say
    **[T2-21]**.
-4. Does a `devices:core` credential reach every device in the tailnet, or only its tagged ones?
+3. Does a `devices:core` credential reach every device in the tailnet, or only its tagged ones?
    **[T2 open]**
-5. Disabling tsnet logtail uploads, and whether to build with `ts_omit_portmapper` **[T1 open]**.
+4. Disabling tsnet logtail uploads, and whether to build with `ts_omit_portmapper` **[T1 open]**.
    Until consent is decided, both sidecars call `logtail.Disable()` and set
    `TS_DISABLE_PORTMAPPER` before the first tsnet server starts (`tsnet.go`, `applyPrivacyDefaults`).
-   Neither is tested yet; the first real tsnet run must confirm that nothing is uploaded and no
-   UPnP/NAT-PMP/PCP request is made.
-6. Windows Firewall prompts for the tsnet UDP socket.
-7. tsnet throughput and latency on Windows for game traffic **[T1-30]**.
-8. Legal review of Terms §2.3 for a paid product; Tailscale naming.
-9. Hardening the **existing** Agent pipe (BUILTIN\Users with create-instance rights, no first
+   The accepted real-tsnet harness checked the relevant logs. This Phase 2 task intentionally
+   did not rerun it or enroll real nodes; packet-level absence of UDP port mapping is not claimed.
+5. Windows Firewall prompts for the tsnet UDP socket.
+6. tsnet throughput and latency on Windows for game traffic **[T1-30]**.
+7. Legal review of Terms §2.3 for a paid product; Tailscale naming.
+8. Hardening the **existing** Agent pipe (BUILTIN\Users with create-instance rights, no first
    instance). That is a Build 7 finding, outside this phase **[T8 implications]**.
 
 ---
@@ -1083,52 +1113,28 @@ in Phase 1.**
 
 ---
 
-## 21. Deferred to Phase 2
+## 21. Phase 2 completion and remaining gates
 
-What the Phase 1 security review could not finish without Phase 2 parts (the Agent's live
-Tailscale API wiring, the Agent hosting the Connect host components, and a production Cloudflare
-deployment), and the smaller limitations it accepted. Each is stated with what Phase 1 already
-does, so none is mistaken for complete.
+This section closes the Phase 1 deferred items and keeps the remaining deployment or low-severity
+limits explicit. "Complete" means implemented and locally tested; it does not mean deployed or
+verified against a real tailnet during this build task.
 
 ### D-1. Owner-confirmed Tailscale node binding
 
-- **Threat.** `POST /v1/memberships/{id}/node` records whatever `nodeId` the friend's device
-  reports. A malicious approved friend could report a node id that is not their own: another
-  friend's node (to have tickets carry it), or the owner's own machine (so that revoking the
-  friend later deletes the owner's device from the tailnet in §12 step 3).
-- **Phase 1 protection.**
-  - The broker refuses a node id that a **different** device already holds on a live membership
-    of the same owner (409 `node_in_use`, race-safe inside one `UPDATE`), so two friend devices
-    can never share one node binding.
-  - A wrong `nid` gives the friend no access: the host verifies `nid` against the **WhoIs**
-    identity of the connecting peer (§9, §10), so binding someone else's node only breaks the
-    friend's own connections.
-  - The broker binds once and never lets the friend change it (`already_bound`).
-  - The Agent's revocation must read the device from the Tailscale API and delete it only if it
-    carries `tag:onesalem-client` and is not an owner node (§12). No Agent code deletes devices yet.
-- **Remaining risk.** Until confirmation exists, a friend who learns another friend's node id
-  before that friend binds it can take the binding first (a denial of service against that
-  friend, not an access gain). The owner cannot yet see or clear a wrong binding.
-- **Exact Phase 2 action.** Split binding into a device-reported *candidate* and an
-  owner-signed *confirmation*: after the friend reports its node, the Agent calls
-  `GET /api/v2/device/{nodeId}` in the owner's tailnet and checks that the device carries
-  `tag:onesalem-client`, was created after the enrollment key was minted, and is not bound
-  elsewhere; then it calls a new owner-signed `POST /v1/memberships/{id}/node/confirm`.
-  `POST /v1/sessions` issues tickets only for a confirmed binding, and the owner can reject or
-  clear a candidate. The tag check before any `DELETE` stays mandatory. The existing primitive
-  `TailscaleApiProvisioner.DeleteDeviceAsync` deletes by id with no tag check of its own, so its
-  Phase 2 caller must run `GetDeviceAsync` and the tag / owner-node check first, or that check
-  must move into it.
-- **Why Phase 1 is still safe.** Phase 1 enrolls no real node at all (fake mode only). Tickets
-  are useless from any node but the WhoIs-verified one, and no code path deletes a tailnet device
-  from a broker-supplied id (`DeleteDeviceAsync` has no caller outside tests).
+**Status: complete.** `POST /node` creates a candidate. The Agent checks the Tailscale device's
+exact friend tag, creation time relative to the minted enrollment key, owner/host exclusions and
+binding consistency, then calls the owner-signed `/node/confirm`; a failed check calls
+`/node/reject`. The broker issues sessions only for confirmed nodes. Revocation re-verifies the
+device and never deletes a candidate, a host, a differently tagged device, or a device still used
+by another live membership. Broker, Agent, infrastructure and friend-app tests cover the gate.
+The fake proof now demonstrates that a candidate gets no ticket before confirmation.
 
 ### D-2. Outer deployment-level rate limiter
 
 - **Threat.** A flood aimed at the broker. Every request that reaches the Worker costs at least
   one D1 read, and D1 serves one database's queries one at a time, so a large enough flood slows
   or blocks legitimate calls (approvals, revocations, ticket refresh) and is billed per row.
-- **Phase 1 protection.** Every signed route has an exact per-key D1 budget; registration and
+- **Inner protection.** Every signed route has an exact per-key D1 budget; registration and
   redeem have per-network budgets (IPv6 grouped by /64) and registration a global ceiling.
   Over-limit traffic adds no counter write. On routes signed by a registered key, requests with
   missing or malformed signed headers or a forged signature write nothing, and replays are refused
@@ -1136,39 +1142,28 @@ does, so none is mistaken for complete.
   the SPKI, the signature and the nonce, so a forged, unusable or replayed registration costs one
   counter write until that network's budget is spent. A correctly signed request with a bad body
   is charged like any other attempt (§5, §14).
-- **Remaining risk.** Exact D1 counters are themselves D1 traffic, so they cannot bound the cost
-  of a flood; a rotating attacker still costs one D1 read per request, and a key holder over
-  budget still costs one nonce write per request.
-- **Exact Phase 2 action.** Before any deployment, put a limiter in front of D1: a Cloudflare
-  WAF rate-limiting rule on the broker route, or a Workers Rate Limiting binding checked first in
-  `fetch`, keyed per client IP and sized well above the D1 budgets so it only ever catches
-  floods **[verified T5-14, T5-15, T5-17]**. Keep Cloudflare Pseudo IPv4 off (or "Add header"),
-  because "Overwrite headers" would defeat the /64 grouping. It complements the D1 counters,
-  which stay the exact enforcement.
-- **Why Phase 1 is still safe.** The broker runs only locally (`wrangler dev --local`,
-  `workers_dev: false`, placeholder database id); it is not reachable from the internet. The host
-  component's revocation (`ConnectHostAuthorizationPipeServer`: local revocation set, replay-cache
-  drop, closing live connections) does not depend on broker availability; in Phase 1 it runs only
-  in tests and the disposable proof, and the Agent hosts it in Phase 2 (D-4). A broker outage does
-  not extend a running friend app's access either: the app ends an open session shortly after its
-  ticket expires without renewal (§16). The exceptions are sessions no running app controls any
-  more (D-3).
+- **Status: implemented, deployment verification remains.** `env.production` declares the
+  Workers Rate Limiting binding `FLOOD`; `fetch` checks it before route lookup, body reads or D1,
+  keyed by the normalized client network. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing or
+  failed production binding return 503 rather than silently bypassing it. Its limit is deliberately
+  above the exact D1 budgets. Cloudflare Pseudo IPv4 must remain off or "Add header" so /64
+  grouping is preserved **[verified T5-14, T5-15, T5-17]**. The remaining gate is creating the
+  production resource and verifying the binding on Cloudflare; no deployment was performed.
 
 ### D-2a. Database restore runbook (deployment requirement)
 
 - **Threat.** After a D1 restore the revocation `seq` counter is rolled back, so a host's kept
   feed cursor can match a new event's `seq` and silently skip events up to it.
-- **Phase 1 protection.** The feed accepts only cursors that are the caller's own events (§13), and
+- **Implemented protection.** The feed accepts only cursors that are the caller's own events (§13), and
   a test demonstrates both the failure without the restore step and the refusal with it.
 - **Remaining risk.** Only if an operator restores the database and skips the step.
-- **Phase 2 action.** Put the step (`UPDATE sqlite_sequence SET seq = seq + 1000000000 WHERE name =
-  'revocations'`, run once right after a restore) in the production runbook, and verify it
-  against the real D1 service once, since the test runs on the local D1 simulation.
-- **Why Phase 1 is safe.** The broker is local only and never restored, and nothing consumes the
-  feed yet. Once the Agent hosts the host component (D-4), its own revocation set and immediate
-  enforcement (§12) do not depend on the feed.
+- **Deployment gate.** The broker runbook contains the step
+  (`UPDATE sqlite_sequence SET seq = seq + 1000000000 WHERE name = 'revocations'`, once right
+  after a restore). Verify it against the real D1 service before launch; automated coverage uses
+  the local D1 simulation. The Agent now consumes the feed, but its immediate local revocation
+  enforcement (§12) does not depend on it.
 
-### D-3. Smaller accepted limitations (Phase 1 review)
+### D-3. Smaller accepted limitations
 
 Low-severity items the review found and deliberately left, each with why it is acceptable now:
 
@@ -1184,7 +1179,7 @@ Low-severity items the review found and deliberately left, each with why it is a
   until the owner approves again. A monitor step or Disconnect refused this way leaves the page
   saying the connection could not be closed yet, and the session stays open until a slot frees.
   This is a local denial of service only: nothing is sent to the squatter (the app verifies the
-  serving process before writing, §11). Phase 2: restart only when the started process has
+  serving process before writing, §11). Future hardening: restart only when the started process has
   exited, treat a verified connection that closes without answering as `no_answer`, and label the
   pipe no-read-up.
 - **A server card can show a stale connection state for up to about 60 s, or longer during a
@@ -1194,15 +1189,15 @@ Low-severity items the review found and deliberately left, each with why it is a
   "Connected" or "Server offline" for up to about a minute after the session ended. While the
   broker cannot be reached or rate-limits the refresh, the page shows its error line but keeps the
   last cards, so a card can stay stale for the whole outage. The Connection page follows the
-  session itself (every 5 s). Phase 2: bind cards to the connection's state changes.
+  session itself (every 5 s). Future hardening: bind cards to the connection's state changes.
 - **Refusal log lines on the host bridge are limited globally**, not per source: a flooding peer
   also hides other friends' refusal reasons for the rest of that minute (the refusal counter and
   a summary line remain). Logs only; no effect on who is allowed.
 - **Non-default REST/RCON ports are not known to the catalog** (a server's definition carries only
   its game port); only the defaults 8212 and 25575 are refused. The owner's tailnet policy still
   exposes only the bridge port (§8).
-- **Two Minecraft servers registered on the same port are both refused**, and the owner is not yet
-  told why Connect fails for them. Safe, but needs UI in Phase 2.
+- **Two Minecraft servers registered on the same port are both refused.** The owner UI now names
+  the shared-port eligibility failure.
 - **Sessions no running app controls any more.** A killed friend app leaves no stale listener on
   a transport it started, because that transport is in a kill-on-close job (§11). Three cases
   remain:
@@ -1228,19 +1223,11 @@ Low-severity items the review found and deliberately left, each with why it is a
 
 ### D-4. Agent hosting of the Connect host components
 
-- **What exists.** The host side is built as libraries in `src/ServerManager.Infrastructure/Connect`
-  (`ConnectHostAuthorizationPipeServer`, `ConnectServerCatalog`, `ConnectLiveConnections`,
-  `ConnectHostTransportSupervisor`, `TailscaleApiProvisioner`) and exercised by tests; the
-  disposable proof also drives the catalog and the authorization pipe server in-process.
-- **What is missing.** The Agent service (`src/ServerManager.Agent`) references none of them: it
-  does not supervise the host transport, serve the host authorization pipe, hold an owner
-  identity or pinned broker keyset, pull the revocation feed (§12), store an OAuth credential, or
-  back the owner's Connect card, which is a disabled preview. So in Phase 1 no friend can reach
-  an owner's real server, and the revocation contract of §12 is enforced only where the proof
-  drives it.
-- **Phase 2 action.** Host these components in the Agent: start the host transport under the
-  supervisor, serve the pipe with the catalog's three-argument constructor (the Agent's real API
-  ports), route "turn Connect off" through `DisableConnectAsync`, pull the revocation feed with a
-  kept `cursor` (restarting from `after=0` on `cursor_ahead`), apply it through the `Revoke*`
-  methods, and add the owner UI. §12's four-step revocation, including the tag check before any
-  device deletion (D-1), is the contract.
+**Status: complete.** `ConnectHostService` is an Agent hosted service. It owns the identity and
+pinned broker keyset, supervises the host sidecar, serves the authorization pipe with the real
+server catalog and Agent ports, waits for the bridge before reporting ready, and consumes the
+persisted revocation cursor. `ConnectOwnerWorkflow` stores the DPAPI-protected OAuth credential,
+checks policy and Tailnet Lock, enrolls and verifies nodes, manages servers/invites/friends, and
+implements the revocation contract. Every owner route is loopback-local only. The Network page,
+setup window and per-server owner windows expose these operations in English and Arabic. The
+remaining gates are real-tailnet smoke and production deployment, not missing Agent wiring.

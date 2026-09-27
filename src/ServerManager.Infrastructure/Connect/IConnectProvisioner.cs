@@ -61,8 +61,7 @@ public class ConnectProvisioningException : Exception
 }
 
 /// <summary>
-/// Provisioning was requested but the owner has not connected a tailnet credential. Phase 1
-/// never has one, so every provisioning path ends here instead of pretending to succeed.
+/// Provisioning was requested but the owner has not connected a tailnet credential.
 /// </summary>
 public sealed class ConnectNotConfiguredException : InvalidOperationException
 {

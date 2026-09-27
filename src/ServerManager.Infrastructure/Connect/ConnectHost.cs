@@ -266,8 +266,11 @@ public sealed class ConnectHost : IAsyncDisposable
             await _store.SaveStateAsync(_state, cancellationToken).ConfigureAwait(false);
             await CheckPolicyAsync(credential, host, cancellationToken).ConfigureAwait(false);
 
-            _runtimeStopping = new CancellationTokenSource();
-            _reconcileLoop = Task.Run(() => ReconcileLoopAsync(_runtimeStopping.Token), CancellationToken.None);
+            // Capture the token: StopAsync may clear the field before Task.Run begins.
+            var runtimeStopping = new CancellationTokenSource();
+            var runtimeToken = runtimeStopping.Token;
+            _runtimeStopping = runtimeStopping;
+            _reconcileLoop = Task.Run(() => ReconcileLoopAsync(runtimeToken), CancellationToken.None);
         }
         catch (ConnectPolicyNotPermittedException exception)
         {
@@ -495,10 +498,15 @@ public sealed class ConnectHost : IAsyncDisposable
                 {
                     await ReconcileOnceAsync(stopping).ConfigureAwait(false);
                 }
-                catch (Exception exception) when (!stopping.IsCancellationRequested)
+                catch (Exception exception) when (exception is not OperationCanceledException || !stopping.IsCancellationRequested)
                 {
-                    _logger.LogWarning("1Salem Connect reconciliation failed: {Error}", exception.Message);
-                    Publish(Status with { ErrorCode = MapError(exception), LastCheckedAtUtc = _clock.GetUtcNow() });
+                    // An in-flight request can fail normally after shutdown cancels its token.
+                    // Do not let that failure prevent StopAsync from disposing the runtime.
+                    if (!stopping.IsCancellationRequested)
+                    {
+                        _logger.LogWarning("1Salem Connect reconciliation failed: {Error}", exception.Message);
+                        Publish(Status with { ErrorCode = MapError(exception), LastCheckedAtUtc = _clock.GetUtcNow() });
+                    }
                 }
                 finally
                 {

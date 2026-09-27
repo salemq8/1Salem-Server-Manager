@@ -18,6 +18,8 @@ public partial class ConnectSetupWindow : Window
     private readonly DispatcherTimer _timer;
     private ConnectStatusResponse? _status;
     private bool _busy;
+    private bool _loading;
+    private int _statusGeneration;
 
     public ConnectSetupWindow()
     {
@@ -37,6 +39,7 @@ public partial class ConnectSetupWindow : Window
         Closed += (_, _) =>
         {
             _timer.Stop();
+            _statusGeneration++;
             _client.Dispose();
         };
     }
@@ -61,22 +64,33 @@ public partial class ConnectSetupWindow : Window
 
     private async Task LoadAsync()
     {
-        if (_busy || !IsVisible)
+        if (_busy || !IsVisible || _loading)
         {
             return;
         }
 
+        _loading = true;
+        var generation = _statusGeneration;
         try
         {
-            _status = await _client.GetStatusAsync();
-            ActionStatus.Text = string.Empty;
+            var status = await _client.GetStatusAsync();
+            if (generation == _statusGeneration && IsVisible)
+            {
+                _status = status;
+                Render();
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            ActionStatus.Text = DiagnosticsService.Redact(exception.Message);
+            if (generation == _statusGeneration && IsVisible)
+            {
+                ActionStatus.Text = LocalizationService.Get("Connect.State.ErrorDetail");
+            }
         }
-
-        Render();
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void Render()
@@ -93,10 +107,7 @@ public partial class ConnectSetupWindow : Window
         CheckButton.IsEnabled = !_busy && view.CanCheckAgain;
         TurnOffButton.IsEnabled = !_busy && view.CanTurnOff;
         SaveButton.IsEnabled = !_busy;
-        if (string.IsNullOrWhiteSpace(ClientIdBox.Text) && !string.IsNullOrWhiteSpace(_status?.ClientIdHint))
-        {
-            ClientIdBox.Text = _status.ClientIdHint;
-        }
+        // ClientIdHint is masked display data, not a credential that can be submitted.
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
@@ -153,6 +164,7 @@ public partial class ConnectSetupWindow : Window
         }
 
         _busy = true;
+        _statusGeneration++;
         ActionStatus.Text = LocalizationService.Get("Connect.State.Checking");
         Render();
         try
@@ -162,7 +174,7 @@ public partial class ConnectSetupWindow : Window
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            ActionStatus.Text = DiagnosticsService.Redact(exception.Message);
+            ActionStatus.Text = LocalizationService.Get("Connect.State.ErrorDetail");
         }
         finally
         {

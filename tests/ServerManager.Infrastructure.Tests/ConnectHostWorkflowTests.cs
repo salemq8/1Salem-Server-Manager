@@ -53,6 +53,33 @@ public sealed class ConnectHostWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task Stop_WhenInFlightReconciliationFailsAfterCancellation_StillDisposesRuntime()
+    {
+        using var keys = new ConnectTestBroker();
+        var reconciliationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new ReadyRuntimeFactory(keys.KeySet, async cancellationToken =>
+        {
+            var pendingRead = new TaskCompletionSource<IReadOnlyList<ConnectBrokerMembership>>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registration = cancellationToken.Register(() => pendingRead.TrySetException(
+                new ConnectOwnerBrokerException(
+                    ConnectOwnerBrokerFailure.Unavailable, null, "test broker failure during shutdown")));
+            reconciliationStarted.TrySetResult();
+            return await pendingRead.Task;
+        });
+        new ConnectOAuthCredentialStore(new ConnectOwnerPaths(_root)).Save(
+            new TailscaleOAuthCredential("client-test", "tskey-client-test-secret"));
+        await using var host = CreateHost(new MemoryServerStore(), factory);
+        await host.StartAsync(CancellationToken.None);
+        await reconciliationStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await host.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(factory.Supervisor.Started);
+        Assert.True(factory.Authorization.Disposed);
+    }
+
+    [Fact]
     public async Task Eligibility_FailsClosedForProxyAndNonLoopbackBinding()
     {
         var serverRoot = Path.Combine(_root, "minecraft");
@@ -215,7 +242,9 @@ public sealed class ConnectHostWorkflowTests : IDisposable
         public IConnectHostTransportControlClient CreateControlClient(ConnectHostTransportOptions options, IConnectHostTransportSupervisor supervisor) => Refuse<IConnectHostTransportControlClient>();
     }
 
-    private sealed class ReadyRuntimeFactory(TicketKeySet keySet) : IConnectHostRuntimeFactory
+    private sealed class ReadyRuntimeFactory(
+        TicketKeySet keySet,
+        Func<CancellationToken, Task<IReadOnlyList<ConnectBrokerMembership>>>? readMemberships = null) : IConnectHostRuntimeFactory
     {
         private readonly TicketKeySet _keySet = keySet;
         public FakeAuthorization Authorization { get; } = new();
@@ -223,14 +252,17 @@ public sealed class ConnectHostWorkflowTests : IDisposable
         public FakeControl Control { get; } = new();
         public FakeProvisioner Provisioner { get; } = new();
         public FakeBroker? Broker { get; private set; }
-        public IConnectOwnerBrokerClient CreateBroker(ConnectIdentity identity) => Broker = new FakeBroker(identity.KeyId, _keySet);
+        public IConnectOwnerBrokerClient CreateBroker(ConnectIdentity identity) => Broker = new FakeBroker(identity.KeyId, _keySet, readMemberships);
         public IConnectProvisioner CreateProvisioner(TailscaleOAuthCredential credential) => Provisioner;
         public IConnectHostAuthorizationServer CreateAuthorizationServer(ConnectHostAuthorizationOptions options, ConnectServerCatalog catalog) => Authorization;
         public IConnectHostTransportSupervisor CreateSupervisor(ConnectHostTransportOptions options) => Supervisor;
         public IConnectHostTransportControlClient CreateControlClient(ConnectHostTransportOptions options, IConnectHostTransportSupervisor supervisor) => Control;
     }
 
-    private sealed class FakeBroker(string ownerId, TicketKeySet keySet) : IConnectOwnerBrokerClient
+    private sealed class FakeBroker(
+        string ownerId,
+        TicketKeySet keySet,
+        Func<CancellationToken, Task<IReadOnlyList<ConnectBrokerMembership>>>? readMemberships = null) : IConnectOwnerBrokerClient
     {
         public const string InviteSecret = "invite-secret-test-only";
         public IReadOnlyList<ConnectBrokerMembership> Memberships { get; set; } = [];
@@ -240,7 +272,7 @@ public sealed class ConnectHostWorkflowTests : IDisposable
         public Task<ConnectBrokerRevocationPage> GetRevocationsAsync(long after, CancellationToken cancellationToken) =>
             Task.FromResult(new ConnectBrokerRevocationPage([], after, false));
         public Task<IReadOnlyList<ConnectBrokerMembership>> GetMembershipsAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(Memberships);
+            readMemberships?.Invoke(cancellationToken) ?? Task.FromResult(Memberships);
         public Task PutServerAsync(Guid serverId, string label, string hostBridge, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<ConnectBrokerInvite> CreateInviteAsync(Guid serverId, int ttlSeconds, CancellationToken cancellationToken) =>
             Task.FromResult(new ConnectBrokerInvite("inv_test", InviteSecret, DateTimeOffset.UtcNow.AddSeconds(ttlSeconds)));
@@ -294,6 +326,7 @@ public sealed class ConnectHostWorkflowTests : IDisposable
     private sealed class FakeAuthorization : IConnectHostAuthorizationServer
     {
         public bool Started { get; private set; }
+        public bool Disposed { get; private set; }
         public string? RevokedMembership { get; private set; }
         public ConnectHostAuthorizationStatus Status => new(true, 0);
         public void Start() => Started = true;
@@ -306,7 +339,7 @@ public sealed class ConnectHostWorkflowTests : IDisposable
         public Task<IReadOnlyList<string>> RevokeTicketAsync(string ticketId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<string>>([]);
         public Task<IReadOnlyList<string>> DisableConnectAsync(Guid serverId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<string>>([]);
         public Task<IReadOnlyList<string>> CloseServerConnectionsAsync(Guid serverId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<string>>([]);
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() { Disposed = true; return ValueTask.CompletedTask; }
     }
 
     private sealed class FakeSupervisor : IConnectHostTransportSupervisor

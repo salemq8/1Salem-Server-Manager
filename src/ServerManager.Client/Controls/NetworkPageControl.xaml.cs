@@ -33,6 +33,7 @@ public partial class NetworkPageControl : UserControl
     private PlayitStatusResponse? _playit;
     private NetworkSnapshot? _network;
     private ConnectStatusResponse? _connect;
+    private bool _loading;
 
     public NetworkPageControl()
     {
@@ -47,6 +48,18 @@ public partial class NetworkPageControl : UserControl
         _timer.Tick += async (_, _) => await LoadAsync();
         Loaded += OnLoaded;
         Unloaded += (_, _) => _timer.Stop();
+        IsVisibleChanged += async (_, _) =>
+        {
+            if (IsVisible)
+            {
+                _timer.Start();
+                await LoadAsync();
+            }
+            else
+            {
+                _timer.Stop();
+            }
+        };
     }
 
     /// <summary>Re-reads Playit and network status, e.g. from the top-bar Refresh.</summary>
@@ -56,11 +69,32 @@ public partial class NetworkPageControl : UserControl
     {
         _feed.Start();
         await _feed.RefreshAsync();
-        _timer.Start();
+        if (IsVisible)
+        {
+            _timer.Start();
+        }
         await LoadAsync();
     }
 
     private async Task LoadAsync()
+    {
+        if (!IsVisible || _loading)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            await LoadStatusAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadStatusAsync()
     {
         try
         {
@@ -78,6 +112,11 @@ public partial class NetworkPageControl : UserControl
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             _network = null;
+        }
+
+        if (!IsVisible)
+        {
+            return;
         }
 
         try

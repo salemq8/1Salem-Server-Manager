@@ -123,16 +123,16 @@ instead.
   first instance with `PipeOptions.FirstPipeInstance`. Have the client verify the pipe server's
   identity. 1Salem Connect's pipes follow this pattern from the start.
 
-## 1Salem Connect: a friend's tailnet node binding is self-reported (Phase 2: owner confirmation)
+## 1Salem Connect: owner-confirmed friend node bindings (resolved locally in Phase 2)
 
 - **Found:** Build 8 (1Salem Connect) Phase 1 security review, finding BRK-4, 2026-09-24.
-- **Status:** partly fixed in Phase 1; the rest needs the Agent's Tailscale API wiring. Deferred to
-  Connect Phase 2. Full write-up: `docs/CONNECT_ARCHITECTURE.md` §21, D-1.
-- **What happens today:** the broker records the node id the friend's device reports. It refuses a
+- **Status:** implemented and locally tested in Phase 2, not deployed. Full write-up:
+  `docs/CONNECT_ARCHITECTURE.md` §21, D-1.
+- **Phase 1 behavior:** the broker recorded the node id the friend's device reported. It refused a
   node id another friend's device already holds on a live membership of the same owner
   (`node_in_use`), binds once, and tickets only work from the WhoIs-verified node, so a wrong
   binding gives no access. The owner cannot yet confirm, see or clear a binding.
-- **Future behaviour:** the Agent checks the reported node through the Tailscale API
+- **Phase 2 behavior:** the Agent checks the reported node through the Tailscale API
   (`tag:onesalem-client`, created after the enrollment key, not bound elsewhere) and confirms it with
   an owner-signed call; tickets are issued only for a confirmed binding. Revocation never deletes a
   device without that tag check.
@@ -140,14 +140,14 @@ instead.
 ## 1Salem Connect: the broker needs an outer rate limiter before any deployment (Phase 2)
 
 - **Found:** Build 8 (1Salem Connect) Phase 1 security review, finding BRK-2, 2026-09-24.
-- **Status:** the D1 side is fixed in Phase 1; the outer layer is deployment configuration.
-  Deferred to Connect Phase 2 (first real deployment). Full write-up:
+- **Status:** D1 budgets and the fail-closed production outer limiter are implemented and locally
+  tested. Verification in a deployed Cloudflare environment remains required. Full write-up:
   `docs/CONNECT_ARCHITECTURE.md` §21, D-2.
 - **What happens today:** exact per-key, per-network and global budgets in D1; over-limit,
-  malformed, forged and replayed requests add no counter write. Every request that reaches the
-  Worker still costs at least one D1 read. The broker runs only locally, so this is not exposed.
-- **Future behaviour:** a Cloudflare WAF rate-limiting rule or a Workers Rate Limiting binding in
-  front of D1, keyed per client IP and sized above the D1 budgets; Pseudo IPv4 not set to
+  malformed, forged and replayed requests add no counter write. The production `FLOOD` Workers
+  Rate Limiting binding rejects excess traffic before D1. Production refuses requests if that
+  binding or a usable client address is absent; the broker has not been deployed.
+- **Deployment gate:** verify the configured limiter and ensure Pseudo IPv4 is not set to
   "Overwrite headers".
 
 ## 1Salem Connect: a low-integrity local process can fill the friend pipe's slots (Phase 2)

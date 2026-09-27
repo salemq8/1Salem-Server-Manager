@@ -10,7 +10,7 @@ namespace ServerManager.Infrastructure.Connect;
 /// <see cref="ConnectServerEntry"/> values:
 /// <list type="bullet">
 /// <item>Only Minecraft servers appear, always as TCP. Palworld is UDP and not bridged in
-/// Phase 1 (§18), so a Palworld ServerId is as unknown as a made-up one.</item>
+/// Build 8 (§18), so a Palworld ServerId is as unknown as a made-up one.</item>
 /// <item>The port is the server's own registered port. The address is never stored here: the
 /// authorizer always pairs the port with 127.0.0.1.</item>
 /// <item>A friend's stream reaches whatever listens on that loopback port, so only a port that

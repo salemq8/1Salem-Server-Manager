@@ -26,7 +26,7 @@ using ServerManager.Infrastructure.Connect;
 namespace ConnectProof;
 
 /// <summary>
-/// Drives one disposable end-to-end run of 1Salem Connect Phase 1: the local broker's whole
+/// Drives one disposable end-to-end fake-mode run of 1Salem Connect Build 8: the local broker's whole
 /// lifecycle, the Agent's real host authorization pipe, and the real Go friend and host
 /// transports in FAKE network mode (loopback stands in for the tailnet, so this is not a tsnet
 /// test). A second friend then goes through the same lifecycle with the friend app's own code
@@ -104,6 +104,7 @@ internal static partial class Program
         using var owner = new ConnectIdentityStore(Path.Combine(options.WorkDirectory, "owner"), ConnectIdentityKind.Owner).Create();
         using var device = new ConnectIdentityStore(Path.Combine(options.WorkDirectory, "device"), ConnectIdentityKind.Device).Create();
         var asOwner = new BrokerCaller(http, new SignedRequestSigner(owner, TimeProvider.System));
+        using var ownerClient = new ConnectOwnerBrokerClient(options.Broker, developmentMode: true, owner, TimeProvider.System);
         var asDevice = new BrokerCaller(http, new SignedRequestSigner(device, TimeProvider.System));
 
         var registeredOwner = await asOwner.SendAsync(HttpMethod.Post, "/v1/owners", new { spki = owner.PublicKeySpkiBase64Url });
@@ -233,11 +234,30 @@ internal static partial class Program
             $"enroll {(enroll.Ok ? "ok" : enroll.Error)}; tskey-client- value: {clientSecret.Error}");
 
         var bind = await asDevice.SendAsync(HttpMethod.Post, $"/v1/memberships/{membershipId}/node", new { nodeId = fakeNodeId });
-        Require(bind.IsSuccess, $"binding the node returned {bind.Status}");
+        Require(bind.IsSuccess, $"binding the candidate node returned {bind.Status}");
 
         // ---- a session and the positive path -------------------------------------------------
         using var sessionKey = Es256.CreateKey();
-        var session = await asDevice.SendAsync(HttpMethod.Post, "/v1/sessions", new { membershipId, sessionSpki = Base64Url.Encode(Es256.ExportPublicKey(sessionKey)) });
+        var sessionSpki = Base64Url.Encode(Es256.ExportPublicKey(sessionKey));
+        var beforeConfirmation = await asDevice.SendAsync(
+            HttpMethod.Post,
+            "/v1/sessions",
+            new { membershipId, sessionSpki });
+        Record(
+            "a candidate node gets no session ticket",
+            beforeConfirmation.Status == 404,
+            $"status {beforeConfirmation.Status}");
+
+        await ownerClient.ConfirmNodeAsync(membershipId, fakeNodeId, CancellationToken.None);
+        var confirmed = (await ownerClient.GetMembershipsAsync(CancellationToken.None))
+            .SingleOrDefault(item => item.MembershipId == membershipId);
+        Record(
+            "the production owner client confirms the verified candidate node",
+            confirmed is { NodeState: "confirmed" } && confirmed.NodeId == fakeNodeId,
+            $"state {confirmed?.NodeState ?? "missing"}; node {confirmed?.NodeId ?? "missing"}");
+        Require(confirmed is { NodeState: "confirmed" }, "the production owner client did not see the confirmed node");
+
+        var session = await asDevice.SendAsync(HttpMethod.Post, "/v1/sessions", new { membershipId, sessionSpki });
         var ticket = session.Text("ticket") ?? string.Empty;
         Record("an approved, enrolled friend gets a signed ticket", session.Status == 201 && ticket.Count(c => c == '.') == 2, $"status {session.Status}");
 
@@ -351,7 +371,7 @@ internal static partial class Program
             $"new session {afterRevoke.Status}; old ticket banner: {bannerAfter ?? "none"}");
 
         // ---- a second friend, driven through the friend app's own code ---------------------------
-        await RunFriendAppAsync(new FriendAppRun(options, asOwner, owner.KeyId, hostServer, serverA, "Proof server A", local, secret ?? string.Empty));
+        await RunFriendAppAsync(new FriendAppRun(options, asOwner, ownerClient, owner.KeyId, hostServer, serverA, "Proof server A", local, secret ?? string.Empty));
     }
 
     // ---- helpers -----------------------------------------------------------------------------

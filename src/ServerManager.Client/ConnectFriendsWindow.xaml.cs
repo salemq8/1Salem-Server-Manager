@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using ServerManager.Client.Controls;
 using ServerManager.Client.Shell;
@@ -23,6 +24,10 @@ public partial class ConnectFriendsWindow : Window
     private readonly DispatcherTimer _timer;
     private ServerConnectResponse? _status;
     private bool _busy;
+    private bool _loading;
+    private bool _hasActionStatus;
+    private long _refreshVersion;
+    private readonly ConnectNicknameDrafts _nicknameDrafts = new();
 
     public ConnectFriendsWindow(Guid serverId)
     {
@@ -57,19 +62,37 @@ public partial class ConnectFriendsWindow : Window
 
     private async Task LoadAsync()
     {
-        if (_busy || !IsVisible)
+        if (_busy || !IsVisible || _loading)
         {
             return;
         }
 
+        _loading = true;
+        var version = _refreshVersion;
         try
         {
-            _status = await _client.GetServerAsync(_serverId);
-            StatusText.Text = string.Empty;
+            var status = await _client.GetServerAsync(_serverId);
+            if (version != _refreshVersion || !IsVisible)
+            {
+                return;
+            }
+
+            _status = status;
+            if (!_hasActionStatus)
+            {
+                StatusText.Text = string.Empty;
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText.Text = DiagnosticsService.Redact(exception.Message);
+            if (version == _refreshVersion && !_hasActionStatus)
+            {
+                StatusText.Text = LocalizationService.Get("Connect.State.ErrorDetail");
+            }
+        }
+        finally
+        {
+            _loading = false;
         }
 
         Render();
@@ -82,6 +105,16 @@ public partial class ConnectFriendsWindow : Window
             return;
         }
 
+        // Keep the active editor (and its caret/focus) intact while background status changes.
+        if (Keyboard.FocusedElement is TextBox editor && FriendsPanel.IsAncestorOf(editor))
+        {
+            return;
+        }
+
+        if (_status is not null)
+        {
+            _nicknameDrafts.Retain(_status.Friends.Select(friend => friend.MembershipId));
+        }
         FriendsPanel.Children.Clear();
         if (_status is null)
         {
@@ -139,15 +172,21 @@ public partial class ConnectFriendsWindow : Window
         {
             var nickname = new TextBox
             {
-                Text = view.Nickname,
+                Text = _nicknameDrafts.Get(friend.MembershipId, view.Nickname),
                 Width = 210,
                 Margin = new Thickness(0, 0, 8, 8),
                 ToolTip = LocalizationService.Get("Connect.Friends.Nickname")
             };
+            nickname.TextChanged += (_, _) => _nicknameDrafts.Set(friend.MembershipId, nickname.Text);
             actions.Children.Add(nickname);
             actions.Children.Add(ActionButton(
                 LocalizationService.Get("Connect.Friends.SaveNickname"),
-                async () => await _client.SetNicknameAsync(friend.MembershipId, nickname.Text.Trim())));
+                async () =>
+                {
+                    var submitted = nickname.Text;
+                    await _client.SetNicknameAsync(friend.MembershipId, submitted.Trim());
+                    _nicknameDrafts.Saved(friend.MembershipId, submitted);
+                }));
 
             var revoke = new Button
             {
@@ -210,6 +249,8 @@ public partial class ConnectFriendsWindow : Window
         }
 
         _busy = true;
+        _refreshVersion++;
+        _hasActionStatus = true;
         StatusText.Text = LocalizationService.Get("Connect.State.Checking");
         try
         {
@@ -217,12 +258,13 @@ public partial class ConnectFriendsWindow : Window
             _status = await _client.GetServerAsync(_serverId);
             if (clearStatus)
             {
+                _hasActionStatus = false;
                 StatusText.Text = string.Empty;
             }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText.Text = DiagnosticsService.Redact(exception.Message);
+            StatusText.Text = LocalizationService.Get("Connect.State.ErrorDetail");
         }
         finally
         {

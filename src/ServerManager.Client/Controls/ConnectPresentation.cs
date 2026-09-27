@@ -79,9 +79,13 @@ public static class ConnectPresentation
         if (status.Policy is ConnectPolicyState.Unsafe or ConnectPolicyState.Incomplete or
             ConnectPolicyState.NotPermitted or ConnectPolicyState.Unverifiable)
         {
-            var reasons = status.PolicyReasons.Count == 0
-                ? LocalizationService.Get("Connect.State.PolicyDetail")
-                : string.Join(Environment.NewLine, status.PolicyReasons);
+            var reasons = LocalizationService.Get(status.Policy switch
+            {
+                ConnectPolicyState.Incomplete => "Connect.State.PolicyIncomplete",
+                ConnectPolicyState.NotPermitted => "Connect.State.PolicyNotPermitted",
+                ConnectPolicyState.Unverifiable => "Connect.State.PolicyUnverifiable",
+                _ => "Connect.State.PolicyDetail"
+            });
             return new(
                 LocalizationService.Get("Connect.State.Policy"),
                 reasons,
@@ -141,7 +145,11 @@ public static class ConnectPresentation
         var pending = status.Friends.Count(friend => friend.State == ConnectFriendState.Pending);
         if (!status.AccountReady)
         {
-            return Disabled("Connect.Server.SetupRequired", "Connect.Server.SetupRequiredDetail", pending);
+            return CleanupAvailable(status,
+                LocalizationService.Get("Connect.Server.SetupRequired"),
+                LocalizationService.Get("Connect.Server.SetupRequiredDetail"),
+                UiStatusTone.Neutral,
+                pending);
         }
 
         if (!status.Eligible)
@@ -149,15 +157,10 @@ public static class ConnectPresentation
             var reasons = status.Issues.Count == 0
                 ? LocalizationService.Get("Connect.Eligibility.Unknown")
                 : string.Join(Environment.NewLine, status.Issues.Select(EligibilityReason));
-            return new(
+            return CleanupAvailable(status,
                 LocalizationService.Get("Connect.Server.NotEligible"),
                 reasons,
                 UiStatusTone.Caution,
-                ConnectServerAction.None,
-                LocalizationService.Get("ServerSettings.ConnectEnable"),
-                false,
-                false,
-                pending > 0,
                 pending);
         }
 
@@ -221,6 +224,18 @@ public static class ConnectPresentation
         false,
         false,
         pending > 0,
+        pending);
+
+    private static ConnectServerViewModel CleanupAvailable(
+        ServerConnectResponse status, string state, string detail, UiStatusTone tone, int pending) => new(
+        state,
+        detail,
+        tone,
+        status.Enabled ? ConnectServerAction.Disable : ConnectServerAction.None,
+        LocalizationService.Get(status.Enabled ? "ServerSettings.ConnectDisable" : "ServerSettings.ConnectEnable"),
+        status.Enabled,
+        false,
+        status.Friends.Count > 0,
         pending);
 
     private static string EligibilityReason(ConnectEligibilityIssue issue) =>

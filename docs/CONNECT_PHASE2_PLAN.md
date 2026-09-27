@@ -1,6 +1,8 @@
 # 1Salem Connect — Phase 2 implementation plan (Build 8)
 
-Status: **plan, in progress.** Phase 1 (secure transport foundation, commit `cc4d7b3`) and the real-tsnet
+Status: **implemented locally; live acceptance and deployment remain separate gates.** See
+`CONNECT_PHASE2_VALIDATION.md` for the final verification record and remaining limitations.
+Phase 1 (secure transport foundation, commit `cc4d7b3`) and the real-tsnet
 smoke test (commit `4bfb9a8`, 58/58) are complete and are not redone. This plan turns the Phase 1
 libraries into a working product for the **owner** (Server Manager + Agent) and the **friend**
 (`1Salem.Connect.exe`), Minecraft first. `docs/CONNECT_ARCHITECTURE.md` stays the contract; each

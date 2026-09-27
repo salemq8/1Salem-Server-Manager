@@ -17,6 +17,9 @@ public partial class ConnectInviteWindow : Window
     {
         _serverId = serverId;
         InitializeComponent();
+        // Ctrl+C and the TextBox context menu must use the same protected clipboard path.
+        System.Windows.DataObject.AddCopyingHandler(LinkBox, SensitiveText_Copying);
+        System.Windows.DataObject.AddCopyingHandler(CodeBox, SensitiveText_Copying);
         FlowDirection = LayoutDirectionService.ForCulture(CultureInfo.CurrentUICulture);
         Localize();
         Closed += (_, _) => _client.Dispose();
@@ -62,6 +65,15 @@ public partial class ConnectInviteWindow : Window
 
     private void CopyCode_Click(object sender, RoutedEventArgs e) => CopySecret(CodeBox.Text);
 
+    private void SensitiveText_Copying(object sender, DataObjectCopyingEventArgs e)
+    {
+        e.CancelCommand();
+        if (sender is System.Windows.Controls.TextBox box && box.SelectionLength > 0)
+        {
+            CopySecret(box.SelectedText);
+        }
+    }
+
     private void CopySecret(string value)
     {
         if (!SafeClipboard.TrySetSensitiveText(value))
@@ -100,7 +112,7 @@ public partial class ConnectInviteWindow : Window
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            StatusText.Text = DiagnosticsService.Redact(exception.Message);
+            StatusText.Text = LocalizationService.Get("Connect.State.ErrorDetail");
         }
         finally
         {

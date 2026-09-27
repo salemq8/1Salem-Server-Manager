@@ -8,7 +8,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-20",
 
-  // No public workers.dev hostname or preview URL: Phase 1 must not be reachable from the
+  // No public workers.dev hostname or preview URL: the default environment must not be reachable from the
   // internet even if someone runs `wrangler deploy` by mistake.
   "workers_dev": false,
   "preview_urls": false,
@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "onesalem-connect",
-      // Placeholder. A real id exists only after `wrangler d1 create`, which Phase 1 never runs.
+      // Placeholder. A real id exists only after the production deployment step.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }

@@ -1,13 +1,18 @@
 # Real tsnet smoke test
 
+Phase 1 acceptance remains `4bfb9a8` (58/58). Phase 2 updates below are compile-checked, not
+rerun on the real tailnet. The full Agent-hosted Phase 2 acceptance additionally requires a
+replacement OAuth credential with `policy_file:read`; do not change the existing accepted
+credential or run live acceptance without Salem's separate authorization.
+
 Development-only. Nothing here ships, and nothing here touches the installed Server Manager,
 its Agent, Minecraft, Palworld, Playit, `C:\ProgramData\1SalemServerManager`, `artifacts\release`
 or a real `%LOCALAPPDATA%\1Salem Connect`.
 
 ## What it proves
 
-The Phase 1 proof (`Run-ConnectProof.ps1`) runs in fake network mode, where loopback stands in
-for the tailnet and a node's identity is self-asserted. Two properties cannot be shown that way.
+The fake-mode proof (`Run-ConnectProof.ps1`) uses loopback in place of the tailnet, and a node's
+identity is self-asserted. Two properties cannot be shown that way.
 This harness runs the same production components on the owner's real tailnet, with temporary
 tagged nodes, to show them:
 
@@ -22,8 +27,10 @@ tagged nodes, to show them:
    address; the probe itself never writes to the connection.
 
 Along the way it repeats, over the tailnet, what the fake-mode proof shows: enrollment through the
-friend app's own code, a loopback-only local listener, traffic to the test service, refusal of a
-forged ServerId, of a ServerId the host does not serve and of a request naming a destination,
+friend app's own code, owner confirmation only after the real device and tag check,
+a loopback-only local listener, traffic to the test
+service, refusal of a forged ServerId, of a ServerId the host does not serve and of a request
+naming a destination,
 refusal of an address no peer owns and of a departed peer, revocation of a live connection, and no
 change to Windows network settings. It also checks that the friend's node id is the same in the
 enroll result, the friend transport's status, the broker's binding, the tailnet API and the host's

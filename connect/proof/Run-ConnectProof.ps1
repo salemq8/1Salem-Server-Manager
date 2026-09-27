@@ -9,7 +9,7 @@ param(
     [switch]$SkipBuild
 )
 
-# Disposable end-to-end proof of 1Salem Connect Phase 1, entirely on this PC:
+# Disposable end-to-end fake-mode proof of 1Salem Connect Build 8, entirely on this PC:
 #   local broker (wrangler dev --local, D1 in a temp folder, throwaway secrets)
 #   + the real Go host and friend transports in FAKE network mode (loopback stands in for the
 #     tailnet; this is NOT a tsnet test)

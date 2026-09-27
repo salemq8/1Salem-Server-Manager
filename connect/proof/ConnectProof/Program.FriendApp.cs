@@ -21,6 +21,7 @@ namespace ConnectProof;
 internal sealed record FriendAppRun(
     ProofOptions Options,
     BrokerCaller Owner,
+    IConnectOwnerBrokerClient OwnerClient,
     string OwnerId,
     ConnectHostAuthorizationPipeServer Host,
     Guid ServerId,
@@ -152,16 +153,32 @@ internal static partial class Program
         var hello = await transport.HelloAsync(CancellationToken.None);
         var node = (await transport.StatusAsync(CancellationToken.None)).Nodes.SingleOrDefault();
         var secondPickup = await broker.TakeEnrollmentAsync(membershipId, CancellationToken.None);
-        var boundNode = (await run.Owner.SendAsync(HttpMethod.Get, "/v1/owners/me/memberships", null)).Items("memberships")
-            .FirstOrDefault(item => item.GetProperty("membershipId").GetString() == membershipId)
-            .GetProperty("nodeId").GetString();
+        var candidate = (await run.OwnerClient.GetMembershipsAsync(CancellationToken.None))
+            .SingleOrDefault(item => item.MembershipId == membershipId);
         Record(
-            "app: approval leads to its server list; it started its transport, enrolled it from the one-time blob and reported the node id",
-            settled && server is { CanOpen: true } && server.StatusText == Text.StatusReady &&
+            "app: enrollment reports only a candidate and cannot be opened before owner confirmation",
+            settled && server is { CanOpen: false } && server.StatusText == Text.StatusConfirmationPending &&
             hello.Mode == "fake" && node?.Node == run.OwnerId && node.NodeId == fakeNodeId &&
-            secondPickup is null && boundNode == fakeNodeId,
+            secondPickup is null && candidate is { NodeState: "candidate" } && candidate.NodeId == fakeNodeId,
             $"page {PageName(main.CurrentPage)}, '{server?.Label}' {server?.StatusText}; transport {hello.Mode} node {node?.NodeId}; " +
-            $"blob left on the broker: {secondPickup is not null}; broker node id {boundNode}");
+            $"blob left on the broker: {secondPickup is not null}; broker candidate node id {candidate?.NodeId}");
+
+        await run.OwnerClient.ConfirmNodeAsync(membershipId, fakeNodeId, CancellationToken.None);
+        var confirmed = (await run.OwnerClient.GetMembershipsAsync(CancellationToken.None))
+            .SingleOrDefault(item => item.MembershipId == membershipId);
+        Record(
+            "app: the production owner client confirms the candidate before the server becomes ready",
+            confirmed is { NodeState: "confirmed" } && confirmed.NodeId == fakeNodeId,
+            $"state {confirmed?.NodeState ?? "missing"}; node {confirmed?.NodeId ?? "missing"}");
+        Require(confirmed is { NodeState: "confirmed" }, "the proof owner could not confirm the app's candidate node");
+
+        settled = await StepPagesAsync(clock);
+        servers = main.CurrentPage as ServersViewModel;
+        server = servers?.Servers.SingleOrDefault();
+        Record(
+            "app: the confirmed server becomes ready to open",
+            settled && server is { CanOpen: true } && server.StatusText == Text.StatusReady,
+            $"page {PageName(main.CurrentPage)}, '{server?.Label}' {server?.StatusText}");
         Require(server is { CanOpen: true }, "the server is not ready to open");
 
         // ---- Connect: a loopback address with Copy, next to a port that is already taken --------------

@@ -294,6 +294,7 @@ internal static partial class Program
         Require(
             boundX.Outcome == EnrollmentOutcome.Completed && boundX.NodeId == friend.Enrolled.NodeId,
             $"binding the friend node for server X ended {boundX.Outcome}{AppLog(app.Log)}");
+        await ConfirmCandidateAsync(asOwner, membershipX, friend.Enrolled.NodeId!, "server X");
 
         // ---- 8. Connect through the app: a loopback address that reaches the test service ---------
         Interrupted.ThrowIfCancellationRequested();
@@ -506,7 +507,31 @@ internal static partial class Program
             enrolled.Outcome == EnrollmentOutcome.Completed && bound is not null && bound == enrolled.NodeId,
             $"outcome {enrolled.Outcome}; node {enrolled.NodeId}; bound at the broker: {bound ?? "none"}{AppLog(app.Log)}");
         Require(enrolled.Outcome == EnrollmentOutcome.Completed, "the friend node did not enroll");
-        return new FriendEnrollment(enrolled, bound, await CheckEnrolledDeviceAsync(run, run.Friend));
+        var device = await CheckEnrolledDeviceAsync(run, run.Friend);
+        await ConfirmCandidateAsync(owner, membershipA, enrolled.NodeId!, "server A");
+        return new FriendEnrollment(enrolled, bound, device);
+    }
+
+    /// <summary>
+    /// The smoke driver acts as the Agent only after CheckEnrolledDeviceAsync has verified the
+    /// real Tailscale device. A candidate cannot receive tickets before this owner-signed step.
+    /// </summary>
+    private static async Task ConfirmCandidateAsync(
+        BrokerCaller owner,
+        string membershipId,
+        string nodeId,
+        string label)
+    {
+        var confirmation = await owner.SendAsync(
+            HttpMethod.Post,
+            $"/v1/memberships/{membershipId}/node/confirm",
+            new { nodeId });
+        var confirmed = confirmation.IsSuccess && confirmation.Text("nodeState") == "confirmed";
+        Record(
+            $"owner confirms the verified friend node for {label}",
+            confirmed,
+            $"status {confirmation.Status}; state {confirmation.Text("nodeState") ?? "missing"}; node {nodeId}");
+        Require(confirmed, $"confirming the friend node for {label} returned {confirmation.Status}");
     }
 
     /// <summary>The app's enrollment, retried while it reports "pending" (the blob not visible yet).</summary>
