@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Windows;
 using System.Windows.Threading;
 using ServerManager.Client.Shell;
+using ServerManager.Client.Transport;
 using ServerManager.Contracts;
 using ServerManager.Core;
 using Application = System.Windows.Application;
@@ -27,9 +28,11 @@ public partial class NetworkPageControl : UserControl
     private readonly DashboardFeed _feed = DashboardFeed.Shared;
     private readonly HttpClient _httpClient =
         AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromSeconds(20));
+    private readonly ConnectOwnerClient _connectClient = new(TimeSpan.FromSeconds(20));
     private readonly DispatcherTimer _timer;
     private PlayitStatusResponse? _playit;
     private NetworkSnapshot? _network;
+    private ConnectStatusResponse? _connect;
 
     public NetworkPageControl()
     {
@@ -77,6 +80,15 @@ public partial class NetworkPageControl : UserControl
             _network = null;
         }
 
+        try
+        {
+            _connect = await _connectClient.GetStatusAsync();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _connect = null;
+        }
+
         Render();
     }
 
@@ -94,6 +106,12 @@ public partial class NetworkPageControl : UserControl
         CopyAddressButton.Content = LocalizationService.Get("Action.CopyAddress");
         AdvancedSection.Header = LocalizationService.Get("Advanced.Title");
         NetworkDetailsButton.Content = LocalizationService.Get("Network.Details");
+        ConnectOwnerTitle.Text = LocalizationService.Get("Network.ConnectTitle");
+        ConnectOwnerButton.Content = LocalizationService.Get("Network.ConnectManage");
+        var connect = ConnectPresentation.Setup(_connect);
+        ConnectOwnerState.Text = connect.State;
+        ConnectOwnerDetail.Text = connect.Detail;
+        ConnectOwnerDot.Fill = ToneBrush(connect.Tone);
 
         var stateShown = StateView.Apply(_feed, "Empty.NoServers", "Empty.NoServersMessage");
         ContentRoot.Visibility = stateShown ? Visibility.Collapsed : Visibility.Visible;
@@ -243,6 +261,12 @@ public partial class NetworkPageControl : UserControl
         RemoteAccessWindow.Open(Window.GetWindow(this));
         // Whatever changed in there (address, linking, stopped tunnel) shows here at once.
         await _feed.RefreshAsync();
+        await LoadAsync();
+    }
+
+    private async void ConnectOwner_Click(object sender, RoutedEventArgs e)
+    {
+        ConnectSetupWindow.Open(Window.GetWindow(this));
         await LoadAsync();
     }
 

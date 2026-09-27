@@ -17,6 +17,7 @@
     </Resource>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ServerManager.Connect.Core\ServerManager.Connect.Core.csproj" />
     <ProjectReference Include="..\ServerManager.Contracts\ServerManager.Contracts.csproj" />
     <ProjectReference Include="..\ServerManager.Infrastructure\ServerManager.Infrastructure.csproj" />
   </ItemGroup>

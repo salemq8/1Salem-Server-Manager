@@ -4,7 +4,9 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Windows;
+using System.Windows.Threading;
 using ServerManager.Client.Shell;
+using ServerManager.Client.Transport;
 using ServerManager.Contracts;
 using ServerManager.Core;
 using ListBoxItem = System.Windows.Controls.ListBoxItem;
@@ -21,17 +23,45 @@ public partial class ServerSettingsTab : UserControl
 {
     private readonly ServerDetailContext _context = ServerDetailContext.Shared;
     private readonly HttpClient _httpClient;
+    private readonly ConnectOwnerClient _connectClient = new(TimeSpan.FromSeconds(30));
+    private readonly DispatcherTimer _connectTimer;
     private bool _active;
     private bool _loading;
+    private bool _connectLoading;
+    private ServerConnectResponse? _connectStatus;
+    private ConnectServerViewModel? _connectView;
+    private string? _connectError;
+    private Guid _connectServerId;
 
     public ServerSettingsTab()
     {
         InitializeComponent();
         _httpClient = _context.CreateClient(TimeSpan.FromMinutes(2));
-        _context.Changed += (_, _) => Dispatcher.Invoke(Localize);
+        _connectTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(6)
+        };
+        _connectTimer.Tick += async (_, _) => await LoadConnectAsync();
+        _context.Changed += (_, _) => Dispatcher.Invoke(() =>
+        {
+            if (_connectServerId != _context.ServerId)
+            {
+                // Never render one server's access state while switching to another server.
+                _connectServerId = _context.ServerId;
+                _connectStatus = null;
+                _connectError = null;
+            }
+            Localize();
+            UpdateConnectPolling();
+        });
         LocalizationService.LanguageChanged += (_, _) => Dispatcher.Invoke(Localize);
         ThemeService.ThemeChanged += (_, _) => Dispatcher.Invoke(Localize);
-        Loaded += (_, _) => Localize();
+        Loaded += (_, _) =>
+        {
+            Localize();
+            UpdateConnectPolling();
+        };
+        Unloaded += (_, _) => _connectTimer.Stop();
     }
 
     public void SetActive(bool active)
@@ -42,6 +72,8 @@ public partial class ServerSettingsTab : UserControl
             Localize();
             LoadGeneral();
         }
+
+        UpdateConnectPolling();
     }
 
     /// <summary>Jumps straight to Advanced, used by the header's Diagnostics entry.</summary>
@@ -73,6 +105,7 @@ public partial class ServerSettingsTab : UserControl
         }
 
         Localize();
+        UpdateConnectPolling();
     }
 
     private void Localize()
@@ -103,7 +136,7 @@ public partial class ServerSettingsTab : UserControl
         OpenFilesButton.Content = LocalizationService.Get("Action.OpenFolder");
         // The Safe File Manager's only entry point; without a label it rendered as a blank button.
         FileManagerButton.Content = LocalizationService.Get("ServerSettings.Files");
-        LocalizeConnectCard();
+        RenderConnectCard();
 
         var group = CurrentGroup;
         var isPalworld = _context.Source?.Game == GameType.Palworld;
@@ -188,20 +221,118 @@ public partial class ServerSettingsTab : UserControl
         }
     }
 
-    /// <summary>
-    /// 1Salem Connect is a development preview with nothing configured in this build. The card
-    /// only says so: its buttons are disabled in the markup and have no handlers, so there is
-    /// no path by which it could appear to enable, invite or revoke anyone.
-    /// </summary>
-    private void LocalizeConnectCard()
+    private void RenderConnectCard()
     {
         ConnectTitle.Text = LocalizationService.Get("ServerSettings.Connect");
-        ConnectBadge.Text = LocalizationService.Get("ServerSettings.ConnectPreview");
-        ConnectBody.Text = LocalizationService.Get("ServerSettings.ConnectBody");
-        ConnectEnableButton.Content = LocalizationService.Get("ServerSettings.ConnectEnable");
+        var game = _context.Source?.Game ?? GameType.Minecraft;
+        _connectView = ConnectPresentation.Server(game, _connectStatus);
+        ConnectBadge.Text = _connectView.State;
+        ConnectBody.Text = _connectError ?? _connectView.Detail;
+        ConnectEnableButton.Content = _connectView.PrimaryLabel;
+        ConnectEnableButton.IsEnabled = !_connectLoading && _connectView.CanRunPrimaryAction;
         ConnectInviteButton.Content = LocalizationService.Get("ServerSettings.ConnectInvite");
-        ConnectFriendsButton.Content = LocalizationService.Get("ServerSettings.ConnectFriends");
-        ConnectRevokeButton.Content = LocalizationService.Get("ServerSettings.ConnectRevoke");
+        ConnectInviteButton.IsEnabled = !_connectLoading && _connectView.CanInvite;
+        ConnectFriendsButton.Content = _connectView.PendingCount > 0
+            ? LocalizationService.Format("ServerSettings.ConnectFriendsPending", _connectView.PendingCount)
+            : LocalizationService.Get("ServerSettings.ConnectFriends");
+        ConnectFriendsButton.IsEnabled = !_connectLoading && _connectView.CanManageFriends;
+    }
+
+    /// <summary>Poll only while this tab's Network group is actually on screen.</summary>
+    private void UpdateConnectPolling()
+    {
+        if (_active && IsVisible && CurrentGroup == "Network")
+        {
+            _connectTimer.Start();
+            _ = LoadConnectAsync();
+        }
+        else
+        {
+            _connectTimer.Stop();
+        }
+    }
+
+    private async Task LoadConnectAsync()
+    {
+        if (_connectLoading || !_active || !IsVisible || CurrentGroup != "Network")
+        {
+            return;
+        }
+
+        if (_context.Card is null)
+        {
+            _connectStatus = null;
+            RenderConnectCard();
+            return;
+        }
+
+        _connectLoading = true;
+        _connectError = null;
+        RenderConnectCard();
+        try
+        {
+            _connectStatus = await _connectClient.GetServerAsync(_context.ServerId);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _connectStatus = null;
+            _connectError = DiagnosticsService.Redact(exception.Message);
+        }
+        finally
+        {
+            _connectLoading = false;
+            RenderConnectCard();
+        }
+    }
+
+    private async void ConnectEnable_Click(object sender, RoutedEventArgs e)
+    {
+        if (_connectView?.PrimaryAction is not (ConnectServerAction.Enable or ConnectServerAction.Disable))
+        {
+            return;
+        }
+
+        await RunConnectActionAsync(() => _connectView.PrimaryAction == ConnectServerAction.Enable
+            ? _connectClient.EnableAsync(_context.ServerId)
+            : _connectClient.DisableAsync(_context.ServerId));
+    }
+
+    private async void ConnectInvite_Click(object sender, RoutedEventArgs e)
+    {
+        new ConnectInviteWindow(_context.ServerId) { Owner = Window.GetWindow(this) }.ShowDialog();
+        await LoadConnectAsync();
+    }
+
+    private async void ConnectFriends_Click(object sender, RoutedEventArgs e)
+    {
+        new ConnectFriendsWindow(_context.ServerId) { Owner = Window.GetWindow(this) }.ShowDialog();
+        await LoadConnectAsync();
+    }
+
+    private async Task RunConnectActionAsync(Func<Task> action)
+    {
+        if (_connectLoading)
+        {
+            return;
+        }
+
+        _connectLoading = true;
+        _connectError = null;
+        RenderConnectCard();
+        try
+        {
+            await action();
+            _connectStatus = await _connectClient.GetServerAsync(_context.ServerId);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _connectError = DiagnosticsService.Redact(exception.Message);
+        }
+        finally
+        {
+            _connectLoading = false;
+            RenderConnectCard();
+        }
     }
 
     private void RenderAdvanced()

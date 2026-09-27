@@ -120,9 +120,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Network: 1Salem Connect (private friend access). A development preview that is
-                     not configured in this build, so the card says so and every action stays
-                     disabled; nothing here provisions, invites or revokes anything. -->
+                <!-- Network: per-server private friend access. Owner-level setup stays on Network. -->
                 <Border x:Name="ConnectCard"
                         Style="{StaticResource SectionCardStyle}"
                         Visibility="Collapsed"
@@ -148,19 +146,15 @@
                             <Button x:Name="ConnectEnableButton"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Margin="0,0,8,8"
-                                    IsEnabled="False" />
+                                    Click="ConnectEnable_Click" />
                             <Button x:Name="ConnectInviteButton"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Margin="0,0,8,8"
-                                    IsEnabled="False" />
+                                    Click="ConnectInvite_Click" />
                             <Button x:Name="ConnectFriendsButton"
                                     Style="{StaticResource QuietButtonStyle}"
                                     Margin="0,0,8,8"
-                                    IsEnabled="False" />
-                            <Button x:Name="ConnectRevokeButton"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    Margin="0,0,8,8"
-                                    IsEnabled="False" />
+                                    Click="ConnectFriends_Click" />
                         </WrapPanel>
                     </StackPanel>
                 </Border>

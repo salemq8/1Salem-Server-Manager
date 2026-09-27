@@ -11,6 +11,29 @@
                   Padding="{StaticResource PagePadding}">
         <StackPanel MaxWidth="1180">
 
+            <!-- Owner-level Connect setup remains available even before a game server exists. -->
+            <Border x:Name="ConnectOwnerCard" Style="{StaticResource SectionCardStyle}" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock x:Name="ConnectOwnerTitle" Style="{StaticResource SectionTitleStyle}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Ellipse x:Name="ConnectOwnerDot" Style="{StaticResource StatusDotStyle}" />
+                            <TextBlock x:Name="ConnectOwnerState" Style="{StaticResource BodyTextStyle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="ConnectOwnerDetail" Style="{StaticResource SecondaryTextStyle}"
+                                   Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button x:Name="ConnectOwnerButton" Grid.Column="1"
+                            Style="{StaticResource QuietButtonStyle}"
+                            VerticalAlignment="Center" Margin="16,0,0,0"
+                            Click="ConnectOwner_Click" />
+                </Grid>
+            </Border>
+
             <controls:PageStateView x:Name="StateView"
                                     Visibility="Collapsed"
                                     RetryRequested="State_RetryRequested" />

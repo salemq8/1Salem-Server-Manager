@@ -55,7 +55,7 @@ public static class SecretRedactor
         AnyCase);
 
     private static readonly Regex SensitiveQueryValue = new(
-        @"\b((?:secret|authKey|clientSecret|client_secret|sessionKey|privateKey|password)=)[^&\s""]+",
+        @"\b((?:secret|authKey|clientSecret|client_secret|sessionKey|privateKey|password)=)[^&\s"",;]+",
         AnyCase);
 
     // Invite links carry the secret in the fragment (https://connect.1salem.app/i#<secret>);

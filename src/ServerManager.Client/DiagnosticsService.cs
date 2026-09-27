@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using ServerManager.Contracts;
 using ServerManager.Client.Shell;
+using ServerManager.Connect.Core.Diagnostics;
 
 namespace ServerManager.Client;
 
@@ -120,7 +121,7 @@ public static partial class DiagnosticsService
     }
 
     public static string Redact(string value) =>
-        SecretPattern().Replace(value, "$1=[REDACTED]");
+        SecretRedactor.Redact(SecretPattern().Replace(value, "$1=[REDACTED]"));
 
     private static async Task<string> TryGetResourceProfileSummaryAsync(
         CancellationToken cancellationToken)
