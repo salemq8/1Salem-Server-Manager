@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Stores, reports or removes the Tailscale OAuth client the tsnet smoke test uses.
+Stores, reports or removes the Tailscale OAuth client used for isolated Connect testing.
 
 .DESCRIPTION
 Run it yourself, in your own PowerShell; the smoke harness never asks for the secret. Without a
@@ -10,24 +10,40 @@ and stores both, encrypted with DPAPI for the current Windows user, in
 and SYSTEM. Only connect\proof\TsnetSmoke (started by Run-TsnetSmoke.ps1 -Live) reads it. Nothing
 here contacts Tailscale.
 
+With -Phase2, stores a separate replacement credential for Agent-hosted acceptance under
+%LOCALAPPDATA%\1Salem Connect Phase2 Acceptance\oauth-client.dpapi. This reuses the same secure
+input/encryption path, never overwrites an existing credential, and does not run a smoke test.
+The accepted Phase 1 credential is not read or changed. -Phase2 cannot be combined with -Remove.
+
 .PARAMETER Status
 Says whether a stored client exists. It never prints it.
 
 .PARAMETER Remove
 Deletes the stored client and its folder.
 
+.PARAMETER Phase2
+Selects the separate, create-only Phase 2 acceptance credential. Its scopes and tags must be
+verified in the read-only acceptance precheck; saving a credential does not verify them.
+
 .EXAMPLE
 powershell -NoProfile -ExecutionPolicy Bypass -File connect\proof\Set-TsnetSmokeCredential.ps1 -Status
+
+.EXAMPLE
+powershell -NoProfile -ExecutionPolicy Bypass -File connect\proof\Set-TsnetSmokeCredential.ps1 -Phase2
 #>
 [CmdletBinding(DefaultParameterSetName = 'Store')]
 param(
     [Parameter(ParameterSetName = 'Status')][switch]$Status,
-    [Parameter(ParameterSetName = 'Remove')][switch]$Remove
+    [Parameter(ParameterSetName = 'Remove')][switch]$Remove,
+    [Parameter(ParameterSetName = 'Store')]
+    [Parameter(ParameterSetName = 'Status')][switch]$Phase2
 )
 
 $ErrorActionPreference = 'Stop'
-$directory = Join-Path $env:LOCALAPPDATA '1Salem Connect Smoke'
+$directoryName = if ($Phase2) { '1Salem Connect Phase2 Acceptance' } else { '1Salem Connect Smoke' }
+$directory = Join-Path $env:LOCALAPPDATA $directoryName
 $file = Join-Path $directory 'oauth-client.dpapi'
+# Protected acceptance input uses the existing staging format, not the Agent's SYSTEM store.
 # Must match SmokeCredential.Entropy in TsnetSmoke. It ties the blob to this purpose; not a secret.
 $entropyText = '1Salem.TsnetSmoke.OAuthClient.v1'
 $secretPrefix = 'tskey-client-'
@@ -106,6 +122,10 @@ if ($Remove) {
     exit 0
 }
 
+if ($Phase2 -and (Test-Path -LiteralPath $file)) {
+    throw 'A Phase 2 acceptance credential is already stored. It was not read or replaced.'
+}
+
 # Read hidden like the secret: a secret pasted into the wrong prompt must not appear on screen.
 $secureId = Read-Host 'Tailscale OAuth client ID' -AsSecureString
 $idPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureId)
@@ -139,7 +159,21 @@ try {
     $plaintext = [Text.Encoding]::UTF8.GetBytes($json)
     $entropy = [Text.Encoding]::UTF8.GetBytes($entropyText)
     $protected = [Security.Cryptography.ProtectedData]::Protect($plaintext, $entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)
-    [IO.File]::WriteAllBytes($file, $protected)
+    if ($Phase2) {
+        # CreateNew also closes the race after the pre-prompt existence check. Never replace an
+        # existing credential, including one created by another invocation while we prompted.
+        $credentialStream = [IO.File]::Open($file, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $credentialStream.Write($protected, 0, $protected.Length)
+            $credentialStream.Flush($true)
+        }
+        finally {
+            $credentialStream.Dispose()
+        }
+    }
+    else {
+        [IO.File]::WriteAllBytes($file, $protected)
+    }
     Write-Host "Stored the OAuth client at $file (DPAPI, current user only)."
 }
 finally {

@@ -71,10 +71,31 @@ the shutdown regression was reproduced deterministically before the correction.
 
 ## Acceptance still required
 
+Acceptance checkpoint (2026-09-27): branch `claude/connect-phase-2`, local-validation HEAD
+`4efcc8b`, clean worktree before the credential helper correction below. Only the accepted old
+credential exists; the separate Phase 2 staging file is absent. Live acceptance stopped at this
+gate: no Tailscale calls, nodes or keys created, no production changes, and no regression or old
+smoke rerun. The helper correction passed PowerShell parsing, Store/Status-only parameter-set
+checks and read-only status checks for both paths. Credential contents were not opened.
+
 1. Salem creates a **replacement** OAuth credential through the approved secure input path:
    `auth_keys` write, `devices:core` write and **`policy_file:read`**, with only
    `tag:onesalem-host`. Do not paste credentials into chat or modify the accepted credential.
    Connect deliberately stays off if policy cannot be verified.
+
+   Store the replacement using the existing secure prompt with its isolated Phase 2 target:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File connect\proof\Set-TsnetSmokeCredential.ps1 -Phase2
+   ```
+
+   This writes only `%LOCALAPPDATA%\1Salem Connect Phase2 Acceptance\oauth-client.dpapi`
+   (DPAPI CurrentUser, protected DACL), refuses to replace an existing file, and does not contact
+   Tailscale or run the Phase 1 proof. `-Phase2 -Status` checks existence without opening it.
+   The accepted `%LOCALAPPDATA%\1Salem Connect Smoke\oauth-client.dpapi` is left untouched.
+   This is secure staging input for acceptance, not the Agent's differently encrypted SYSTEM
+   credential store; the Agent must still save/read its credential through the production path.
+
 2. Separately authorize a real-tailnet acceptance of the Agent-hosted path, including SYSTEM
    identity/state permissions, policy and Tailnet Lock handling, invitations, confirmation,
    shared-node revocation and restart recovery. The prior Phase 1 smoke test does not replace this.
