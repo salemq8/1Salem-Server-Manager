@@ -1,10 +1,9 @@
 namespace ServerManager.Infrastructure.Connect;
 
 /// <summary>
-/// The servers the owner has turned 1Salem Connect on for. Phase 1 keeps this in memory only:
-/// there is no schema change and nothing survives an Agent restart, so every server starts with
-/// Connect off. That is the safe default, because a server that is not in this set can never be
-/// reached through a ticket.
+/// The in-memory enforcement switch for the servers the owner has turned Connect on for. Phase 2
+/// restores it from <see cref="ConnectStateStore"/> only after the policy and host node pass their
+/// checks; until then every server remains fail-closed.
 /// </summary>
 public sealed class ConnectEnabledServers
 {
@@ -32,6 +31,27 @@ public sealed class ConnectEnabledServers
         lock (_gate)
         {
             return _serverIds.Contains(serverId);
+        }
+    }
+
+    public IReadOnlyList<Guid> Snapshot()
+    {
+        lock (_gate)
+        {
+            return _serverIds.Order().ToArray();
+        }
+    }
+
+    public void Replace(IEnumerable<Guid> serverIds)
+    {
+        ArgumentNullException.ThrowIfNull(serverIds);
+        lock (_gate)
+        {
+            _serverIds.Clear();
+            foreach (var serverId in serverIds.Where(id => id != Guid.Empty))
+            {
+                _serverIds.Add(serverId);
+            }
         }
     }
 }

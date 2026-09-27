@@ -22,7 +22,15 @@ namespace ServerManager.Infrastructure.Connect;
 /// its own log; this is the second layer.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class ConnectHostTransportSupervisor : IAsyncDisposable
+public interface IConnectHostTransportSupervisor : IAsyncDisposable
+{
+    int? RunningProcessId { get; }
+    void Start();
+    Task StopAsync();
+}
+
+[SupportedOSPlatform("windows")]
+public sealed class ConnectHostTransportSupervisor : IConnectHostTransportSupervisor
 {
     private readonly ConnectHostTransportOptions _options;
     private readonly IConnectSidecarProcessRunner _runner;

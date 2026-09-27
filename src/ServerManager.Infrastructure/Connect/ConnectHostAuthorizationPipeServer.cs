@@ -131,8 +131,19 @@ public sealed record ConnectHostAuthorizationStatus(bool SubscriberPresent, int 
 /// connections are live, every <see cref="ConnectHostAuthorizationOptions.ServerCheckInterval"/>.</item>
 /// </list>
 /// </summary>
+public interface IConnectHostAuthorizationServer : IAsyncDisposable
+{
+    ConnectHostAuthorizationStatus Status { get; }
+    void Start();
+    Task<IReadOnlyList<string>> RevokeDeviceAsync(string deviceId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> RevokeMembershipAsync(string membershipId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> RevokeTicketAsync(string ticketId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> DisableConnectAsync(Guid serverId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<string>> CloseServerConnectionsAsync(Guid serverId, CancellationToken cancellationToken);
+}
+
 [SupportedOSPlatform("windows")]
-public sealed class ConnectHostAuthorizationPipeServer : IAsyncDisposable
+public sealed class ConnectHostAuthorizationPipeServer : IConnectHostAuthorizationServer
 {
     /// <summary>
     /// The host transport needs two connections (requests and the subscription) and a few more

@@ -15,7 +15,16 @@ namespace ServerManager.Infrastructure.Connect;
 /// supervisor still holds are verified before a request containing an auth key is written.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed partial class ConnectHostTransportControlClient
+public interface IConnectHostTransportControlClient
+{
+    Task<ConnectHostTransportHello> HelloAsync(CancellationToken cancellationToken);
+    Task<ConnectHostTransportStatus> StatusAsync(CancellationToken cancellationToken);
+    Task<string> EnrollAsync(string authKey, string hostname, CancellationToken cancellationToken);
+    Task<JsonElement> DiagnosticsAsync(CancellationToken cancellationToken);
+}
+
+[SupportedOSPlatform("windows")]
+public sealed partial class ConnectHostTransportControlClient : IConnectHostTransportControlClient
 {
     private readonly string _pipeName;
     private readonly Func<int?> _runningProcessId;
@@ -23,7 +32,7 @@ public sealed partial class ConnectHostTransportControlClient
     private readonly TimeSpan _enrollTimeout;
     private long _nextId;
 
-    public ConnectHostTransportControlClient(ConnectHostTransportOptions options, ConnectHostTransportSupervisor supervisor)
+    public ConnectHostTransportControlClient(ConnectHostTransportOptions options, IConnectHostTransportSupervisor supervisor)
         : this(
             (options ?? throw new ArgumentNullException(nameof(options))).ControlPipeName,
             ProcessIdGetter(supervisor),
@@ -32,7 +41,7 @@ public sealed partial class ConnectHostTransportControlClient
     {
     }
 
-    private static Func<int?> ProcessIdGetter(ConnectHostTransportSupervisor supervisor)
+    private static Func<int?> ProcessIdGetter(IConnectHostTransportSupervisor supervisor)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
         return () => supervisor.RunningProcessId;

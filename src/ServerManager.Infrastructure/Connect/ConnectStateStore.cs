@@ -141,7 +141,12 @@ public sealed record ConnectOwnerState
 public sealed record ConnectRegisteredServerState(Guid ServerId, string Label, string HostBridge);
 
 /// <summary>Invite metadata only. The one-time secret is intentionally not representable.</summary>
-public sealed record ConnectInviteState(string InviteId, Guid ServerId, DateTimeOffset ExpiresAt, string State);
+public sealed record ConnectInviteState(
+    string InviteId,
+    Guid ServerId,
+    DateTimeOffset ExpiresAt,
+    string State,
+    DateTimeOffset CreatedAt = default);
 
 public sealed record ConnectMembershipState(
     string MembershipId,
@@ -151,7 +156,11 @@ public sealed record ConnectMembershipState(
     DateTimeOffset? KeyMintedAt,
     DateTimeOffset? EnrollmentPostedAt,
     string? ConfirmedNodeId,
-    string? LocalNickname);
+    string? LocalNickname,
+    string State = "pending",
+    DateTimeOffset CreatedAt = default,
+    DateTimeOffset? ApprovedAt = null,
+    string? NodeState = null);
 
 public sealed record ConnectRevocationState
 {

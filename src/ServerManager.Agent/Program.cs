@@ -18,6 +18,7 @@ using ServerManager.Infrastructure.Playit;
 using ServerManager.Infrastructure.Updates;
 using ServerManager.Core.Content;
 using ServerManager.Infrastructure.Content;
+using ServerManager.Infrastructure.Connect;
 
 var agentOptions = AgentOptions.Parse(args);
 var storageOptions = new SqliteStorageOptions(agentOptions.DataRoot);
@@ -70,6 +71,18 @@ builder.Services.AddSingleton<IClientStore, SqliteClientStore>();
 // Hosted services start in registration order. The database must exist before
 // polling, Playit recovery, scheduling, or metrics services can query stores.
 builder.Services.AddHostedService<DatabaseInitializationService>();
+var connectAgentPorts = agentOptions.LanEnabled
+    ? new[] { 5251, agentOptions.LanPort }
+    : new[] { new Uri(agentOptions.ApiUrl).Port };
+builder.Services.AddSingleton(new ConnectHostOptions(
+    agentOptions.DataRoot,
+    Path.Combine(AppContext.BaseDirectory, "1Salem.Connect.Host.Transport.exe"),
+    new Uri("https://connect.1salem.app/"),
+    connectAgentPorts));
+builder.Services.AddSingleton<IConnectHostRuntimeFactory, SystemConnectHostRuntimeFactory>();
+builder.Services.AddSingleton<ConnectHost>();
+builder.Services.AddSingleton<ConnectOwnerWorkflow>();
+builder.Services.AddHostedService<ConnectHostService>();
 builder.Services.AddSingleton<ISecretStore>(certificateSecretStore);
 builder.Services.AddSingleton(certificateIdentity);
 builder.Services.AddSingleton<ILocalAgentCredential>(
@@ -1447,6 +1460,7 @@ app.MapPost(
         return Results.Ok(result);
     });
 app.MapContentEndpoints();
+app.MapConnectEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 static string DescribeActivity(string action) => action switch

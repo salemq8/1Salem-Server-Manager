@@ -23,8 +23,8 @@ namespace ServerManager.Infrastructure.Connect;
 /// The API host is fixed; there is no base-URL option that could send the credential anywhere
 /// else. Ids are restricted to letters and digits before they go into a path. Without an
 /// explicitly configured credential every call throws <see cref="ConnectNotConfiguredException"/>
-/// before anything is sent. The caller owns the <see cref="HttpClient"/> and should give it a
-/// handler that does not follow redirects.
+/// before anything is sent. The provisioner owns the <see cref="HttpClient"/>; its handler must
+/// not follow redirects.
 /// </summary>
 public sealed class TailscaleApiProvisioner : IConnectProvisioner
 {
@@ -472,5 +472,11 @@ public sealed class TailscaleApiProvisioner : IConnectProvisioner
 
         value = text;
         return true;
+    }
+
+    public void Dispose()
+    {
+        _http.Dispose();
+        _tokenGate.Dispose();
     }
 }

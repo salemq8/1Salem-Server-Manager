@@ -12,7 +12,26 @@ using ServerManager.Connect.Core.Identity;
 namespace ServerManager.Infrastructure.Connect;
 
 /// <summary>Hardened owner-side client for every broker owner route.</summary>
-public sealed partial class ConnectOwnerBrokerClient : IDisposable
+public interface IConnectOwnerBrokerClient : IDisposable
+{
+    Task<string> RegisterOwnerAsync(CancellationToken cancellationToken);
+    Task PutServerAsync(Guid serverId, string label, string hostBridge, CancellationToken cancellationToken);
+    Task<ConnectBrokerInvite> CreateInviteAsync(Guid serverId, int ttlSeconds, CancellationToken cancellationToken);
+    Task RevokeInviteAsync(string inviteId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ConnectBrokerMembership>> GetMembershipsAsync(CancellationToken cancellationToken);
+    Task ApproveMembershipAsync(string membershipId, CancellationToken cancellationToken);
+    Task RejectMembershipAsync(string membershipId, CancellationToken cancellationToken);
+    Task PutEnrollmentAsync(string membershipId, string ciphertext, CancellationToken cancellationToken);
+    Task ConfirmNodeAsync(string membershipId, string nodeId, CancellationToken cancellationToken);
+    Task RejectNodeAsync(string membershipId, string nodeId, CancellationToken cancellationToken);
+    Task<ConnectBrokerRevocationResult> RevokeMembershipAsync(string membershipId, CancellationToken cancellationToken);
+    Task RevokeDeviceAsync(string deviceId, CancellationToken cancellationToken);
+    Task RevokeSessionAsync(string ticketId, CancellationToken cancellationToken);
+    Task<ConnectBrokerRevocationPage> GetRevocationsAsync(long after, CancellationToken cancellationToken);
+    Task<byte[]> GetTicketKeysAsync(CancellationToken cancellationToken);
+}
+
+public sealed partial class ConnectOwnerBrokerClient : IConnectOwnerBrokerClient
 {
     private const int MaxResponseBytes = 64 * 1024;
     private readonly Uri _origin;

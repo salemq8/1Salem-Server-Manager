@@ -8,7 +8,7 @@ namespace ServerManager.Infrastructure.Connect;
 /// reports, and delete a revoked friend's node. The credential behind it lives on the owner's
 /// PC only; the broker never sees it.
 /// </summary>
-public interface IConnectProvisioner
+public interface IConnectProvisioner : IDisposable
 {
     /// <summary>A one-off host key tagged only <c>tag:onesalem-host</c>.</summary>
     Task<EnrollmentSecret> CreateHostAuthKeyAsync(CancellationToken cancellationToken);
