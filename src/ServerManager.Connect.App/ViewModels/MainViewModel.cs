@@ -43,7 +43,8 @@ public sealed class MainViewModel : ObservableObject, INavigator
             _sessions = new SessionService(services.Broker, context.Transport, services.TransportProcess, context.Log);
         }
 
-        FlowDirection = CultureInfo.CurrentUICulture.TextInfo.IsRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        var culture = CultureInfo.CurrentUICulture;
+        FlowDirection = culture.TextInfo.IsRightToLeft && Text.HasOwnTable(culture) ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         ShowServersCommand = new RelayCommand(ShowServers, () => CanUseServers);
         ShowDiagnosticsCommand = new RelayCommand(ShowDiagnostics);
     }

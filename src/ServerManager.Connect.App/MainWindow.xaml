@@ -56,8 +56,13 @@
                             Style="{StaticResource QuietButtonStyle}"
                             AutomationProperties.Name="{x:Static loc:Text.NavDiagnostics}" />
                 </StackPanel>
+                <!-- The product name is Latin text that starts with a digit; laid out right to left it
+                     would reorder, so it keeps its own direction inside an Arabic window. Sized to its
+                     text, it still sits at the window's start edge (right in Arabic, left in English). -->
                 <TextBlock Text="{Binding Title}"
                            Style="{StaticResource SectionTitleStyle}"
+                           FlowDirection="LeftToRight"
+                           HorizontalAlignment="Left"
                            VerticalAlignment="Center" />
             </DockPanel>
         </Border>

@@ -133,9 +133,9 @@ This missing-credential gate is no longer current; the completed run used the se
    revocation and restart recovery passed. The LocalSystem identity, SYSTEM-only state, pipe
    identities, sidecar lifecycle and service restart are now accepted separately in
    [CONNECT_SYSTEM_SERVICE_ACCEPTANCE.md](CONNECT_SYSTEM_SERVICE_ACCEPTANCE.md) (24/24).
-3. Perform interactive WPF visual/keyboard acceptance in English and Arabic, including RTL,
-   actual Windows clipboard behavior and error/recovery presentation. Headless tests and XAML
-   compilation are verified here; visual rendering and clipboard history UI are not claimed.
+3. WPF visual/keyboard acceptance in English and Arabic (RTL), with the real Windows clipboard, is
+   complete: [CONNECT_UI_ACCEPTANCE.md](CONNECT_UI_ACCEPTANCE.md). The Windows clipboard history
+   panel itself, other DPI settings and high-contrast themes are not claimed.
 4. Separately authorize Cloudflare provisioning/deployment and verify the real D1 migrations,
    secrets, key rotation, restore procedure, client-IP behavior and outer limiter. Placeholder
    deployment identifiers must be resolved before a real deploy.

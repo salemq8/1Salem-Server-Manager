@@ -89,7 +89,7 @@ public sealed class EnrollmentTests
 
         Assert.Single(app.Transport.Enrollments);
         var failed = Assert.Single(servers.Servers);
-        Assert.Equal("Enrollment pending", failed.StatusText);
+        Assert.Equal("Setup failed", failed.StatusText);
         Assert.Equal("Setting up this server failed. Ask the server owner to approve this PC again.", failed.Problem);
     }
 
@@ -115,7 +115,7 @@ public sealed class EnrollmentTests
         await servers.RefreshAsync(CancellationToken.None);
 
         var stuck = Assert.Single(servers.Servers);
-        Assert.Equal("Enrollment pending", stuck.StatusText);
+        Assert.Equal("Setup failed", stuck.StatusText);
         Assert.Equal("Setting up this server failed. Ask the server owner to approve this PC again.", stuck.Problem);
         Assert.Single(app.Transport.Enrollments);
         Assert.Empty(app.Broker.Bound);

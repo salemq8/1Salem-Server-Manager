@@ -49,6 +49,7 @@ public static class Text
     public static string StatusEnrollmentPending => Get(nameof(StatusEnrollmentPending));
     public static string StatusConfirmationPending => Get(nameof(StatusConfirmationPending));
     public static string StatusConfirmationFailed => Get(nameof(StatusConfirmationFailed));
+    public static string StatusSetupFailed => Get(nameof(StatusSetupFailed));
     public static string StatusReady => Get(nameof(StatusReady));
     public static string StatusDeclined => Get(nameof(StatusDeclined));
     public static string StatusUnavailable => Get(nameof(StatusUnavailable));
@@ -103,6 +104,24 @@ public static class Text
     /// <summary>A table entry with <c>{0}</c> filled in for the current culture.</summary>
     public static string Format(string template, object argument) =>
         string.Format(CultureInfo.CurrentCulture, template, argument);
+
+    /// <summary>
+    /// Whether this culture (or a parent of it, such as "ar" for "ar-SA") has its own string
+    /// table. A right-to-left layout is only right when the words shown are right-to-left too;
+    /// without a translation the app shows English and must stay left to right.
+    /// </summary>
+    public static bool HasOwnTable(CultureInfo culture)
+    {
+        for (var current = culture; !current.Equals(CultureInfo.InvariantCulture); current = current.Parent)
+        {
+            if (Table.GetResourceSet(current, createIfNotExists: true, tryParents: false) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static string Get(string key) =>
         Table.GetString(key, CultureInfo.CurrentUICulture) ??

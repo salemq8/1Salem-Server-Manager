@@ -53,6 +53,7 @@
   <data name="StatusEnrollmentPending" xml:space="preserve"><value>Enrollment pending</value></data>
   <data name="StatusConfirmationPending" xml:space="preserve"><value>Waiting for the owner to finish setting up this PC</value></data>
   <data name="StatusConfirmationFailed" xml:space="preserve"><value>Setting up this PC failed — ask the owner to invite you again</value></data>
+  <data name="StatusSetupFailed" xml:space="preserve"><value>Setup failed</value></data>
   <data name="StatusReady" xml:space="preserve"><value>Ready</value></data>
   <data name="StatusDeclined" xml:space="preserve"><value>Declined</value></data>
   <data name="StatusUnavailable" xml:space="preserve"><value>Not available</value></data>

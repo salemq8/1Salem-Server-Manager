@@ -12,7 +12,7 @@
             <Border x:Name="CreateCard" Style="{StaticResource SectionCardStyle}" Margin="0,18,0,0">
                 <StackPanel>
                     <TextBlock x:Name="ValidityLabel" Style="{StaticResource MetricLabelStyle}" />
-                    <ComboBox x:Name="ValidityBox" Margin="0,8,0,0" SelectedIndex="0">
+                    <ComboBox x:Name="ValidityBox" Margin="0,8,0,0" SelectedIndex="0" AutomationProperties.LabeledBy="{Binding ElementName=ValidityLabel}">
                         <ComboBoxItem Tag="86400" />
                         <ComboBoxItem Tag="259200" />
                         <ComboBoxItem Tag="604800" />
@@ -27,11 +27,11 @@
                     <TextBlock x:Name="ShownOnceText" Style="{StaticResource SecondaryTextStyle}"
                                TextWrapping="Wrap" />
                     <TextBlock x:Name="LinkLabel" Style="{StaticResource MetricLabelStyle}" Margin="0,16,0,6" />
-                    <TextBox x:Name="LinkBox" IsReadOnly="True" FlowDirection="LeftToRight" />
+                    <TextBox x:Name="LinkBox" IsReadOnly="True" FlowDirection="LeftToRight" AutomationProperties.LabeledBy="{Binding ElementName=LinkLabel}" />
                     <Button x:Name="CopyLinkButton" Style="{StaticResource QuietButtonStyle}"
                             HorizontalAlignment="Left" Margin="0,8,0,0" Click="CopyLink_Click" />
                     <TextBlock x:Name="CodeLabel" Style="{StaticResource MetricLabelStyle}" Margin="0,16,0,6" />
-                    <TextBox x:Name="CodeBox" IsReadOnly="True" FlowDirection="LeftToRight" />
+                    <TextBox x:Name="CodeBox" IsReadOnly="True" FlowDirection="LeftToRight" AutomationProperties.LabeledBy="{Binding ElementName=CodeLabel}" />
                     <Button x:Name="CopyCodeButton" Style="{StaticResource QuietButtonStyle}"
                             HorizontalAlignment="Left" Margin="0,8,0,0" Click="CopyCode_Click" />
                     <TextBlock x:Name="ExpiryText" Style="{StaticResource SecondaryTextStyle}" Margin="0,14,0,0" />

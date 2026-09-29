@@ -25,10 +25,10 @@
                                TextWrapping="Wrap" />
                     <TextBlock x:Name="ClientIdLabel" Style="{StaticResource MetricLabelStyle}"
                                Margin="0,16,0,6" />
-                    <TextBox x:Name="ClientIdBox" FlowDirection="LeftToRight" />
+                    <TextBox x:Name="ClientIdBox" FlowDirection="LeftToRight" AutomationProperties.LabeledBy="{Binding ElementName=ClientIdLabel}" />
                     <TextBlock x:Name="ClientSecretLabel" Style="{StaticResource MetricLabelStyle}"
                                Margin="0,14,0,6" />
-                    <PasswordBox x:Name="ClientSecretBox" FlowDirection="LeftToRight" />
+                    <PasswordBox x:Name="ClientSecretBox" FlowDirection="LeftToRight" AutomationProperties.LabeledBy="{Binding ElementName=ClientSecretLabel}" />
                     <TextBlock x:Name="ActionStatus" Style="{StaticResource SecondaryTextStyle}"
                                Margin="0,10,0,0" TextWrapping="Wrap" />
                     <WrapPanel Margin="0,16,0,0">

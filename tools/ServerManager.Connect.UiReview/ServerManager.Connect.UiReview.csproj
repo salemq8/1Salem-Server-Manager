@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Developer-only UI review renderer for 1Salem Connect. Not part of the solution and never
+    shipped. It renders the real owner Connect windows (against an in-process fake Agent) and the
+    real friend-app pages (against the friend-app test fakes) to PNG, in any culture, and records
+    each screen's keyboard order. See README.md.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <StartupObject>ServerManager.Connect.UiReview.Program</StartupObject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ServerManager.Client\ServerManager.Client.csproj" />
+    <ProjectReference Include="..\..\src\ServerManager.Connect.App\ServerManager.Connect.App.csproj" />
+    <!-- The client's implicit Window style names this icon relative to the entry assembly. -->
+    <Resource Include="..\..\assets\branding\1SalemServerManager.ico" Link="Assets\1SalemServerManager.ico" />
+    <!-- FakeProcessInspector uses friend-app internals and is not needed to render pages. -->
+    <Compile Include="..\..\tests\ServerManager.Connect.App.Tests\Fakes\*.cs" Exclude="..\..\tests\ServerManager.Connect.App.Tests\Fakes\FakeProcessInspector.cs" Link="Fakes\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

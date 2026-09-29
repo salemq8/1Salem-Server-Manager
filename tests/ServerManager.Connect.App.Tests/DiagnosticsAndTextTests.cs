@@ -82,7 +82,7 @@ public sealed class DiagnosticsAndTextTests
     {
         var forbidden = new Regex(@"\b(DERP|WireGuard|OAuth|ACL|node ?keys?|tailnet|Tailscale|tsnet|ticket)\b", RegexOptions.IgnoreCase);
 
-        var leaks = Entries()
+        var leaks = Entries().Concat(Entries(Arabic))
             .Where(entry => !entry.Key.StartsWith("Diagnostics", StringComparison.Ordinal) && forbidden.IsMatch(entry.Value))
             .Select(entry => entry.Key)
             .ToList();
@@ -90,9 +90,31 @@ public sealed class DiagnosticsAndTextTests
         Assert.Empty(leaks);
     }
 
-    private static Dictionary<string, string> Entries()
+    [Fact]
+    public void Arabic_table_translates_every_string_with_the_same_placeholders()
     {
-        var set = Text.Table.GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: true)
+        var english = Entries();
+        var arabic = Entries(Arabic);
+        var placeholders = new Regex(@"\{\d+\}");
+        static string[] Slots(Regex pattern, string text) => [.. pattern.Matches(text).Select(match => match.Value).Order(StringComparer.Ordinal)];
+
+        Assert.Equal(english.Keys.Order(StringComparer.Ordinal), arabic.Keys.Order(StringComparer.Ordinal));
+        Assert.All(english, entry => Assert.Equal(Slots(placeholders, entry.Value), Slots(placeholders, arabic[entry.Key])));
+    }
+
+    [Fact]
+    public void Only_a_translated_right_to_left_language_turns_the_window_right_to_left()
+    {
+        Assert.True(Text.HasOwnTable(CultureInfo.GetCultureInfo("ar-SA")));
+        // No Hebrew table: the app shows English, which must stay left to right.
+        Assert.False(Text.HasOwnTable(CultureInfo.GetCultureInfo("he-IL")));
+    }
+
+    private static readonly CultureInfo Arabic = CultureInfo.GetCultureInfo("ar");
+
+    private static Dictionary<string, string> Entries(CultureInfo? culture = null)
+    {
+        var set = Text.Table.GetResourceSet(culture ?? CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: culture is null)
             ?? throw new MissingManifestResourceException("The string table is missing.");
         return set.Cast<DictionaryEntry>().ToDictionary(entry => (string)entry.Key, entry => (string)entry.Value!);
     }

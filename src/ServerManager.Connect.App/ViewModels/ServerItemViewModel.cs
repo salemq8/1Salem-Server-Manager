@@ -6,12 +6,13 @@ namespace ServerManager.Connect.App.ViewModels;
 /// <summary>One server card. Rebuilt on every refresh, so it holds a snapshot and never changes.</summary>
 public sealed class ServerItemViewModel : ObservableObject
 {
-    public ServerItemViewModel(Membership membership, string? problem, INavigator navigator)
+    public ServerItemViewModel(Membership membership, string? problem, INavigator navigator, bool setupFailed = false)
     {
         Membership = membership ?? throw new ArgumentNullException(nameof(membership));
         ArgumentNullException.ThrowIfNull(navigator);
         Problem = problem;
-        StatusText = Describe(membership, navigator.FindConnection(membership.MembershipId));
+        // A failed setup must not also read "pending" right above the failure it explains.
+        StatusText = setupFailed ? Text.StatusSetupFailed : Describe(membership, navigator.FindConnection(membership.MembershipId));
         OpenCommand = new RelayCommand(() => navigator.ShowConnection(Membership), () => CanOpen);
     }
 

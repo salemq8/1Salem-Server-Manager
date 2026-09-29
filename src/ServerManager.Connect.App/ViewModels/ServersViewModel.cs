@@ -122,7 +122,7 @@ public sealed class ServersViewModel : ObservableObject, IPageLifetime
             {
                 EnrollmentOutcome.Completed => new ServerItemViewModel(
                     membership with { NodeId = result.NodeId, NodeState = MembershipNodeState.Candidate }, null, _navigator),
-                EnrollmentOutcome.Failed => new ServerItemViewModel(membership, Text.ErrorSetupFailed, _navigator),
+                EnrollmentOutcome.Failed => new ServerItemViewModel(membership, Text.ErrorSetupFailed, _navigator, setupFailed: true),
                 _ => new ServerItemViewModel(membership, null, _navigator)
             };
         }

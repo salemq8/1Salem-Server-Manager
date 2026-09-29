@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arabic translation of Strings.resx. Keys and {n} placeholders must match the English table
+  exactly (a test checks both). Product and game names (1Salem Connect, Minecraft and its menu
+  names) stay as the friend sees them in those programs. Only keys that start with
+  "Diagnostics" may use network vocabulary.
+-->
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppTitle" xml:space="preserve">
+    <value>1Salem Connect</value>
+  </data>
+  <data name="NavServers" xml:space="preserve">
+    <value>الخوادم</value>
+  </data>
+  <data name="NavDiagnostics" xml:space="preserve">
+    <value>التشخيص</value>
+  </data>
+  <data name="CommonBack" xml:space="preserve">
+    <value>رجوع</value>
+  </data>
+  <data name="CommonRetry" xml:space="preserve">
+    <value>حاول مرة أخرى</value>
+  </data>
+  <data name="WelcomeTitle" xml:space="preserve">
+    <value>العب على خوادم أصدقائك</value>
+  </data>
+  <data name="WelcomeBody" xml:space="preserve">
+    <value>انضم إلى خادم ألعاب صديقك باستخدام دعوة. يمر اتصال اللعبة وحده عبر 1Salem Connect، ويبقى باقي اتصال هذا الكمبيوتر بالإنترنت كما هو.</value>
+  </data>
+  <data name="WelcomeGetStarted" xml:space="preserve">
+    <value>ابدأ</value>
+  </data>
+  <data name="NotConfigured" xml:space="preserve">
+    <value>لم يتم إعداد 1Salem Connect بعد</value>
+  </data>
+  <data name="NotConfiguredDetail" xml:space="preserve">
+    <value>هذه النسخة من 1Salem Connect ليس لها عنوان خدمة، لذا لا يمكنها الانضمام إلى الخوادم. ثبّت الإصدار الرسمي من 1Salem Connect.</value>
+  </data>
+  <data name="InviteTitle" xml:space="preserve">
+    <value>أدخل دعوتك</value>
+  </data>
+  <data name="InviteBody" xml:space="preserve">
+    <value>الصق رابط الدعوة أو رمزها الذي أرسله إليك صاحب الخادم.</value>
+  </data>
+  <data name="InviteInputLabel" xml:space="preserve">
+    <value>رابط الدعوة أو رمزها</value>
+  </data>
+  <data name="InviteJoin" xml:space="preserve">
+    <value>انضمام</value>
+  </data>
+  <data name="InviteNotValid" xml:space="preserve">
+    <value>هذه الدعوة غير صالحة. اطلب دعوة جديدة من صاحب الخادم.</value>
+  </data>
+  <data name="WaitingTitle" xml:space="preserve">
+    <value>بانتظار الموافقة</value>
+  </data>
+  <data name="WaitingBody" xml:space="preserve">
+    <value>يجب أن يوافق صاحب {0} على هذا الكمبيوتر. تتحقق هذه الصفحة تلقائيًا، ويمكنك إغلاق التطبيق والعودة لاحقًا.</value>
+  </data>
+  <data name="WaitingStatus" xml:space="preserve">
+    <value>بانتظار موافقة صاحب الخادم…</value>
+  </data>
+  <data name="WaitingDeclined" xml:space="preserve">
+    <value>رفض صاحب الخادم هذا الطلب.</value>
+  </data>
+  <data name="ServersTitle" xml:space="preserve">
+    <value>خوادمك</value>
+  </data>
+  <data name="ServersEmpty" xml:space="preserve">
+    <value>لم تنضم إلى أي خادم بعد.</value>
+  </data>
+  <data name="ServersAdd" xml:space="preserve">
+    <value>إضافة خادم</value>
+  </data>
+  <data name="ServersRefresh" xml:space="preserve">
+    <value>تحديث</value>
+  </data>
+  <data name="ServersOpen" xml:space="preserve">
+    <value>فتح</value>
+  </data>
+  <data name="ServersOpenNamed" xml:space="preserve">
+    <value>فتح {0}</value>
+  </data>
+  <data name="StatusWaitingForApproval" xml:space="preserve">
+    <value>بانتظار الموافقة</value>
+  </data>
+  <data name="StatusEnrollmentPending" xml:space="preserve">
+    <value>بانتظار إعداد هذا الكمبيوتر</value>
+  </data>
+  <data name="StatusConfirmationPending" xml:space="preserve">
+    <value>بانتظار أن يُكمل صاحب الخادم إعداد هذا الكمبيوتر</value>
+  </data>
+  <data name="StatusConfirmationFailed" xml:space="preserve">
+    <value>فشل إعداد هذا الكمبيوتر — اطلب من صاحب الخادم دعوتك مرة أخرى</value>
+  </data>
+  <data name="StatusSetupFailed" xml:space="preserve">
+    <value>فشل الإعداد</value>
+  </data>
+  <data name="StatusReady" xml:space="preserve">
+    <value>جاهز</value>
+  </data>
+  <data name="StatusDeclined" xml:space="preserve">
+    <value>مرفوض</value>
+  </data>
+  <data name="StatusUnavailable" xml:space="preserve">
+    <value>غير متاح</value>
+  </data>
+  <data name="StateConnecting" xml:space="preserve">
+    <value>جارٍ الاتصال…</value>
+  </data>
+  <data name="StateConnected" xml:space="preserve">
+    <value>متصل</value>
+  </data>
+  <data name="StateDisconnected" xml:space="preserve">
+    <value>غير متصل</value>
+  </data>
+  <data name="StateServerOffline" xml:space="preserve">
+    <value>الخادم غير متصل</value>
+  </data>
+  <data name="StateAccessExpired" xml:space="preserve">
+    <value>انتهت صلاحية الوصول</value>
+  </data>
+  <data name="StateAccessRevoked" xml:space="preserve">
+    <value>تم إلغاء الوصول</value>
+  </data>
+  <data name="ConnectionConnect" xml:space="preserve">
+    <value>اتصال</value>
+  </data>
+  <data name="ConnectionDisconnect" xml:space="preserve">
+    <value>قطع الاتصال</value>
+  </data>
+  <data name="ConnectionCopy" xml:space="preserve">
+    <value>نسخ</value>
+  </data>
+  <data name="ConnectionCopyAddress" xml:space="preserve">
+    <value>نسخ عنوان الخادم</value>
+  </data>
+  <data name="ConnectionCopied" xml:space="preserve">
+    <value>تم نسخ العنوان</value>
+  </data>
+  <data name="ConnectionAddressLabel" xml:space="preserve">
+    <value>عنوان الخادم</value>
+  </data>
+  <data name="ConnectionAddressHint" xml:space="preserve">
+    <value>في Minecraft، افتح Multiplayer واختر Direct Connection ثم أدخل هذا العنوان.</value>
+  </data>
+  <data name="ErrorBrokerUnreachable" xml:space="preserve">
+    <value>تعذر الوصول إلى 1Salem Connect. تحقق من اتصالك بالإنترنت ثم حاول مرة أخرى.</value>
+  </data>
+  <data name="ErrorTooManyAttempts" xml:space="preserve">
+    <value>محاولات كثيرة جدًا. انتظر دقيقة ثم حاول مرة أخرى.</value>
+  </data>
+  <data name="ErrorDeviceNotAccepted" xml:space="preserve">
+    <value>تعذر التحقق من هذا الكمبيوتر. تأكد من صحة التاريخ والوقت ثم حاول مرة أخرى.</value>
+  </data>
+  <data name="ErrorTransportUnavailable" xml:space="preserve">
+    <value>مكوّن الاتصال لا يعمل. أعد تشغيل 1Salem Connect، وأعد تثبيته إذا استمرت المشكلة.</value>
+  </data>
+  <data name="ErrorTransportUntrusted" xml:space="preserve">
+    <value>أجاب برنامج آخر بدلًا من مكوّن الاتصال في 1Salem Connect، لذلك لم يُرسَل إليه أي شيء. أغلق النسخ الأخرى من 1Salem Connect أو أعد تشغيل هذا الكمبيوتر، ثم حاول مرة أخرى.</value>
+  </data>
+  <data name="ErrorSetupFailed" xml:space="preserve">
+    <value>فشل إعداد هذا الخادم. اطلب من صاحب الخادم الموافقة على هذا الكمبيوتر مرة أخرى.</value>
+  </data>
+  <data name="ErrorIdentityUnavailable" xml:space="preserve">
+    <value>لا يستطيع مستخدم Windows الحالي فتح هوية 1Salem Connect المحفوظة على هذا الكمبيوتر، لذا يجب إقران هذا الكمبيوتر من جديد. الإقران من جديد غير متاح في هذا الإصدار بعد.</value>
+  </data>
+  <data name="ErrorSessionLost" xml:space="preserve">
+    <value>توقف الاتصال. اتصل مرة أخرى للمتابعة.</value>
+  </data>
+  <data name="ErrorCloseUnconfirmed" xml:space="preserve">
+    <value>لم يُغلَق الاتصال بعد، لذا قد يظل العنوان يعمل. يواصل 1Salem Connect المحاولة، ويمكنك أيضًا الضغط على قطع الاتصال مرة أخرى.</value>
+  </data>
+  <data name="ErrorUnexpected" xml:space="preserve">
+    <value>حدث خطأ ما. التفاصيل التقنية موجودة في التشخيص.</value>
+  </data>
+  <data name="DiagnosticsTitle" xml:space="preserve">
+    <value>التشخيص</value>
+  </data>
+  <data name="DiagnosticsBody" xml:space="preserve">
+    <value>تفاصيل تقنية لاستكشاف الأخطاء وإصلاحها. تُزال المفاتيح والتذاكر ورموز الدعوات قبل عرض أي شيء أو نسخه.</value>
+  </data>
+  <data name="DiagnosticsRefresh" xml:space="preserve">
+    <value>تحديث</value>
+  </data>
+  <data name="DiagnosticsCopy" xml:space="preserve">
+    <value>نسخ التشخيص</value>
+  </data>
+  <data name="DiagnosticsReportLabel" xml:space="preserve">
+    <value>تقرير التشخيص</value>
+  </data>
+  <data name="DiagnosticsApp" xml:space="preserve">
+    <value>إصدار التطبيق</value>
+  </data>
+  <data name="DiagnosticsBroker" xml:space="preserve">
+    <value>خدمة الدعوات</value>
+  </data>
+  <data name="DiagnosticsNotConfigured" xml:space="preserve">
+    <value>غير مُعدّ</value>
+  </data>
+  <data name="DiagnosticsDevelopmentMode" xml:space="preserve">
+    <value>وضع التطوير</value>
+  </data>
+  <data name="DiagnosticsDevice" xml:space="preserve">
+    <value>معرّف الجهاز</value>
+  </data>
+  <data name="DiagnosticsConfiguredMode" xml:space="preserve">
+    <value>وضع النقل (المُعدّ)</value>
+  </data>
+  <data name="DiagnosticsFakeMode" xml:space="preserve">
+    <value>وهمي، معرّف العقدة {0} (مُعلَن ذاتيًا، وليس حدًا أمنيًا)</value>
+  </data>
+  <data name="DiagnosticsTransport" xml:space="preserve">
+    <value>النقل</value>
+  </data>
+  <data name="DiagnosticsTransportNotRunning" xml:space="preserve">
+    <value>لا يعمل</value>
+  </data>
+  <data name="DiagnosticsTicketKeys" xml:space="preserve">
+    <value>مفاتيح التذاكر</value>
+  </data>
+  <data name="DiagnosticsNodes" xml:space="preserve">
+    <value>العقد (عقدة tsnet، معرّف العقدة، الحالة)</value>
+  </data>
+  <data name="DiagnosticsSessions" xml:space="preserve">
+    <value>الجلسات (المعرّف، المحلي، الحالة، جسر المضيف، الاتصالات)</value>
+  </data>
+  <data name="DiagnosticsErrors" xml:space="preserve">
+    <value>الأخطاء الأخيرة</value>
+  </data>
+  <data name="DiagnosticsTransportLog" xml:space="preserve">
+    <value>سجل النقل</value>
+  </data>
+  <data name="DiagnosticsNone" xml:space="preserve">
+    <value>لا يوجد</value>
+  </data>
+</root>

@@ -143,12 +143,16 @@ public partial class ConnectFriendsWindow : Window
             Text = view.State,
             Style = (Style)FindResource("SectionTitleStyle")
         });
-        panel.Children.Add(new TextBlock
+        // A pending friend has no setup progress yet; its status is already the heading.
+        if (!view.IsPending)
         {
-            Text = view.Setup,
-            Style = (Style)FindResource("SecondaryTextStyle"),
-            Margin = new Thickness(0, 4, 0, 0)
-        });
+            panel.Children.Add(new TextBlock
+            {
+                Text = view.Setup,
+                Style = (Style)FindResource("SecondaryTextStyle"),
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+        }
         panel.Children.Add(new TextBlock
         {
             Text = view.DeviceId,
@@ -170,6 +174,14 @@ public partial class ConnectFriendsWindow : Window
         }
         else
         {
+            var nicknameLabel = new TextBlock
+            {
+                Text = LocalizationService.Get("Connect.Friends.Nickname"),
+                Style = (Style)FindResource("MetricLabelStyle"),
+                Margin = new Thickness(0, 12, 0, 6)
+            };
+            panel.Children.Add(nicknameLabel);
+            actions.Margin = new Thickness(0);
             var nickname = new TextBox
             {
                 Text = _nicknameDrafts.Get(friend.MembershipId, view.Nickname),
@@ -177,6 +189,7 @@ public partial class ConnectFriendsWindow : Window
                 Margin = new Thickness(0, 0, 8, 8),
                 ToolTip = LocalizationService.Get("Connect.Friends.Nickname")
             };
+            System.Windows.Automation.AutomationProperties.SetLabeledBy(nickname, nicknameLabel);
             nickname.TextChanged += (_, _) => _nicknameDrafts.Set(friend.MembershipId, nickname.Text);
             actions.Children.Add(nickname);
             actions.Children.Add(ActionButton(
