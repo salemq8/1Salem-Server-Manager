@@ -182,13 +182,16 @@ function New-SourceArchive {
             Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
                 Where-Object {
                 $candidate = $_.FullName
+                # Match exclusions below the repository root only; the root itself may sit under
+                # an excluded name (for example a worktree in .claude\worktrees).
+                $inRepo = '\' + $candidate.Substring($root.Length).TrimStart('\', '/')
                 -not $candidate.Equals(
                     (Join-Path $root 'build-info.json'),
                     [System.StringComparison]::OrdinalIgnoreCase) -and
                 # A local broker secrets file never ships (its .example twin does).
                 $_.Name -notin @('.dev.vars', '.env') -and
                 -not ($excluded | Where-Object {
-                    $candidate.IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                    $inRepo.IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                 })
             } | ForEach-Object {
                 $relative = $_.FullName.Substring($root.Length).TrimStart(
