@@ -114,9 +114,11 @@ same state.
 ## Production deployment runbook (requires separate approval)
 
 This runbook is documentation only. Running any command in this section creates or changes remote
-Cloudflare state and requires Salem's explicit approval. The intended API route is
-`connect.1salem.app/v1/*`; the invite landing page at `connect.1salem.app/i#...` is not handled by
-this Worker.
+Cloudflare state and requires Salem's explicit approval. The Worker serves exactly two routes:
+the API at `connect.1salem.app/v1/*` and the static invite landing page at `connect.1salem.app/i`
+(invite links are `https://connect.1salem.app/i#<secret>`; the fragment never reaches the Worker).
+Every command below needs Wrangler logged in to the Cloudflare account that owns `1salem.app`
+(`npx wrangler login`, done by Salem).
 
 1. Confirm the `1salem.app` zone already has the intended `connect.1salem.app` DNS record. Do not
    let Worker deployment create or replace DNS unexpectedly.
@@ -136,13 +138,15 @@ this Worker.
    npm run migrate:remote
    ```
 
-5. Set both required secrets through Wrangler's interactive prompt. Never put their values on a
-   command line, in chat, in this file or in source control:
+5. Create and store both required secrets. The script generates them in memory, pipes each to
+   `wrangler secret put`, never prints or saves them, refuses to replace existing ones, and prints
+   only the public ticket key (`kid`, SPKI):
 
    ```powershell
-   npx wrangler secret put TICKET_SIGNING_KEY --env production
-   npx wrangler secret put INVITE_PEPPER --env production
+   node scripts/put-production-secrets.mjs --confirm-production
    ```
+
+   Never put their values on a command line, in chat, in this file or in source control.
 
 6. In Cloudflare Network settings, leave **Pseudo IPv4** off or set it to **Add header**. Do not
    use **Overwrite headers**, which would defeat the broker's IPv6 /64 grouping. Optionally add a
@@ -157,8 +161,12 @@ this Worker.
 
 8. Review the dry-run bundle and configuration. Only then, in the separately approved deployment
    step, run `npx wrangler deploy --env production`. Verify that `workers.dev` and preview URLs are
-   disabled, the route is only `/v1/*`, the `FLOOD` binding is present, and invocation logs are
-   disabled. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing limiter fail closed with 503.
+   disabled, the routes are only `/v1/*` and `/i`, the `FLOOD` binding is present, and invocation
+   logs are disabled. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing limiter fail closed with 503.
+9. Smoke-check the live Worker read-only: `GET https://connect.1salem.app/v1/keys` returns the `kid`
+   printed in step 5, and `GET https://connect.1salem.app/i` returns the landing page. Once the
+   1Salem Connect download page exists, add `CONNECT_DOWNLOAD_URL` (an https URL) to
+   `env.production.vars` and deploy again so the landing page links to it.
 
 ### D1 restore procedure
 

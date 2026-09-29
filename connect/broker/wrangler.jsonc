@@ -49,6 +49,11 @@
         {
           "pattern": "connect.1salem.app/v1/*",
           "zone_name": "1salem.app"
+        },
+        {
+          // The invite landing page (https://connect.1salem.app/i#<secret>); exactly /i, nothing else.
+          "pattern": "connect.1salem.app/i",
+          "zone_name": "1salem.app"
         }
       ],
       "d1_databases": [
@@ -80,6 +85,8 @@
       ],
       "vars": {
         "CONNECT_REQUIRE_FLOOD_LIMIT": "true"
+        // Add "CONNECT_DOWNLOAD_URL": "https://…" once the 1Salem Connect download page exists;
+        // until then the invite page shows the steps without a download link.
       },
       "observability": {
         "enabled": true,

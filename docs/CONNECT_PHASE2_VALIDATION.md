@@ -136,9 +136,14 @@ This missing-credential gate is no longer current; the completed run used the se
 3. WPF visual/keyboard acceptance in English and Arabic (RTL), with the real Windows clipboard, is
    complete: [CONNECT_UI_ACCEPTANCE.md](CONNECT_UI_ACCEPTANCE.md). The Windows clipboard history
    panel itself, other DPI settings and high-contrast themes are not claimed.
-4. Separately authorize Cloudflare provisioning/deployment and verify the real D1 migrations,
-   secrets, key rotation, restore procedure, client-IP behavior and outer limiter. Placeholder
-   deployment identifiers must be resolved before a real deploy.
+4. Cloudflare is prepared but not deployed; it needs Salem's authorization. The Worker serves the
+   API (`/v1/*`) and the static invite landing page (`/i`); `scripts/put-production-secrets.mjs`
+   creates the production secrets without exposing them; the production dry-run builds with the
+   D1, `FLOOD` and fail-closed limiter bindings (broker tests 120/120). Still open at deploy time,
+   because they need the Cloudflare account: the real D1 database id (from `wrangler d1 create`),
+   confirming the rate-limit `namespace_id` is unused and the `connect.1salem.app` DNS record
+   exists, remote migrations, and the post-deploy read-only smoke check. See the broker README
+   runbook.
 5. Keep packaging/release authorization separate. Palworld/UDP and the existing deferred pipe
    denial-of-service / friend-card refresh limitations remain outside this delivery; see
    `CONNECT_ARCHITECTURE.md` §21 and `DEFERRED_ISSUES.md`.

@@ -22,4 +22,6 @@ export interface Env {
    * not_configured) instead of silently running without its outer limiter.
    */
   CONNECT_REQUIRE_FLOOD_LIMIT?: string;
+  /** Not a secret: the https page where friends download 1Salem Connect, linked from GET /i. */
+  CONNECT_DOWNLOAD_URL?: string;
 }

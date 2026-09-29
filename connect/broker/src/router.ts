@@ -7,6 +7,7 @@ import type { Caller, CallerKind, RequestContext } from "./context";
 import { LIMITS, type Limit } from "./ratelimit";
 import { putEnrollment, takeEnrollment } from "./routes/enrollment";
 import { registerDevice, registerOwner } from "./routes/identities";
+import { invitePage } from "./routes/invitePage";
 import { createInvite, redeemInvite, revokeInvite } from "./routes/invites";
 import { getKeys } from "./routes/keys";
 import {
@@ -39,6 +40,8 @@ const { ownerReads, ownerWrites, deviceCalls, redeemPerDevice, sessionsPerDevice
 
 const ROUTES: Route[] = [
   { method: "GET", path: path("/v1/keys"), auth: null, handler: getKeys },
+  // The invite landing page. The secret stays in the link's fragment, which never reaches here.
+  { method: "GET", path: path("/i"), auth: null, handler: invitePage },
   // Registration authenticates itself: the signing key arrives in the body (proof of possession).
   // It meters itself too, per client network and globally, since no key is known yet.
   { method: "POST", path: path("/v1/owners"), auth: null, handler: registerOwner },
