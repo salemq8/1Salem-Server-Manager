@@ -119,10 +119,10 @@ internal static partial class Program
         var inviteSecret = invite.Text("secret") ?? string.Empty;
         welcome!.GetStartedCommand.Execute(null);
         var invitePage = main.CurrentPage as InviteViewModel ?? throw new InvalidOperationException("Get started did not open the invite page");
-        invitePage.InviteText = $"https://connect.1salem.app/i#{run.UsedInviteSecret}";
+        invitePage.InviteText = $"https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#{run.UsedInviteSecret}";
         await invitePage.JoinAsync();
         var usedInviteError = invitePage.ErrorText;
-        invitePage.InviteText = $"https://connect.1salem.app/i#{inviteSecret}";
+        invitePage.InviteText = $"https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#{inviteSecret}";
         await invitePage.JoinAsync();
         var waiting = main.CurrentPage as WaitingViewModel;
         Record(

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Creates the broker's two PRODUCTION secrets and stores them with `wrangler secret put`, for the
-// separately approved deployment step only (README, "Production deployment runbook").
+// separately approved production step only (README, "Changing production"). Production already has
+// both secrets; the script refuses to replace them.
 //
 //   TICKET_SIGNING_KEY  PKCS#8 DER of a fresh ECDSA P-256 key, standard base64
 //   INVITE_PEPPER       32 CSPRNG bytes, base64url

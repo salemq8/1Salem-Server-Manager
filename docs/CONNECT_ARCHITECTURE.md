@@ -1,10 +1,11 @@
 # 1Salem Connect — Architecture (Build 8, Phase 2)
 
-Status: **Phase 2 implemented and locally verified; not deployed.** The broker, Agent host,
-owner UI, friend UI, candidate-node confirmation and revocation path are wired end to end. The
-fake proof is automated. No command in this build task enrolled a real tailnet device, deployed a
-Cloudflare resource, or touched production. Real-tailnet and deployment gates remain in §19 and
-§21.
+Status: **Phase 2 implemented and verified; broker live on Cloudflare workers.dev.** The broker,
+Agent host, owner UI, friend UI, candidate-node confirmation and revocation path are wired end to
+end. The fake proof is automated. The real-tailnet acceptance, SYSTEM-service acceptance and UI
+acceptance are recorded in `CONNECT_PHASE2_VALIDATION.md`. On 2026-09-29 Salem deployed the broker
+as Worker `onesalem-connect-broker-production` at
+`https://onesalem-connect-broker-production.onesalemconnect.workers.dev` (no custom domain).
 
 Everything marked **[verified]** is backed by an official source recorded in
 `docs/CONNECT_PROVIDER_RESEARCH.md` (fact ids such as `T2-05` refer to that file; `P1-xx` ids
@@ -246,7 +247,8 @@ and the nonce, so neither junk nor replays spend it.
 - Bound to one owner and one ServerId. Default lifetime 24 h, maximum 7 days. **Single use**:
   redemption is one conditional `UPDATE … WHERE state='active' AND expires_at > now`. Revocable
   by the owner.
-- Presented as a link `https://connect.1salem.app/i#<secret>` (the fragment never reaches a
+- Presented as a link `<broker origin>/i#<secret>` (in production
+  `https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#<secret>`; the fragment never reaches a
   server log), a code, or later a QR code.
 - The invite carries nothing but the secret: no OAuth secret, auth key, Agent credential, path or
   IP.
@@ -841,9 +843,11 @@ idempotent.
 ## 13. Broker (control plane only)
 
 Cloudflare Worker + D1. It has local development configuration and a production environment with
-the outer `FLOOD` rate-limit binding. It remains **not deployed**; local tests and the loopback-only
-proof use `wrangler dev --local` (Miniflare on workerd, D1 in `.wrangler/state`) **[verified
-T5-19, T5-20]**.
+the outer `FLOOD` rate-limit binding. The production environment is **deployed on workers.dev**
+(2026-09-29): API `/v1/*` and landing page `/i` on
+`https://onesalem-connect-broker-production.onesalemconnect.workers.dev`, D1
+`onesalem-connect-production`. Local tests and the loopback-only proof still use
+`wrangler dev --local` (Miniflare on workerd, D1 in `.wrangler/state`) **[verified T5-19, T5-20]**.
 
 Responsibilities: owner/device registration, invites, redemption, approval, enrollment relay
 (ciphertext only, one-time pickup), session tickets, revocation. It never receives Minecraft or
@@ -1142,13 +1146,13 @@ The fake proof now demonstrates that a candidate gets no ticket before confirmat
   the SPKI, the signature and the nonce, so a forged, unusable or replayed registration costs one
   counter write until that network's budget is spent. A correctly signed request with a bad body
   is charged like any other attempt (§5, §14).
-- **Status: implemented, deployment verification remains.** `env.production` declares the
+- **Status: implemented and deployed.** `env.production` declares the
   Workers Rate Limiting binding `FLOOD`; `fetch` checks it before route lookup, body reads or D1,
   keyed by the normalized client network. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing or
   failed production binding return 503 rather than silently bypassing it. Its limit is deliberately
-  above the exact D1 budgets. Cloudflare Pseudo IPv4 must remain off or "Add header" so /64
-  grouping is preserved **[verified T5-14, T5-15, T5-17]**. The remaining gate is creating the
-  production resource and verifying the binding on Cloudflare; no deployment was performed.
+  above the exact D1 budgets. With a custom domain, the zone's Pseudo IPv4 must remain off or "Add
+  header" so /64 grouping is preserved **[verified T5-14, T5-15, T5-17]**. The production Worker was
+  deployed on workers.dev on 2026-09-29 with this binding active (per Salem's deployment check).
 
 ### D-2a. Database restore runbook (deployment requirement)
 
@@ -1230,4 +1234,4 @@ persisted revocation cursor. `ConnectOwnerWorkflow` stores the DPAPI-protected O
 checks policy and Tailnet Lock, enrolls and verifies nodes, manages servers/invites/friends, and
 implements the revocation contract. Every owner route is loopback-local only. The Network page,
 setup window and per-server owner windows expose these operations in English and Arabic. The
-remaining gates are real-tailnet smoke and production deployment, not missing Agent wiring.
+real-tailnet acceptance and the workers.dev production deployment are complete (2026-09-29).

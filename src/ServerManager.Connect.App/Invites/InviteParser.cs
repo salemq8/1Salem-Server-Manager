@@ -4,7 +4,7 @@ using ServerManager.Connect.Core.Crypto;
 namespace ServerManager.Connect.App.Invites;
 
 /// <summary>
-/// Accepts what a friend pastes: the link <c>https://connect.1salem.app/i#&lt;secret&gt;</c> or the
+/// Accepts what a friend pastes: the link <c>https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#&lt;secret&gt;</c> or the
 /// bare code (contract §6). Either way the result is the 32-byte secret as canonical base64url.
 /// A link must carry the secret in its fragment, the part a browser never sends to a server; a
 /// secret anywhere else in a link means the link is not one of ours, and it is refused rather

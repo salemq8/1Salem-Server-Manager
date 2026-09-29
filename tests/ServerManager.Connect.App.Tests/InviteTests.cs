@@ -14,7 +14,7 @@ public sealed class InviteTests
     {
         var secret = TestIds.NewInviteSecret();
 
-        Assert.True(InviteParser.TryParse($"https://connect.1salem.app/i#{secret}", out var parsed));
+        Assert.True(InviteParser.TryParse($"https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#{secret}", out var parsed));
         Assert.Equal(secret, parsed);
     }
 
@@ -28,11 +28,11 @@ public sealed class InviteTests
     }
 
     [Theory]
-    [InlineData("https://connect.1salem.app/i")]
-    [InlineData("https://connect.1salem.app/i#")]
-    [InlineData("ftp://connect.1salem.app/i#{0}")]
-    [InlineData("https://connect.1salem.app/i?secret={0}")]
-    [InlineData("https://connect.1salem.app/i/{0}")]
+    [InlineData("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i")]
+    [InlineData("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#")]
+    [InlineData("ftp://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#{0}")]
+    [InlineData("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i?secret={0}")]
+    [InlineData("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i/{0}")]
     [InlineData("{0}=")]
     [InlineData("{0}A")]
     [InlineData("not an invite")]
@@ -53,7 +53,7 @@ public sealed class InviteTests
         app.Main.ShowInvite();
         var invite = Assert.IsType<InviteViewModel>(app.Main.CurrentPage);
 
-        invite.InviteText = $"https://connect.1salem.app/i#{secret}";
+        invite.InviteText = $"https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#{secret}";
         await invite.JoinAsync();
 
         Assert.Equal(secret, Assert.Single(app.Broker.RedeemedSecrets));
@@ -75,7 +75,7 @@ public sealed class InviteTests
         await invite.JoinAsync();
         var rejectedByBroker = invite.ErrorText;
 
-        invite.InviteText = "https://connect.1salem.app/i#too-short";
+        invite.InviteText = "https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#too-short";
         await invite.JoinAsync();
         var rejectedLocally = invite.ErrorText;
 

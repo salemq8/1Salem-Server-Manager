@@ -1,6 +1,8 @@
 # 1Salem Connect — Phase 2 implementation plan (Build 8)
 
-Status: **implemented locally; live acceptance and deployment remain separate gates.** See
+Status: **implemented locally; live acceptance and deployment remain separate gates.**
+*Superseded 2026-09-29: live acceptance is complete and the broker is deployed on workers.dev; see
+the broker README.* See
 `CONNECT_PHASE2_VALIDATION.md` for the final verification record and remaining limitations.
 Phase 1 (secure transport foundation, commit `cc4d7b3`) and the real-tsnet
 smoke test (commit `4bfb9a8`, 58/58) are complete and are not redone. This plan turns the Phase 1
@@ -32,7 +34,7 @@ Taken in this plan (sensible defaults, reversible):
 | P2-6 | A friend has **one node per owner tailnet**, shared by all of that friend's servers with this owner. Revoking one server deletes the tailnet device only when no other live membership of that owner is bound to it; otherwise the UI says so honestly. | Deleting it would cut the friend off servers they still legitimately have. |
 | P2-7 | Owner UI: an owner-level card on the **Network** page (+ a setup window), and a per-server card in **Server Detail › Settings › Network** (Minecraft only). No new sidebar destination or tab. | Structural tests pin five destinations and five tabs. |
 | P2-8 | Only per-server **Revoke access** is offered in the UI. Device-wide revocation (`/v1/devices/{id}/revoke`) is not exposed in Phase 2. | The host's device revocation is permanent while the broker allows re-invite; exposing it would create a confusing, unrecoverable state. |
-| P2-9 | Broker production config targets the route pattern `connect.1salem.app/v1/*`, leaving `connect.1salem.app/i#…` for the invite landing page. | A custom domain on the whole host would 404 every invite link. |
+| P2-9 | Broker production config targets the route pattern `connect.1salem.app/v1/*`, leaving `connect.1salem.app/i#…` for the invite landing page. *Superseded 2026-09-29: production is served on its workers.dev origin (`/v1/*` and `/i`), no zone routes.* | A custom domain on the whole host would 404 every invite link. |
 
 **Needed from Salem (none blocks implementation):**
 
@@ -43,9 +45,13 @@ Taken in this plan (sensible defaults, reversible):
    replacement OAuth client with `auth_keys`, `devices:core` and `policy_file:read`, tagged
    `tag:onesalem-host`. (No change is made to the existing client.)
 2. **Broker hostname** (P2-9) — confirm `connect.1salem.app/v1/*` or choose a separate API host.
-   Only configuration and docs depend on it.
+   Only configuration and docs depend on it. *Resolved 2026-09-29:* production uses the Worker's
+   workers.dev origin `https://onesalem-connect-broker-production.onesalemconnect.workers.dev`
+   (API `/v1/*`, invite page `/i`) with no zone routes; `connect.1salem.app` is an optional later
+   migration.
 3. **Deployment** — nothing is deployed in Phase 2 implementation. A separate, explicitly approved
-   step creates the D1 database, sets the secrets, adds the outer limiter and deploys.
+   step creates the D1 database, sets the secrets, adds the outer limiter and deploys. *Done
+   2026-09-29 by Salem; see the broker README.*
 4. **Real acceptance run** — proving the Agent-hosted path on the real tailnet needs a new
    disposable harness run (like the smoke test) with Salem's authorization; it never replaces the
    installed Build 7 Agent.
@@ -63,7 +69,7 @@ Owner (Server Manager, Network page)                 Agent (SYSTEM)             
                                                          GET device: host tag, no Tailnet Lock error ─► hostBridge 100.x:7780
 Owner (Server Detail › Settings › Network, Minecraft)
  5 Enable for this server ────────────────────────────► PUT /v1/servers/{id} {label, tcp, hostBridge}
- 6 Invite friend ─────────────────────────────────────► POST /v1/invites ─► link https://connect.1salem.app/i#<secret> (shown once)
+ 6 Invite friend ─────────────────────────────────────► POST /v1/invites ─► link <broker origin>/i#<secret> (shown once)
 Friend (1Salem Connect)
  7 redeem ─► pending
 Owner
@@ -104,7 +110,7 @@ Owner
 
 New error codes: `node_mismatch`, `node_rejected` (bare, `^[a-z_]+$`).
 
-**Production readiness (not deployed):**
+**Production readiness (not deployed):** *Superseded 2026-09-29: production is live on workers.dev (`workers_dev:true`, no routes); see the broker README.*
 
 - `wrangler.jsonc` gets `env.production`: `workers_dev:false`, `preview_urls:false`, route
   `connect.1salem.app/v1/*` (zone `1salem.app`), its own `d1_databases` entry (placeholder id,

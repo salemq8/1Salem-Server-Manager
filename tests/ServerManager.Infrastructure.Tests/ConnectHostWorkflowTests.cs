@@ -176,7 +176,7 @@ public sealed class ConnectHostWorkflowTests : IDisposable
 
         Assert.True((await workflow.GetServerAsync(server.Id, CancellationToken.None)).Enabled);
         Assert.Equal(FakeBroker.InviteSecret, invite.Code);
-        Assert.Contains("#" + FakeBroker.InviteSecret, invite.Link, StringComparison.Ordinal);
+        Assert.Equal("https://connect.example/i#" + FakeBroker.InviteSecret, invite.Link);
         var state = await File.ReadAllTextAsync(new ConnectOwnerPaths(_root).StateFile);
         Assert.DoesNotContain(FakeBroker.InviteSecret, state, StringComparison.Ordinal);
         Assert.Contains("inv_test", state, StringComparison.Ordinal);

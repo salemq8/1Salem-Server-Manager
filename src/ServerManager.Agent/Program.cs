@@ -86,7 +86,7 @@ var connectAgentPorts = agentOptions.LanEnabled
 builder.Services.AddSingleton(new ConnectHostOptions(
     agentOptions.DataRoot,
     connectAcceptance?.TransportExecutablePath ?? Path.Combine(AppContext.BaseDirectory, "1Salem.Connect.Host.Transport.exe"),
-    connectAcceptance?.BrokerOrigin ?? new Uri("https://connect.1salem.app/"),
+    connectAcceptance?.BrokerOrigin ?? ConnectHostOptions.ProductionBrokerOrigin,
     connectAgentPorts,
     brokerDevelopmentMode: connectAcceptance is not null,
     authorizationPipeName: connectAcceptance?.AuthorizationPipeName ?? ConnectPipeNames.HostAuthorization,

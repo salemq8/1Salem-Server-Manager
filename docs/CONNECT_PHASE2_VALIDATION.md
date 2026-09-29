@@ -4,7 +4,8 @@ Local checkpoint: 2026-09-27. Acceptance update: 2026-09-29. Branch: `claude/con
 
 The local implementation slices A–G are complete. The September 27 validation below is a
 historical checkpoint; the separately authorized Phase 2 live acceptance is **complete: 95/95
-driver checks passed**, with cleanup and Windows comparisons passed. There is **no deployment**. The accepted Phase 1
+driver checks passed**, with cleanup and Windows comparisons passed. The broker was later deployed
+to Cloudflare workers.dev (item 4 below). The accepted Phase 1
 baseline remains `4bfb9a8` (real-tsnet 58/58); that old smoke proof was not rerun.
 
 ## Current real-tailnet acceptance — 2026-09-29
@@ -136,14 +137,13 @@ This missing-credential gate is no longer current; the completed run used the se
 3. WPF visual/keyboard acceptance in English and Arabic (RTL), with the real Windows clipboard, is
    complete: [CONNECT_UI_ACCEPTANCE.md](CONNECT_UI_ACCEPTANCE.md). The Windows clipboard history
    panel itself, other DPI settings and high-contrast themes are not claimed.
-4. Cloudflare is prepared but not deployed; it needs Salem's authorization. The Worker serves the
-   API (`/v1/*`) and the static invite landing page (`/i`); `scripts/put-production-secrets.mjs`
-   creates the production secrets without exposing them; the production dry-run builds with the
-   D1, `FLOOD` and fail-closed limiter bindings (broker tests 120/120). Still open at deploy time,
-   because they need the Cloudflare account: the real D1 database id (from `wrangler d1 create`),
-   confirming the rate-limit `namespace_id` is unused and the `connect.1salem.app` DNS record
-   exists, remote migrations, and the post-deploy read-only smoke check. See the broker README
-   runbook.
+4. Cloudflare production is **live on workers.dev**, deployed by Salem on 2026-09-29: Worker
+   `onesalem-connect-broker-production` at
+   `https://onesalem-connect-broker-production.onesalemconnect.workers.dev` (API `/v1/*`, invite
+   page `/i`), D1 `onesalem-connect-production` with migrations 0001–0003, both secrets stored,
+   `FLOOD` limiter and cleanup cron active, preview URLs off. No custom domain or `1salem.app`
+   route is used; that is an optional later migration. The Agent, invite links and the packaged
+   friend app point at this origin. See the broker README.
 5. Keep packaging/release authorization separate. Palworld/UDP and the existing deferred pipe
    denial-of-service / friend-card refresh limitations remain outside this delivery; see
    `CONNECT_ARCHITECTURE.md` §21 and `DEFERRED_ISSUES.md`.

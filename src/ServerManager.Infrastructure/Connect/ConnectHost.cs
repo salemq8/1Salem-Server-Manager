@@ -85,6 +85,7 @@ public sealed class ConnectHost : IAsyncDisposable
     internal ConnectEnabledServers EnabledServers => _enabled;
     internal IGameServerStore ServerStore => _servers;
     internal IReadOnlyList<int> AgentPorts => _options.AgentPorts;
+    internal Uri BrokerOrigin => _options.BrokerOrigin;
     internal IConnectHostAuthorizationServer? ActiveAuthorization => _authorization;
     internal IConnectOwnerBrokerClient Broker => _broker ?? throw new ConnectHostOperationException(ConnectErrorCodes.NotReady);
     internal IConnectProvisioner Provisioner => _provisioner ?? throw new ConnectHostOperationException(ConnectErrorCodes.NotReady);

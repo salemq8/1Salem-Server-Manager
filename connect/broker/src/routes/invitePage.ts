@@ -1,4 +1,4 @@
-// GET /i: the landing page behind invite links (https://connect.1salem.app/i#<secret>). The secret
+// GET /i: the landing page behind invite links (https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#<secret>). The secret
 // is in the URL fragment, which browsers never send, so this Worker never sees it and the page is
 // the same static document for everyone. Its one script copies the page's own address (fragment
 // included) to the clipboard for pasting into 1Salem Connect; nothing is loaded from elsewhere.

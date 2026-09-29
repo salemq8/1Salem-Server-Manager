@@ -34,6 +34,7 @@ public sealed class BrokerClientTests
     [Theory]
     [InlineData("https://broker.example/", false)]
     [InlineData("https://broker.example:8443/", false)]
+    [InlineData("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/", false)]
     [InlineData("http://127.0.0.1:8787/", true)]
     [InlineData("http://localhost:8787/", true)]
     public void Broker_client_accepts_https_and_local_http_in_development(string address, bool developmentMode)

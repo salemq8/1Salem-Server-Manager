@@ -25,7 +25,10 @@ or a VPN on their PC.
   screen reader.
 
 Private friend access supports Minecraft Java servers. Palworld is not supported yet.
-The Connect service at `connect.1salem.app` must be live for invitations to work.
+The Connect service (broker) runs on Cloudflare workers.dev at
+`https://onesalem-connect-broker-production.onesalemconnect.workers.dev`. Server Manager and the
+1Salem Connect app use that address, and invitation links look like
+`https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#…`.
 
 
 ## Content Hub (Build 7)

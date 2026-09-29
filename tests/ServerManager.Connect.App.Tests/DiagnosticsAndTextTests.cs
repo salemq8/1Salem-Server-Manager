@@ -20,7 +20,7 @@ public sealed class DiagnosticsAndTextTests
         app.Transport.Nodes.Add(new TransportNode(app.OwnerId, "nFAKE1CNTRL", "fake"));
         app.Transport.Log.Add("2026-09-24T10:00:00Z enroll failed for tskey-auth-kABCDEF123CNTRL-secretpart");
         app.Transport.Log.Add("2026-09-24T10:00:01Z ticket eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiIxc2FsZW0ifQ.c2lnbmF0dXJlLXNlY3JldA");
-        app.Log.Record("invite", new InvalidOperationException($"could not use https://connect.1salem.app/i#{secret}"));
+        app.Log.Record("invite", new InvalidOperationException($"could not use https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#{secret}"));
         app.Main.ShowDiagnostics();
         var diagnostics = Assert.IsType<DiagnosticsViewModel>(app.Main.CurrentPage);
 

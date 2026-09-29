@@ -41,7 +41,7 @@ internal static class OwnerScenarios
 
         // Invite: create, then copy through the real Windows clipboard.
         var secret = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        agent.Invite = new ConnectInviteCreated("inv_" + new string('r', 26), "https://connect.1salem.app/i#" + secret, secret, now.AddHours(24));
+        agent.Invite = new ConnectInviteCreated("inv_" + new string('r', 26), "https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#" + secret, secret, now.AddHours(24));
         var invite = new ConnectInviteWindow(ServerId);
         Report.Show(invite);
         await report.CaptureAsync("06-invite-before-create", invite);

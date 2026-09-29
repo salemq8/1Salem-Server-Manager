@@ -506,7 +506,7 @@ Assert-ProductVersion (Join-Path $connectPublish '1Salem.Connect.exe')
 Copy-Item -LiteralPath (Join-Path $transportBin '1Salem.Connect.Transport.exe') -Destination $connectPublish
 Copy-Item -LiteralPath $generatedBuildInfo -Destination $connectPublish
 $connectSettings = [ordered]@{
-    brokerUrl = 'https://connect.1salem.app/'
+    brokerUrl = 'https://onesalem-connect-broker-production.onesalemconnect.workers.dev/'
     developmentMode = $false
     transportMode = 'tsnet'
     transportPath = '1Salem.Connect.Transport.exe'

@@ -58,7 +58,7 @@ public static class SecretRedactor
         @"\b((?:secret|authKey|clientSecret|client_secret|sessionKey|privateKey|password)=)[^&\s"",;]+",
         AnyCase);
 
-    // Invite links carry the secret in the fragment (https://connect.1salem.app/i#<secret>);
+    // Invite links carry the secret in the fragment (https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#<secret>);
     // any other URL fragment that looks like a token is treated the same way.
     private static readonly Regex InviteFragment = new(
         @"(/i#)[A-Za-z0-9_\-]+",

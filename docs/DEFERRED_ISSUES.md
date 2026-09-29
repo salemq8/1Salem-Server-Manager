@@ -126,8 +126,8 @@ instead.
 ## 1Salem Connect: owner-confirmed friend node bindings (resolved locally in Phase 2)
 
 - **Found:** Build 8 (1Salem Connect) Phase 1 security review, finding BRK-4, 2026-09-24.
-- **Status:** implemented and locally tested in Phase 2, not deployed. Full write-up:
-  `docs/CONNECT_ARCHITECTURE.md` §21, D-1.
+- **Status:** implemented in Phase 2, accepted on a real tailnet, and deployed with the broker on
+  workers.dev (2026-09-29). Full write-up: `docs/CONNECT_ARCHITECTURE.md` §21, D-1.
 - **Phase 1 behavior:** the broker recorded the node id the friend's device reported. It refused a
   node id another friend's device already holds on a live membership of the same owner
   (`node_in_use`), binds once, and tickets only work from the WhoIs-verified node, so a wrong
@@ -141,14 +141,14 @@ instead.
 
 - **Found:** Build 8 (1Salem Connect) Phase 1 security review, finding BRK-2, 2026-09-24.
 - **Status:** D1 budgets and the fail-closed production outer limiter are implemented and locally
-  tested. Verification in a deployed Cloudflare environment remains required. Full write-up:
-  `docs/CONNECT_ARCHITECTURE.md` §21, D-2.
+  tested, and the broker is deployed on workers.dev with the `FLOOD` binding active (2026-09-29,
+  per Salem's deployment check). Full write-up: `docs/CONNECT_ARCHITECTURE.md` §21, D-2.
 - **What happens today:** exact per-key, per-network and global budgets in D1; over-limit,
   malformed, forged and replayed requests add no counter write. The production `FLOOD` Workers
   Rate Limiting binding rejects excess traffic before D1. Production refuses requests if that
-  binding or a usable client address is absent; the broker has not been deployed.
-- **Deployment gate:** verify the configured limiter and ensure Pseudo IPv4 is not set to
-  "Overwrite headers".
+  binding or a usable client address is absent.
+- **Custom domain (optional, later):** on the zone, ensure Pseudo IPv4 is not set to "Overwrite
+  headers". The workers.dev hostname has no such zone setting.
 
 ## 1Salem Connect: a low-integrity local process can fill the friend pipe's slots (Phase 2)
 

@@ -121,9 +121,10 @@ public sealed class ConnectOwnerWorkflow(ConnectHost host, TimeProvider clock)
                     .Append(new ConnectInviteState(invite.InviteId, serverId, invite.ExpiresAt, "active", createdAt)).ToArray()
             });
             await _host.SaveStateAsync(cancellationToken).ConfigureAwait(false);
+            // The landing page is on the broker's own origin, so the link follows the broker.
             result = new ConnectInviteCreated(
                 invite.InviteId,
-                "https://connect.1salem.app/i#" + invite.Secret,
+                new Uri(_host.BrokerOrigin, "i").AbsoluteUri + "#" + invite.Secret,
                 invite.Secret,
                 invite.ExpiresAt);
         }, cancellationToken).ConfigureAwait(false);

@@ -10,7 +10,7 @@ public sealed class SecretRedactorTests
     [InlineData("enroll with tskey-auth-kABC123CNTRL-SecretPart99", "tskey-auth-[REDACTED]", "SecretPart99")]
     [InlineData("client tskey-client-kXYZ-TopSecret", "tskey-client-[REDACTED]", "TopSecret")]
     [InlineData("key=tskey-api-kQQ-Hidden", "tskey-api-[REDACTED]", "Hidden")]
-    [InlineData("invite https://connect.1salem.app/i#Zm9vYmFyYmF6cXV4cXV1eHF1dXhxdXV4cXV1eHF1dXg", "/i#[REDACTED]", "Zm9vYmFy")]
+    [InlineData("invite https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#Zm9vYmFyYmF6cXV4cXV1eHF1dXhxdXV4cXV1eHF1dXg", "/i#[REDACTED]", "Zm9vYmFy")]
     [InlineData("Authorization: Bearer abc.def.ghi", "Authorization: [REDACTED]", "Bearer abc")]
     [InlineData("X-1S-Sig: AbCdEfGhIjKlMnOp", "X-1S-Sig: [REDACTED]", "AbCdEfGhIjKlMnOp")]
     [InlineData("{\"authKey\":\"tsk-something\",\"keyId\":\"k1\"}", "\"authKey\":\"[REDACTED]\"", "tsk-something")]

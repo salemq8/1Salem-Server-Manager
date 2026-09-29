@@ -66,7 +66,7 @@ public sealed class ConnectAcceptanceTests : IDisposable
     [InlineData("--api-url", "http://0.0.0.0:18000")]
     [InlineData("--api-url", "http://127.0.0.1:5251")]
     [InlineData("--api-url", "http://127.0.0.1:18522")]
-    [InlineData("--connect-broker-url", "https://connect.1salem.app")]
+    [InlineData("--connect-broker-url", "https://onesalem-connect-broker-production.onesalemconnect.workers.dev")]
     [InlineData("--connect-broker-url", "http://localhost:18000")]
     [InlineData("--connect-broker-url", "http://127.0.0.1:18000/path")]
     [InlineData("--connect-broker-url", "http://127.0.0.1:18000?query=1")]

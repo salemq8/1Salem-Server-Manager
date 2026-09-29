@@ -1,4 +1,4 @@
-# 1Salem Connect broker (Phase 2, production-ready; not deployed)
+# 1Salem Connect broker (live on Cloudflare workers.dev)
 
 The control plane of 1Salem Connect: a Cloudflare Worker with a D1 database that registers owner
 and device keys, relays invites, approvals and enrollment ciphertext, signs short-lived session
@@ -6,10 +6,11 @@ tickets and publishes revocations. It never carries game traffic and holds no Ta
 credential. The binding contract is [`docs/CONNECT_ARCHITECTURE.md`](../../docs/CONNECT_ARCHITECTURE.md)
 (§5 signed requests, §6 invites, §9 tickets, §12 revocation, §13 API, §14 abuse protection).
 
-**Nothing is deployed.** The top-level configuration runs only under `wrangler dev --local`
-(workerd + Miniflare, D1 in a local SQLite file). `env.production` is an operator-reviewed
-deployment template with a placeholder D1 id. Do not run `wrangler deploy`, `wrangler secret put`
-or anything with `--remote` during implementation or tests.
+**Production is live** at `https://onesalem-connect-broker-production.onesalemconnect.workers.dev`
+(see [Production](#production-live-on-workersdev)). The top-level configuration runs only under
+`wrangler dev --local` (workerd + Miniflare, D1 in a local SQLite file). Do not run
+`wrangler deploy`, `wrangler secret put` or anything with `--remote` during implementation or
+tests; production changes need Salem's approval.
 
 ## Prerequisites
 
@@ -111,71 +112,75 @@ ciphertext. Registration is limited to 30 per hour per client network, and local
 one bucket, so the proof (2 registrations per run) can run about 15 times an hour against the
 same state.
 
-## Production deployment runbook (requires separate approval)
+## Production (live on workers.dev)
 
-This runbook is documentation only. Running any command in this section creates or changes remote
-Cloudflare state and requires Salem's explicit approval. The Worker serves exactly two routes:
-the API at `connect.1salem.app/v1/*` and the static invite landing page at `connect.1salem.app/i`
-(invite links are `https://connect.1salem.app/i#<secret>`; the fragment never reaches the Worker).
-Every command below needs Wrangler logged in to the Cloudflare account that owns `1salem.app`
-(`npx wrangler login`, done by Salem).
+Deployed on 2026-09-29 from `env.production`:
 
-1. Confirm the `1salem.app` zone already has the intended `connect.1salem.app` DNS record. Do not
-   let Worker deployment create or replace DNS unexpectedly.
-2. Pick a positive integer `ratelimits[].namespace_id` not used by another rate-limiter binding in
-   the Cloudflare account, and replace `1001` in `env.production` if it is already in use. Bindings
-   sharing a namespace also share counters.
-3. Create a dedicated production D1 database and copy its printed id into the production
-   `d1_databases` entry:
+| Item | Value |
+|---|---|
+| Worker | `onesalem-connect-broker-production` |
+| Origin | `https://onesalem-connect-broker-production.onesalemconnect.workers.dev` |
+| API | `<origin>/v1/*` |
+| Invite landing page | `<origin>/i`; links are `<origin>/i#<secret>` and the fragment never reaches the Worker |
+| D1 | `onesalem-connect-production` (`b30aa061-4d2e-4bec-891f-3ec9a461d5c6`), migrations 0001–0003 |
+| Secrets | `TICKET_SIGNING_KEY`, `INVITE_PEPPER` (stored; never recreate or print them) |
+| Other bindings | `FLOOD` limiter (2000 per 60 s, `namespace_id` 1001), `CONNECT_REQUIRE_FLOOD_LIMIT=true`, cleanup cron every 15 minutes |
+| Hostnames | workers.dev on, preview URLs off, no custom domain or zone routes |
 
-   ```powershell
-   npx wrangler d1 create onesalem-connect-production
-   ```
+The Server Manager Agent (`ConnectHostOptions.ProductionBrokerOrigin`) and the friend app's
+packaged `1Salem.Connect.settings.json` (`tools/build-release.ps1`) point at this origin, and the
+Agent builds invite links from it. No `1salem.app` hostname is in use.
 
-4. Apply all migrations, including additive migration `0003_node_confirmation.sql`:
+### Changing production (requires Salem's approval)
 
-   ```powershell
-   npm run migrate:remote
-   ```
+Every command below changes remote Cloudflare state. Wrangler must be logged in to the account that
+owns the Worker (`npx wrangler login`, done by Salem).
 
-5. Create and store both required secrets. The script generates them in memory, pipes each to
-   `wrangler secret put`, never prints or saves them, refuses to replace existing ones, and prints
-   only the public ticket key (`kid`, SPKI):
+- **Never** run `wrangler d1 create` for production again or change the database id: the database
+  holds invites, memberships and revocations.
+- **Never** replace the production secrets. `scripts/put-production-secrets.mjs` refuses to
+  overwrite existing ones; replacing `TICKET_SIGNING_KEY` would invalidate every issued ticket.
+- A new migration file is applied with `npm run migrate:remote` before the code that needs it.
+- Keep `ratelimits[].namespace_id` (1001) unique among rate-limiter bindings in the account;
+  bindings that share a namespace also share counters.
+- Validate, then deploy:
 
-   ```powershell
-   node scripts/put-production-secrets.mjs --confirm-production
-   ```
+  ```powershell
+  npm run typecheck
+  npm test
+  npm run deploy:check
+  npx wrangler deploy --env production
+  ```
 
-   Never put their values on a command line, in chat, in this file or in source control.
+  Check that the output lists the workers.dev URL only, the `DB` and `FLOOD` bindings and no
+  routes. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing limiter fail closed with 503.
+- Smoke-check read-only: `GET <origin>/v1/keys` returns the current `kid`, and `GET <origin>/i`
+  returns the landing page.
+- Once the 1Salem Connect download page exists, add `CONNECT_DOWNLOAD_URL` (an https URL) to
+  `env.production.vars` and deploy again so the landing page links to it.
 
-6. In Cloudflare Network settings, leave **Pseudo IPv4** off or set it to **Add header**. Do not
-   use **Overwrite headers**, which would defeat the broker's IPv6 /64 grouping. Optionally add a
-   zone-level WAF rate-limiting rule on `connect.1salem.app/v1/*` as another coarse flood layer.
-7. Validate without deploying:
+### Optional later migration to a custom domain
 
-   ```powershell
-   npm run typecheck
-   npm test
-   npm run deploy:check
-   ```
-
-8. Review the dry-run bundle and configuration. Only then, in the separately approved deployment
-   step, run `npx wrangler deploy --env production`. Verify that `workers.dev` and preview URLs are
-   disabled, the routes are only `/v1/*` and `/i`, the `FLOOD` binding is present, and invocation
-   logs are disabled. `CONNECT_REQUIRE_FLOOD_LIMIT=true` makes a missing limiter fail closed with 503.
-9. Smoke-check the live Worker read-only: `GET https://connect.1salem.app/v1/keys` returns the `kid`
-   printed in step 5, and `GET https://connect.1salem.app/i` returns the landing page. Once the
-   1Salem Connect download page exists, add `CONNECT_DOWNLOAD_URL` (an https URL) to
-   `env.production.vars` and deploy again so the landing page links to it.
+Not configured, and not needed for Build 8. If `connect.1salem.app` is wanted later: create its DNS
+record in the `1salem.app` zone, add routes `connect.1salem.app/v1/*` and `connect.1salem.app/i`
+(zone `1salem.app`) to `env.production`, then change `ConnectHostOptions.ProductionBrokerOrigin`
+and the packaged `brokerUrl` in a new Build. Keep workers.dev enabled while installed Builds still
+use the workers.dev origin. On that zone, leave **Pseudo IPv4** off or at **Add header** (never
+**Overwrite headers**, which defeats the IPv6 /64 grouping); a zone WAF rate-limiting rule on
+`/v1/*` can then add another coarse flood layer.
 
 ### D1 restore procedure
 
-Keep the Worker closed to traffic immediately after a privileged D1 restore. Before reopening it,
-advance the revocation sequence exactly once:
+Keep the Worker closed to traffic immediately after a privileged D1 restore (for example, turn off
+its workers.dev route in the Cloudflare dashboard). Before reopening it, advance the revocation
+sequence exactly once:
 
 ```sql
 UPDATE sqlite_sequence SET seq = seq + 1000000000 WHERE name = 'revocations';
 ```
+
+With Wrangler: `npx wrangler d1 execute onesalem-connect-production --remote --env production
+--command "UPDATE sqlite_sequence SET seq = seq + 1000000000 WHERE name = 'revocations';"`
 
 Then verify that a pre-restore cursor receives `409 cursor_ahead` and that a host can replay the
 owner's idempotent revocation feed from `after=0`. Skipping this step can let a host retain a cursor
@@ -278,8 +283,8 @@ The broker cannot enforce these itself.
   cost of a flood. `env.production` declares a Workers Rate Limiting binding named `FLOOD`, keyed
   by the normalized client network and checked before route lookup, body reads or D1. It is set well
   above the exact D1 budgets so it catches floods only. It is per location and eventually
-  consistent, so it complements the D1 counters and does not replace them. A zone-level WAF rule
-  may be added as another outer layer.
+  consistent, so it complements the D1 counters and does not replace them. With a custom domain, a
+  zone-level WAF rule may be added as another outer layer.
 - **After any database restore (for example D1 Time Travel), raise the revocation sequence before
   reopening the broker.** A restore rolls back `sqlite_sequence` too, so new revocations would
   reuse seq numbers issued before the restore. A host holding one of those as its cursor would pass
@@ -291,9 +296,10 @@ The broker cannot enforce these itself.
   local revocation set and immediate enforcement (architecture §12) do not depend on the feed. The
   Agent service hosts that component, persists the cursor and consumes the feed (architecture
   §12 and §21 D-4).
-- **Leave Cloudflare's Pseudo IPv4 off, or at "Add header".** "Overwrite headers" replaces
-  `CF-Connecting-IP` with an address derived from the full IPv6 address. That gives every
-  address in a /64 its own bucket again.
+- **With a custom domain, leave the zone's Pseudo IPv4 off, or at "Add header".** "Overwrite
+  headers" replaces `CF-Connecting-IP` with an address derived from the full IPv6 address. That
+  gives every address in a /64 its own bucket again. The workers.dev hostname is not in a zone, so
+  there is no such setting today.
 - **The Agent must verify before confirming or deleting.** A membership's candidate `nodeId` is
   whatever the friend's device reported. The Agent confirms it only after the checks in the Phase
   2 plan. Before revocation step 3 (`DELETE /api/v2/device/{id}`, §12), it must re-read the device

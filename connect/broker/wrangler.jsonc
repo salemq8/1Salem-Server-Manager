@@ -1,5 +1,6 @@
-// 1Salem Connect broker. The top-level environment stays local-only. env.production is a
-// production-ready template, but nothing in this repository creates resources or deploys it.
+// 1Salem Connect broker. The top-level environment stays local-only. env.production is the live
+// deployment (`npx wrangler deploy --env production`, Worker onesalem-connect-broker-production),
+// served at https://onesalem-connect-broker-production.onesalemconnect.workers.dev.
 // Secrets never go in this file or in vars: locally they live in a git-ignored .dev.vars, and a
 // production operator sets them with Wrangler's interactive secret command.
 {
@@ -17,7 +18,7 @@
     {
       "binding": "DB",
       "database_name": "onesalem-connect",
-      // Placeholder. A real id exists only after the production deployment step.
+      // Placeholder for the local-only environment; production has its own database below.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
@@ -43,25 +44,17 @@
 
   "env": {
     "production": {
-      "workers_dev": false,
+      // Production is served on its workers.dev hostname: the API at /v1/* and the invite landing
+      // page at /i (links are <origin>/i#<secret>). Preview URLs stay off. A custom domain is a
+      // possible later migration (see the broker README); it is not configured.
+      "workers_dev": true,
       "preview_urls": false,
-      "routes": [
-        {
-          "pattern": "connect.1salem.app/v1/*",
-          "zone_name": "1salem.app"
-        },
-        {
-          // The invite landing page (https://connect.1salem.app/i#<secret>); exactly /i, nothing else.
-          "pattern": "connect.1salem.app/i",
-          "zone_name": "1salem.app"
-        }
-      ],
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "onesalem-connect-production",
-          // Deployment step: replace this placeholder with the id printed by `wrangler d1 create`.
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          // Created on 2026-09-29. Never recreate it: it holds invites, memberships and revocations.
+          "database_id": "b30aa061-4d2e-4bec-891f-3ec9a461d5c6",
           "migrations_dir": "migrations"
         }
       ],
@@ -74,7 +67,7 @@
       "ratelimits": [
         {
           "name": "FLOOD",
-          // Must remain unique within the Cloudflare account. See the deployment runbook.
+          // Must remain unique within the Cloudflare account (README, "Changing production").
           "namespace_id": "1001",
           "simple": {
             // Deliberately well above the exact per-identity D1 budgets; this catches floods only.

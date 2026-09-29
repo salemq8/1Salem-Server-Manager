@@ -233,7 +233,7 @@ public sealed class ConnectOwnerUiTests
     [Theory]
     [InlineData("tskey-client-a1b2c3d4", "tskey-client-[REDACTED]")]
     [InlineData("{\"clientSecret\":\"owner-secret\"}", "{\"clientSecret\":\"[REDACTED]\"}")]
-    [InlineData("https://connect.1salem.app/i#invite_secret_123", "https://connect.1salem.app/i#[REDACTED]")]
+    [InlineData("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#invite_secret_123", "https://onesalem-connect-broker-production.onesalemconnect.workers.dev/i#[REDACTED]")]
     public void Diagnostics_ChainsConnectSecretRedactor(string input, string expected) =>
         Assert.Equal(expected, DiagnosticsService.Redact(input));
 

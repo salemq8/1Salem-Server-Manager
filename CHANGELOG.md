@@ -7,8 +7,9 @@
   Manager, and the separate 1Salem Connect friend app (`1SalemConnect-1.5.zip`).
 - The Agent hosts the Connect host transport; friends reach only the approved server through a
   loopback address, with no system VPN, route, DNS or proxy change.
-- Added the Connect broker (Cloudflare Worker) with its invite landing page; deployment is a
-  separate, authorized step.
+- Added the Connect broker (Cloudflare Worker) with its invite landing page, live on Cloudflare
+  workers.dev at `https://onesalem-connect-broker-production.onesalemconnect.workers.dev`; the
+  Agent, invite links and the packaged friend app use that address.
 - Release packaging builds the Go transports with `ts_omit_oauthkey` and keeps local broker
   state, secrets and dependencies out of `Source.zip`.
 

@@ -9,6 +9,13 @@ namespace ServerManager.Infrastructure.Connect;
 
 public sealed class ConnectHostOptions
 {
+    /// <summary>
+    /// The live broker (Cloudflare workers.dev). The API is under <c>/v1/</c> and invite links are
+    /// <c>/i#&lt;secret&gt;</c> on the same origin.
+    /// </summary>
+    public static Uri ProductionBrokerOrigin { get; } =
+        new("https://onesalem-connect-broker-production.onesalemconnect.workers.dev/");
+
     public ConnectHostOptions(
         string dataRoot,
         string transportExecutablePath,
