@@ -248,7 +248,8 @@ function Assert-ArchiveSafe {
                 $segments -contains 'SaveGames' -or
                 $segments -contains 'ProgramData' -or
                 ((-not $isSourceArchive) -and $segments -contains 'backups') -or
-                $name -match '(?i)(playit\.toml|credentials?\.|private[-_]?config|\.pfx$|\.pem$|\.key$|\.sav$|\.db$)') {
+                # Code files named after a credential type (TailscaleOAuthCredential.cs) are source.
+                $name -match '(?i)(playit\.toml|credentials?\.(?!(cs|ps1)$)|private[-_]?config|\.pfx$|\.pem$|\.key$|\.sav$|\.db$)') {
                 throw "Server data or secret-like content in $Path`: $name"
             }
         }
