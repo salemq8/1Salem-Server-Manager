@@ -1,4 +1,32 @@
-# 1Salem Server Manager 1.5 — Build 7
+# 1Salem Server Manager 1.5 — Build 8
+
+## 1Salem Connect: private friend access (Build 8)
+
+Friends can now join a Minecraft server privately, without a public address, port forwarding
+or a VPN on their PC.
+
+- **For the owner**, in Server Manager: set up private friend access once with your own
+  Tailscale account (an OAuth client in your own tailnet; the secret is protected on this PC and
+  never shown again). Then, per Minecraft server, turn **Private friend access** on, **Invite
+  friend** to create a one-time invitation link or code, and approve, rename or revoke friends
+  from **Friends**.
+- **For the friend**, the separate **1Salem Connect** app (`1SalemConnect-1.5.zip`): paste the
+  invitation, wait for the owner's approval, then **Connect**. Minecraft connects to a local
+  address such as `127.0.0.1:18211`. Only that game connection goes through 1Salem Connect;
+  the rest of the friend's internet traffic, routes, DNS and proxy settings are left alone.
+- Access is checked twice: by the owner's tailnet policy, which lets friend devices reach only
+  the Connect port, and by this app, which lets each approved friend reach only the server they
+  were invited to. Friends never reach the Agent, RDP, file sharing, other servers or your LAN.
+- An invitation works once, expires, and can be revoked. Revoking a friend closes their live
+  connection, stops new ones, and removes their device from your tailnet when nothing else of
+  theirs still uses it; the app says exactly which step is still pending otherwise.
+- Invitation links are copied without entering Windows clipboard history or cloud clipboard.
+- Both apps are in English and Arabic, right to left in Arabic, and reachable by keyboard and
+  screen reader.
+
+Private friend access supports Minecraft Java servers. Palworld is not supported yet.
+The Connect service at `connect.1salem.app` must be live for invitations to work.
+
 
 ## Content Hub (Build 7)
 
@@ -196,3 +224,5 @@ update tooling — no change to the visible Version 1.5 identity:
 - Uses the rolling `artifacts/release/1.5` release directory.
 - Builds a validated candidate first and promotes it only after the installed update and rollback snapshot are verified.
 - Adds `BUILD_REVISION` and `build-info.json` without presenting Build 1 as product version 1.5.1.
+- From Build 8, also contains `1SalemConnect-1.5.zip`, the 1Salem Connect friend app, and the Agent
+  includes the Connect host transport.

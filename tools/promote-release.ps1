@@ -60,6 +60,7 @@ $required = @(
     'Portable.zip',
     'Source.zip',
     "1SalemServerManager-Update-$version.zip",
+    "1SalemConnect-$version.zip",
     'version.json',
     'build-info.json',
     'SHA256SUMS.txt',

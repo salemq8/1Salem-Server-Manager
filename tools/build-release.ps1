@@ -75,6 +75,7 @@ function Test-ReleaseIntegrity {
         'Portable.zip',
         'Source.zip',
         "1SalemServerManager-Update-$Version.zip",
+        "1SalemConnect-$Version.zip",
         'version.json',
         'build-info.json',
         'SHA256SUMS.txt',
@@ -157,7 +158,10 @@ function New-SourceArchive {
         '\artifacts\',
         '\bin\',
         '\obj\',
-        '\TestResults\'
+        '\TestResults\',
+        '\node_modules\',
+        '\.wrangler\',
+        '\.claude\'
     )
     $stream = [System.IO.File]::Open(
         $Destination,
@@ -181,6 +185,8 @@ function New-SourceArchive {
                 -not $candidate.Equals(
                     (Join-Path $root 'build-info.json'),
                     [System.StringComparison]::OrdinalIgnoreCase) -and
+                # A local broker secrets file never ships (its .example twin does).
+                $_.Name -notin @('.dev.vars', '.env') -and
                 -not ($excluded | Where-Object {
                     $candidate.IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                 })
@@ -401,6 +407,21 @@ foreach ($output in @(
     Copy-Item -LiteralPath $generatedBuildInfo -Destination $output
 }
 
+# 1Salem Connect. The Go transports are built with -tags ts_omit_oauthkey, so no value handed to
+# them can be used as an OAuth client secret to mint keys; refuse to package them otherwise. The
+# Agent starts the host transport from its own directory.
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'connect\transport\build.ps1')
+Assert-Success 'Build the 1Salem Connect transports'
+$transportBin = Join-Path $root 'connect\transport\bin'
+$goTool = Join-Path $root '.tools\go\bin\go.exe'
+foreach ($transport in '1Salem.Connect.Host.Transport.exe', '1Salem.Connect.Transport.exe') {
+    $metadata = & $goTool version -m (Join-Path $transportBin $transport)
+    if ($LASTEXITCODE -ne 0 -or -not ($metadata -match 'ts_omit_oauthkey')) {
+        throw "$transport was not built with ts_omit_oauthkey."
+    }
+}
+Copy-Item -LiteralPath (Join-Path $transportBin '1Salem.Connect.Host.Transport.exe') -Destination $agentPublish
+
 Copy-Item -LiteralPath $updaterPublish `
     -Destination (Join-Path $clientPublish 'Updater') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $clientPublish 'Launcher') | Out-Null
@@ -471,6 +492,28 @@ Assert-ProductVersion $setupHost.FullName
 Copy-Item -LiteralPath $setupHost.FullName -Destination (Join-Path $releaseRoot 'Setup.exe')
 Copy-Item -LiteralPath $generatedBuildInfo -Destination (Join-Path $releaseRoot 'build-info.json')
 
+# The friend app is its own small download: the app, its transport, and the settings that point it
+# at the production broker (without them it reports that it is not configured).
+$connectPublish = Join-Path $publishRoot 'Connect'
+Publish-Application `
+    (Join-Path $root 'src\ServerManager.Connect.App\ServerManager.Connect.App.csproj') `
+    $connectPublish 'Connect'
+Assert-ProductVersion (Join-Path $connectPublish '1Salem.Connect.exe')
+Copy-Item -LiteralPath (Join-Path $transportBin '1Salem.Connect.Transport.exe') -Destination $connectPublish
+Copy-Item -LiteralPath $generatedBuildInfo -Destination $connectPublish
+$connectSettings = [ordered]@{
+    brokerUrl = 'https://connect.1salem.app/'
+    developmentMode = $false
+    transportMode = 'tsnet'
+    transportPath = '1Salem.Connect.Transport.exe'
+} | ConvertTo-Json
+[System.IO.File]::WriteAllText(
+    (Join-Path $connectPublish '1Salem.Connect.settings.json'),
+    $connectSettings,
+    [System.Text.UTF8Encoding]::new($false))
+$connectPackageName = "1SalemConnect-$releaseVersion.zip"
+New-ZipFromDirectory $connectPublish (Join-Path $releaseRoot $connectPackageName)
+
 New-SourceArchive (Join-Path $releaseRoot 'Source.zip')
 $notesSource = Join-Path $root "docs\RELEASE_NOTES_$releaseVersion.md"
 if (-not (Test-Path -LiteralPath $notesSource)) {
@@ -510,6 +553,7 @@ $versionDocument | ConvertTo-Json -Depth 6 |
 foreach ($archive in @(
     (Join-Path $releaseRoot 'Portable.zip'),
     (Join-Path $releaseRoot 'Source.zip'),
+    (Join-Path $releaseRoot $connectPackageName),
     $updatePackagePath
 )) {
     Assert-ArchiveSafe $archive
@@ -525,6 +569,7 @@ $checksumFiles = @(
     'Portable.zip',
     'Source.zip',
     $updatePackageName,
+    $connectPackageName,
     'version.json',
     'build-info.json',
     'RELEASE_NOTES.md'
@@ -541,6 +586,7 @@ $requiredFiles = @(
     'Portable.zip',
     'Source.zip',
     $updatePackageName,
+    $connectPackageName,
     'version.json',
     'build-info.json',
     'SHA256SUMS.txt',

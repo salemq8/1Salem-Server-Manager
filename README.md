@@ -43,6 +43,10 @@ for vanilla Minecraft Java and vanilla Palworld dedicated servers.
 - VERSION-driven product metadata, semantic downgrade prevention, immutable
   release folders, per-component installed-version reporting, and a permanent
   Stable launcher with atomic active-version switching.
+- 1Salem Connect private friend access for Minecraft: one-time invitations,
+  owner approval and revocation, and a separate friend app that reaches only
+  the approved server through a local address, with no system VPN, route, DNS
+  or proxy change (see [Connect architecture](docs/CONNECT_ARCHITECTURE.md)).
 
 ## Release files
 
@@ -51,7 +55,7 @@ The release build reads the current value from `VERSION` and writes:
 - Rolling Stable output: `artifacts/release/1.5/`
 - Visible product version remains `1.5`; normal releases increment `BUILD_REVISION` only.
 - Validated candidates are created under `artifacts/staging/release-candidates/` and promoted only after the installed update succeeds.
-- The rolling directory contains Setup.exe, Portable.zip, Source.zip, the update ZIP, version.json, build-info.json, SHA256SUMS.txt, and RELEASE_NOTES.md.
+- The rolling directory contains Setup.exe, Portable.zip, Source.zip, the update ZIP, the 1Salem Connect friend app (`1SalemConnect-<VERSION>.zip`), version.json, build-info.json, SHA256SUMS.txt, and RELEASE_NOTES.md.
 
 `VERSION` is the only manually edited current product-version source. Use
 `tools\next-build.ps1` to calculate the next internal Build without changing VERSION.

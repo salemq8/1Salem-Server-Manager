@@ -36,7 +36,11 @@ internal sealed class ConnectAcceptanceResourceJournal(string dataRoot)
         // Never accept an auth key or any response body here: only the provider's resource ID.
         var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
-            kind, id, timestamp = DateTimeOffset.UtcNow, role, tag
+            kind,
+            id,
+            timestamp = DateTimeOffset.UtcNow,
+            role,
+            tag
         }) + "\n");
         lock (_sync)
         {

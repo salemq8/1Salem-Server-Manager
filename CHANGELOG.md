@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5 — Build 8
+
+- Added 1Salem Connect private friend access for Minecraft: owner setup with the owner's own
+  Tailscale OAuth client, one-time invitations, approval, nicknames and revocation in Server
+  Manager, and the separate 1Salem Connect friend app (`1SalemConnect-1.5.zip`).
+- The Agent hosts the Connect host transport; friends reach only the approved server through a
+  loopback address, with no system VPN, route, DNS or proxy change.
+- Added the Connect broker (Cloudflare Worker) with its invite landing page; deployment is a
+  separate, authorized step.
+- Release packaging builds the Go transports with `ts_omit_oauthkey` and keeps local broker
+  state, secrets and dependencies out of `Source.zip`.
+
+Builds 2 to 7 are described in `docs/RELEASE_NOTES_1.5.md`.
+
 ## 1.5 — Build 1
 
 - Completed the one-time visible product-version transition from 1.3.2 to 1.5.

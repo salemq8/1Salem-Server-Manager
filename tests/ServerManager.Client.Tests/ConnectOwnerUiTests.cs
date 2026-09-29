@@ -161,7 +161,8 @@ public sealed class ConnectOwnerUiTests
     public void UnreadyOrIneligibleServer_KeepsCleanupActions(bool accountReady, bool eligible)
     {
         var response = Server(eligible: eligible, enabled: true,
-            friends: [Friend(ConnectFriendState.Approved)]) with { AccountReady = accountReady };
+            friends: [Friend(ConnectFriendState.Approved)]) with
+        { AccountReady = accountReady };
         var view = ConnectPresentation.Server(GameType.Minecraft, response);
         Assert.Equal(ConnectServerAction.Disable, view.PrimaryAction);
         Assert.True(view.CanRunPrimaryAction);

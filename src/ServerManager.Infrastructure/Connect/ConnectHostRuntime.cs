@@ -94,7 +94,8 @@ public sealed class SystemConnectHostRuntimeFactory(
                 AllowAutoRedirect = false,
                 UseCookies = false,
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-            }) { Timeout = TimeSpan.FromSeconds(20) },
+            })
+            { Timeout = TimeSpan.FromSeconds(20) },
             credential,
             _clock,
             _loggerFactory.CreateLogger<TailscaleApiProvisioner>());

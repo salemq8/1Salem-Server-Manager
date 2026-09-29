@@ -328,12 +328,12 @@ public sealed class ConnectOwnerWorkflow(ConnectHost host, TimeProvider clock)
         invite.State == "active" && invite.ExpiresAt <= _clock.GetUtcNow()
             ? Contracts.ConnectInviteState.Expired
             : invite.State switch
-        {
-            "used" => Contracts.ConnectInviteState.Used,
-            "revoked" => Contracts.ConnectInviteState.Revoked,
-            "expired" => Contracts.ConnectInviteState.Expired,
-            _ => Contracts.ConnectInviteState.Active
-        });
+            {
+                "used" => Contracts.ConnectInviteState.Used,
+                "revoked" => Contracts.ConnectInviteState.Revoked,
+                "expired" => Contracts.ConnectInviteState.Expired,
+                _ => Contracts.ConnectInviteState.Active
+            });
 
     private static ConnectFriendItem ToFriend(ConnectMembershipState member) => new(
         member.MembershipId,

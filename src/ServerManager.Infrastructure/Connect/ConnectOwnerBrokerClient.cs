@@ -75,7 +75,8 @@ public sealed partial class ConnectOwnerBrokerClient : IConnectOwnerBrokerClient
             AllowAutoRedirect = false,
             UseCookies = false,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-        }) { Timeout = Timeout.InfiniteTimeSpan };
+        })
+        { Timeout = Timeout.InfiniteTimeSpan };
     }
 
     public async Task<string> RegisterOwnerAsync(CancellationToken cancellationToken)
@@ -325,7 +326,8 @@ public sealed partial class ConnectOwnerBrokerClient : IConnectOwnerBrokerClient
             429 => ConnectOwnerBrokerFailure.RateLimited,
             >= 500 => ConnectOwnerBrokerFailure.Unavailable,
             _ => ConnectOwnerBrokerFailure.Rejected
-        }, code, message) { RetryAfter = RetryAfter(response) };
+        }, code, message)
+        { RetryAfter = RetryAfter(response) };
     }
 
     private static string? ErrorCode(byte[] content)
