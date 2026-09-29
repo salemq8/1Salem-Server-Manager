@@ -19,8 +19,10 @@ using ServerManager.Infrastructure.Updates;
 using ServerManager.Core.Content;
 using ServerManager.Infrastructure.Content;
 using ServerManager.Infrastructure.Connect;
+using ServerManager.Connect.Core.Pipes;
 
 var agentOptions = AgentOptions.Parse(args);
+var connectAcceptance = agentOptions.ConnectAcceptance;
 var storageOptions = new SqliteStorageOptions(agentOptions.DataRoot);
 var certificateSecretStore = new WindowsDpapiSecretStore();
 var certificateIdentity = AgentCertificateManager.LoadOrCreate(
@@ -33,10 +35,13 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory
 });
 
-builder.Host.UseWindowsService(options =>
+if (connectAcceptance is null)
 {
-    options.ServiceName = "1Salem Server Manager Agent";
-});
+    builder.Host.UseWindowsService(options =>
+    {
+        options.ServiceName = "1Salem Server Manager Agent";
+    });
+}
 if (agentOptions.LanEnabled)
 {
     builder.WebHost.ConfigureKestrel(options =>
@@ -76,10 +81,20 @@ var connectAgentPorts = agentOptions.LanEnabled
     : new[] { new Uri(agentOptions.ApiUrl).Port };
 builder.Services.AddSingleton(new ConnectHostOptions(
     agentOptions.DataRoot,
-    Path.Combine(AppContext.BaseDirectory, "1Salem.Connect.Host.Transport.exe"),
-    new Uri("https://connect.1salem.app/"),
-    connectAgentPorts));
+    connectAcceptance?.TransportExecutablePath ?? Path.Combine(AppContext.BaseDirectory, "1Salem.Connect.Host.Transport.exe"),
+    connectAcceptance?.BrokerOrigin ?? new Uri("https://connect.1salem.app/"),
+    connectAgentPorts,
+    brokerDevelopmentMode: connectAcceptance is not null,
+    authorizationPipeName: connectAcceptance?.AuthorizationPipeName ?? ConnectPipeNames.HostAuthorization,
+    controlPipeName: connectAcceptance?.ControlPipeName ?? ConnectPipeNames.HostTransportAgent));
 builder.Services.AddSingleton<IConnectHostRuntimeFactory, SystemConnectHostRuntimeFactory>();
+#if DEBUG
+if (connectAcceptance is not null)
+{
+    builder.Services.AddSingleton<SystemConnectHostRuntimeFactory>();
+    builder.Services.AddSingleton<IConnectHostRuntimeFactory, ConnectAcceptanceRuntimeFactory>();
+}
+#endif
 builder.Services.AddSingleton<ConnectHost>();
 builder.Services.AddSingleton<ConnectOwnerWorkflow>();
 builder.Services.AddHostedService<ConnectHostService>();
@@ -197,9 +212,28 @@ builder.Services.AddHttpClient<ModpackService>(client =>
     })
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = true });
 
+if (connectAcceptance is not null)
+{
+    // Strip every unrelated production background service before any is constructed/started.
+    ConnectAcceptanceOptions.ConfigureHostedServices(builder.Services);
+}
+
 var app = builder.Build();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseMiddleware<ApiAuthenticationMiddleware>();
+
+if (connectAcceptance is not null)
+{
+    // No restore recovery, updater, Playit, game recovery, resource governor, or production APIs.
+    await ConnectAcceptanceOptions.InitializeDatabaseAsync(app.Services, agentOptions.DataRoot, CancellationToken.None);
+    app.MapGet("/health", (AgentRuntimeState runtime) =>
+        Results.Ok(new HealthResponse("Healthy", runtime.Version, DateTimeOffset.UtcNow)));
+    app.MapGet("/api/v1/agent/status", (AgentRuntimeState runtime, AgentOptions options) =>
+        Results.Ok(runtime.ToStatus(options)));
+    app.MapConnectEndpoints();
+    await app.RunAsync();
+    return;
+}
 
 app.MapGet(
     "/health",

@@ -53,6 +53,28 @@ public sealed class ConnectHostWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task ConfiguredStart_UsesExplicitAuthorizationAndControlPipes()
+    {
+        using var keys = new ConnectTestBroker();
+        var factory = new ReadyRuntimeFactory(keys.KeySet);
+        new ConnectOAuthCredentialStore(new ConnectOwnerPaths(_root)).Save(
+            new TailscaleOAuthCredential("client-test", "tskey-client-test-secret"));
+        const string authorizationPipe = "1Salem.Connect.Acceptance.test.Authz";
+        const string controlPipe = "1Salem.Connect.Acceptance.test.Control";
+        var options = new ConnectHostOptions(_root, Path.Combine(_root, "transport.exe"),
+            new Uri("http://127.0.0.1:18299/"), [18298], brokerDevelopmentMode: true,
+            authorizationPipeName: authorizationPipe, controlPipeName: controlPipe);
+        await using var host = new ConnectHost(options, new MemoryServerStore(), TimeProvider.System, factory, NullLogger<ConnectHost>.Instance);
+
+        await host.StartAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectSetupState.Ready, host.Status.State);
+        Assert.Equal(authorizationPipe, factory.AuthorizationOptions!.PipeName);
+        Assert.Equal(authorizationPipe, factory.TransportOptions!.AuthorizationPipeName);
+        Assert.Equal(controlPipe, factory.TransportOptions.ControlPipeName);
+    }
+
+    [Fact]
     public async Task Stop_WhenInFlightReconciliationFailsAfterCancellation_StillDisposesRuntime()
     {
         using var keys = new ConnectTestBroker();
@@ -252,10 +274,14 @@ public sealed class ConnectHostWorkflowTests : IDisposable
         public FakeControl Control { get; } = new();
         public FakeProvisioner Provisioner { get; } = new();
         public FakeBroker? Broker { get; private set; }
+        public ConnectHostAuthorizationOptions? AuthorizationOptions { get; private set; }
+        public ConnectHostTransportOptions? TransportOptions { get; private set; }
         public IConnectOwnerBrokerClient CreateBroker(ConnectIdentity identity) => Broker = new FakeBroker(identity.KeyId, _keySet, readMemberships);
         public IConnectProvisioner CreateProvisioner(TailscaleOAuthCredential credential) => Provisioner;
-        public IConnectHostAuthorizationServer CreateAuthorizationServer(ConnectHostAuthorizationOptions options, ConnectServerCatalog catalog) => Authorization;
-        public IConnectHostTransportSupervisor CreateSupervisor(ConnectHostTransportOptions options) => Supervisor;
+        public IConnectHostAuthorizationServer CreateAuthorizationServer(ConnectHostAuthorizationOptions options, ConnectServerCatalog catalog)
+        { AuthorizationOptions = options; return Authorization; }
+        public IConnectHostTransportSupervisor CreateSupervisor(ConnectHostTransportOptions options)
+        { TransportOptions = options; return Supervisor; }
         public IConnectHostTransportControlClient CreateControlClient(ConnectHostTransportOptions options, IConnectHostTransportSupervisor supervisor) => Control;
     }
 

@@ -7,11 +7,17 @@ public sealed record AgentOptions(
     string PipeName,
     string ApiUrl,
     bool LanEnabled = false,
-    int LanPort = 5252)
+    int LanPort = 5252,
+    ConnectAcceptanceOptions? ConnectAcceptance = null)
 {
     public static AgentOptions Parse(IReadOnlyList<string> args)
     {
         ArgumentNullException.ThrowIfNull(args);
+
+        if (args.Any(argument => argument.StartsWith("--connect-", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ConnectAcceptanceOptions.Parse(args);
+        }
 
         var dataRoot = AgentTransportDefaults.ResolveDataRoot();
         var lanEnabled = false;

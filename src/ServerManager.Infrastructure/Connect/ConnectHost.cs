@@ -241,6 +241,7 @@ public sealed class ConnectHost : IAsyncDisposable
                 new ConnectHostAuthorizationOptions(
                     ownerId,
                     ticketKeys,
+                    pipeName: _options.AuthorizationPipeName,
                     initialRevocations: ConnectRevocationSeed.FromState(_revocations, _clock.GetUtcNow())),
                 _catalog);
             _authorization.Start();
@@ -249,7 +250,9 @@ public sealed class ConnectHost : IAsyncDisposable
                 _options.TransportExecutablePath,
                 ConnectTransportMode.Tsnet,
                 ":7780",
-                _paths.HostTransportDirectory);
+                _paths.HostTransportDirectory,
+                authorizationPipeName: _options.AuthorizationPipeName,
+                controlPipeName: _options.ControlPipeName);
             _supervisor = _factory.CreateSupervisor(transportOptions);
             _control = _factory.CreateControlClient(transportOptions, _supervisor);
             _supervisor.Start();

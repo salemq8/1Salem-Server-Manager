@@ -838,7 +838,7 @@ public sealed class ConnectHostAuthorizationPipeServer : IConnectHostAuthorizati
             claims.DeviceId,
             claims.MembershipId,
             claims.ServerIdText,
-            result.Endpoint);
+            result.Endpoint!.ToString());
         return (HostAuthorizationMessages.Allow(id, result.Endpoint!, result.ConnectionId!), result.ConnectionId);
     }
 

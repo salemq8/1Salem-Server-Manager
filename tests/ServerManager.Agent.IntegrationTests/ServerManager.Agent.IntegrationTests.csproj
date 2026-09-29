@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\ServerManager.Agent\ServerManager.Agent.csproj" />
+    <Compile Include="..\..\connect\proof\Phase2Acceptance\CleanupNodeGate.cs" Link="Acceptance\CleanupNodeGate.cs" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using ServerManager.Connect.Core.Identity;
+using ServerManager.Connect.Core.Pipes;
 using ServerManager.Connect.Core.Tickets;
 using ServerManager.Core;
 
@@ -13,7 +14,9 @@ public sealed class ConnectHostOptions
         string transportExecutablePath,
         Uri brokerOrigin,
         IEnumerable<int> agentPorts,
-        bool brokerDevelopmentMode = false)
+        bool brokerDevelopmentMode = false,
+        string authorizationPipeName = ConnectPipeNames.HostAuthorization,
+        string controlPipeName = ConnectPipeNames.HostTransportAgent)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(transportExecutablePath);
@@ -27,6 +30,8 @@ public sealed class ConnectHostOptions
         }
 
         BrokerDevelopmentMode = brokerDevelopmentMode;
+        AuthorizationPipeName = ValidatePipeName(authorizationPipeName);
+        ControlPipeName = ValidatePipeName(controlPipeName);
     }
 
     public string DataRoot { get; }
@@ -34,8 +39,15 @@ public sealed class ConnectHostOptions
     public Uri BrokerOrigin { get; }
     public IReadOnlyList<int> AgentPorts { get; }
     public bool BrokerDevelopmentMode { get; }
+    public string AuthorizationPipeName { get; }
+    public string ControlPipeName { get; }
     public TimeSpan ReconcileInterval { get; init; } = TimeSpan.FromSeconds(15);
     public TimeSpan ControlStartupTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    private static string ValidatePipeName(string value) =>
+        value is { Length: > 0 and <= 200 } &&
+        value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')
+            ? value : throw new ArgumentException("Invalid Connect pipe name.", nameof(value));
 }
 
 public interface IConnectHostRuntimeFactory

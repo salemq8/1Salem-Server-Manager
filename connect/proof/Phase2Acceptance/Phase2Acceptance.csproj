@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Development-only real Agent-hosted acceptance. Never packaged or added to the solution. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>Phase2Acceptance</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/ServerManager.Connect.App/ServerManager.Connect.App.csproj" />
+    <ProjectReference Include="../../../src/ServerManager.Infrastructure/ServerManager.Infrastructure.csproj" />
+    <Compile Include="../TsnetSmoke/SmokeCredential.cs" Link="Shared/SmokeCredential.cs" />
+    <Compile Include="../TsnetSmoke/SmokeTailnetApi.cs" Link="Shared/SmokeTailnetApi.cs" />
+    <Compile Include="../TsnetSmoke/SmokeJob.cs" Link="Shared/SmokeJob.cs" />
+    <Compile Include="../TsnetSmoke/ProofHelpers.cs" Link="Shared/ProofHelpers.cs" />
+  </ItemGroup>
+</Project>

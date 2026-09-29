@@ -3,11 +3,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ServerManager.Connect.Core.Crypto;
 using ServerManager.Connect.Core.Pipes;
 using ServerManager.Connect.Core.Tickets;
 using ServerManager.Infrastructure.Connect;
+using ServerManager.Infrastructure.Logging;
 
 namespace ServerManager.Infrastructure.Tests;
 
@@ -82,6 +84,35 @@ public sealed class ConnectHostAuthorizationPipeServerTests
         Assert.Equal("allow", response.GetProperty("decision").GetString());
         Assert.Equal($"127.0.0.1:{ConnectTestServerStore.MinecraftPort}", response.GetProperty("endpoint").GetString());
         Assert.Matches(ConnectionIdPattern, response.GetProperty("connId").GetString());
+    }
+
+    [Fact]
+    public async Task Authorize_WithProductionJsonLogger_ReturnsAllowAndLogsEndpointAsText()
+    {
+        var logDirectory = Path.Combine(Path.GetTempPath(), "1salem-connect-authz-log-" + Guid.NewGuid().ToString("N"));
+        var logPath = Path.Combine(logDirectory, "agent.jsonl");
+        try
+        {
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(
+                new JsonFileLoggerProvider(new JsonFileLoggerOptions(logPath))));
+            await using var host = new Harness(logger: loggerFactory.CreateLogger<ConnectHostAuthorizationPipeServer>());
+            await using var transport = await host.SubscribeAsync();
+            await using var requests = await host.ConnectAsync();
+
+            var response = await requests.AuthorizeAsync(host.FreshAuthorizeBody());
+
+            Assert.Equal("allow", response.GetProperty("decision").GetString());
+            var endpoint = $"127.0.0.1:{ConnectTestServerStore.MinecraftPort}";
+            Assert.Equal(endpoint, response.GetProperty("endpoint").GetString());
+            var records = (await File.ReadAllLinesAsync(logPath)).Select(line => JsonNode.Parse(line)!).ToArray();
+            var allowed = Assert.Single(records, record => record["properties"]?["Endpoint"] is not null);
+            Assert.Equal(endpoint, allowed["properties"]!["Endpoint"]!.GetValue<string>());
+            Assert.Contains("allowed connection", allowed["message"]!.GetValue<string>(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(logDirectory)) Directory.Delete(logDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -638,7 +669,8 @@ public sealed class ConnectHostAuthorizationPipeServerTests
             TimeSpan? serverCheckInterval = null,
             int liveConnectionCapacity = ConnectLiveConnections.DefaultCapacity,
             int replayCacheCapacity = ReplayCache.DefaultCapacity,
-            Func<ConnectTestBroker, ConnectRevocationSeed>? seedFactory = null)
+            Func<ConnectTestBroker, ConnectRevocationSeed>? seedFactory = null,
+            ILogger<ConnectHostAuthorizationPipeServer>? logger = null)
         {
             Enabled.Enable(ConnectTestServerStore.Minecraft);
             Enabled.Enable(ConnectTestServerStore.Palworld);
@@ -657,7 +689,7 @@ public sealed class ConnectHostAuthorizationPipeServerTests
                 options,
                 new ConnectServerCatalog(Store, Enabled),
                 Broker.Clock,
-                NullLogger<ConnectHostAuthorizationPipeServer>.Instance,
+                logger ?? NullLogger<ConnectHostAuthorizationPipeServer>.Instance,
                 liveConnectionCapacity,
                 replayCacheCapacity);
             Server.Start();
