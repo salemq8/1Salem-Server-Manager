@@ -46,9 +46,11 @@ public sealed class ConnectHostTransportControlClientTests
     {
         var pipeName = Name();
         await using var server = ConnectPipeSecurity.CreateFirstInstance(pipeName);
+        // Listen before the client connects: it disconnects at once, and a late listen fails.
+        var connecting = server.WaitForConnectionAsync();
         var serving = Task.Run(async () =>
         {
-            await server.WaitForConnectionAsync();
+            await connecting;
             return await new JsonLineReader(server).ReadAsync(CancellationToken.None);
         });
         var client = Create(pipeName, Environment.ProcessId + 1);
