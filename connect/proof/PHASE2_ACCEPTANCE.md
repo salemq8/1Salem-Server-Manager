@@ -80,3 +80,17 @@ The Debug Agent journals key creation/deletion and device-read/deletion metadata
 The driver owns its Agent/probe process job and friend transport, temporary nodes/keys, native credential copy and isolated state. The runner owns the local broker job, disposable broker secrets and local D1 data. Successful cleanup removes the run's sensitive state and retains redacted evidence; it does not delete the separately approved staging credential. If cleanup cannot prove ownership/removal, it retains recovery material: resolve the recorded resources before starting another live run. To request a running driver's orderly cancellation, create its `driver/stop.request` file and allow cleanup to finish; killing the console cannot guarantee cloud cleanup.
 
 Acceptance requires passing driver checks, confirmed zero temporary nodes, successful key cleanup, and passing runner network/process/service comparisons. It does not validate the installed SYSTEM service identity, production broker deployment, packaging, upgrades, real gameplay or graphical WPF rendering. No release/version change, service replacement, production credential edit, network-adapter/route/DNS change, or deployment is part of this procedure.
+
+## SYSTEM-service mode
+
+`Run-SystemServiceAcceptance.ps1` (Windows PowerShell 5.1, run elevated) is the short check of the
+installed service identity. It needs the same focused builds and the staged credential, but no
+precheck file, friend transport or probe. The driver's `--system-service` mode registers the
+isolated Debug Agent as a disposable LocalSystem service, enrolls only the host, checks the service
+and sidecar identities, pipe access, SYSTEM-only state, stop/restart behaviour and credential
+removal, then deletes the service, the host device and its key. The runner then takes ownership of
+the SYSTEM-owned state and removes it. Results: [SYSTEM-service acceptance](../../docs/CONNECT_SYSTEM_SERVICE_ACCEPTANCE.md).
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File connect\proof\Run-SystemServiceAcceptance.ps1
+```

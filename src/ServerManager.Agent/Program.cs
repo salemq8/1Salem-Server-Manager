@@ -35,12 +35,16 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory
 });
 
-if (connectAcceptance is null)
+// A no-op unless the process was started by the Service Control Manager. The Debug acceptance
+// host may also run as a disposable LocalSystem service so its SYSTEM identity can be accepted;
+// it never writes to the Event Log, because the first write would register a new source.
+builder.Host.UseWindowsService(options =>
 {
-    builder.Host.UseWindowsService(options =>
-    {
-        options.ServiceName = "1Salem Server Manager Agent";
-    });
+    options.ServiceName = connectAcceptance is null ? "1Salem Server Manager Agent" : "1Salem Connect Acceptance Agent";
+});
+if (connectAcceptance is not null)
+{
+    builder.Logging.AddFilter<Microsoft.Extensions.Logging.EventLog.EventLogLoggerProvider>(static _ => false);
 }
 if (agentOptions.LanEnabled)
 {

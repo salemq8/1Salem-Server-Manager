@@ -93,7 +93,10 @@ internal sealed partial class AcceptanceRun
             await Attempt("remove isolated credential and transport state", () =>
             {
                 SqliteConnection.ClearAllPools();
-                foreach (var directory in new[] { AgentRoot, Work("friend"), Work("probe-state") }) RemoveOwnedDirectory(directory);
+                // SYSTEM-owned Agent state cannot be removed by this process without taking
+                // ownership; the SYSTEM-service runner does that after this driver has exited.
+                string[] owned = _options.SystemService ? [Work("friend"), Work("probe-state")] : [AgentRoot, Work("friend"), Work("probe-state")];
+                foreach (var directory in owned) RemoveOwnedDirectory(directory);
                 return Task.CompletedTask;
             });
         }

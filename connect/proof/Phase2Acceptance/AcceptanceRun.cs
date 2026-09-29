@@ -163,6 +163,13 @@ internal sealed partial class AcceptanceRun : IDisposable
 
     private async Task StopAgentAsync()
     {
+        if (_options.SystemService)
+        {
+            await RemoveServiceAsync();
+            ReadAgentJournal();
+            SaveLedger();
+            return;
+        }
         if (_agent is null) return;
         if (!_agent.HasExited)
         {
@@ -306,6 +313,8 @@ internal sealed partial class AcceptanceRun : IDisposable
 
     private void RecoverMarkers()
     {
+        // Under SYSTEM the host marker is in SYSTEM-only state; its ID comes from the Agent's status.
+        if (_options.SystemService) return;
         foreach (var node in _nodes)
         {
             if (!File.Exists(node.Marker)) continue;
@@ -363,7 +372,9 @@ internal sealed partial class AcceptanceRun : IDisposable
         SaveLedger();
         File.WriteAllBytes(Work("result.json"), JsonSerializer.SerializeToUtf8Bytes(new
         {
-            runId = RunId, mode = "Phase2 actual Agent-hosted real tsnet acceptance", startedAt = StartedAt,
+            runId = RunId,
+            mode = _options.SystemService ? "Agent-hosted Connect SYSTEM-service acceptance" : "Phase2 actual Agent-hosted real tsnet acceptance",
+            startedAt = StartedAt,
             finishedAt = DateTimeOffset.UtcNow, passed = Passed, temporaryNodesRemaining = _temporaryNodesRemaining,
             checks = _checks, agentDecisions = _decisions.ToArray()
         }, Json));

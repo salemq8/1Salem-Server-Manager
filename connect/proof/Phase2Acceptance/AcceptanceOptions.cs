@@ -6,12 +6,13 @@ namespace Phase2Acceptance;
 
 internal sealed record AcceptanceOptions(
     string Work, string Agent, Uri Broker, Uri ApiUrl, string HostTransport,
-    string FriendTransport, string Probe, string Credential, string Precheck, bool Live)
+    string FriendTransport, string Probe, string Credential, string Precheck, bool Live, bool SystemService = false)
 {
     public static AcceptanceOptions Parse(string[] args)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         var live = false;
+        var systemService = false;
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
             "--work", "--agent", "--broker", "--api-url", "--host-transport",
@@ -20,8 +21,20 @@ internal sealed record AcceptanceOptions(
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] == "--live" && !live) { live = true; continue; }
+            // The short SYSTEM-service acceptance enrolls only the host: no friend, probe or
+            // human Tailnet Lock evidence; the Agent's own preflight refuses a locked tailnet.
+            if (args[i] == "--system-service" && !systemService) { systemService = true; continue; }
             if (!allowed.Contains(args[i]) || i + 1 >= args.Length || !values.TryAdd(args[i], args[++i]))
                 throw new ArgumentException("Unknown, duplicate, or incomplete acceptance argument.");
+        }
+        if (systemService)
+        {
+            if (values.ContainsKey("--friend-transport") || values.ContainsKey("--probe") ||
+                values.ContainsKey("--tailnet-lock-off-evidence"))
+                throw new ArgumentException("The SYSTEM-service acceptance takes no friend, probe or evidence arguments.");
+            values["--friend-transport"] = values.GetValueOrDefault("--host-transport") ?? string.Empty;
+            values["--probe"] = values["--friend-transport"];
+            values["--tailnet-lock-off-evidence"] = values["--friend-transport"];
         }
         string Value(string key) => values.GetValueOrDefault(key) ?? throw new ArgumentException("Missing " + key);
         string Full(string key)
@@ -44,7 +57,7 @@ internal sealed record AcceptanceOptions(
         }
         var options = new AcceptanceOptions(Full("--work"), Full("--agent"), Loopback("--broker"),
             Loopback("--api-url"), Full("--host-transport"), Full("--friend-transport"), Full("--probe"),
-            Full("--credential"), Full("--tailnet-lock-off-evidence"), live);
+            Full("--credential"), Full("--tailnet-lock-off-evidence"), live, systemService);
         var expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "1Salem Connect Phase2 Acceptance", "oauth-client.dpapi");
         if (!string.Equals(options.Credential, expected, StringComparison.OrdinalIgnoreCase))
@@ -63,6 +76,12 @@ internal sealed record AcceptanceOptions(
 
     public void VerifyPrecheckAndCredentialBoundary()
     {
+        if (SystemService)
+        {
+            VerifyCredentialBoundary();
+            return;
+        }
+
         AssertNoReparse(Precheck);
         using var evidence = JsonDocument.Parse(File.ReadAllBytes(Precheck));
         var root = evidence.RootElement;
@@ -73,6 +92,11 @@ internal sealed record AcceptanceOptions(
             DateTimeOffset.UtcNow - checkedAt > TimeSpan.FromMinutes(30) || checkedAt > DateTimeOffset.UtcNow.AddMinutes(2))
             throw new InvalidOperationException("A fresh independent Tailnet Lock OFF, scope and policy precheck is required.");
 
+        VerifyCredentialBoundary();
+    }
+
+    private void VerifyCredentialBoundary()
+    {
         AssertNoReparse(Credential);
         var file = new FileInfo(Credential);
         if (!file.Exists || file.Length is < 1 or > 65536)

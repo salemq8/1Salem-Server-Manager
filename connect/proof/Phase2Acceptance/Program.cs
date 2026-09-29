@@ -33,7 +33,7 @@ internal static class Program
         using var watch = new CancellationTokenSource();
         var watcher = WatchAsync(Path.Combine(options.Work, "stop.request"), stop, watch.Token);
         using var run = new AcceptanceRun(options, stop.Token);
-        try { await run.ExecuteAsync(); }
+        try { await (options.SystemService ? run.ExecuteSystemServiceAsync() : run.ExecuteAsync()); }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             // Exceptions can contain upstream response bodies. Evidence records type only.

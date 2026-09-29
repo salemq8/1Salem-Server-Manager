@@ -130,8 +130,9 @@ This missing-credential gate is no longer current; the completed run used the se
 
 2. The separately authorized real-tailnet acceptance of the isolated, current-user Agent-hosted
    path is complete, with policy and Tailnet Lock checks, invitations, confirmation, shared-node
-   revocation and restart recovery passed. Installed SYSTEM identity/state permissions remain
-   unvalidated; the prior Phase 1 smoke test does not replace either check.
+   revocation and restart recovery passed. The LocalSystem identity, SYSTEM-only state, pipe
+   identities, sidecar lifecycle and service restart are now accepted separately in
+   [CONNECT_SYSTEM_SERVICE_ACCEPTANCE.md](CONNECT_SYSTEM_SERVICE_ACCEPTANCE.md) (24/24).
 3. Perform interactive WPF visual/keyboard acceptance in English and Arabic, including RTL,
    actual Windows clipboard behavior and error/recovery presentation. Headless tests and XAML
    compilation are verified here; visual rendering and clipboard history UI are not claimed.
