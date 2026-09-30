@@ -43,6 +43,9 @@ internal sealed class FakeAgent : IDisposable
 
     public List<string> Requests { get; } = [];
 
+    /// <summary>Optional routes tried first (the Content scenario); may delay to simulate a slow site.</summary>
+    public Func<string, string, Task<(int Status, object? Payload)?>>? Extra { get; set; }
+
     public void Dispose()
     {
         _stop.Cancel();
@@ -91,7 +94,7 @@ internal sealed class FakeAgent : IDisposable
                 var body = new byte[length];
                 for (var read = 0; read < length;) read += await stream.ReadAsync(body.AsMemory(read));
             }
-            var (status, payload) = Route(request[0], request[1]);
+            var (status, payload) = (Extra is null ? null : await Extra(request[0], request[1])) ?? Route(request[0], request[1]);
             lock (Requests) Requests.Add(request[0] + " " + request[1] + " -> " + status);
             var json = JsonSerializer.SerializeToUtf8Bytes(payload, Json);
             var response = Encoding.ASCII.GetBytes(

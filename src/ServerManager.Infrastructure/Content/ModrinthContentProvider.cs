@@ -36,7 +36,9 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
         }
 
-        var loaders = ContentTypePolicy.ModrinthLoaders(request.Kind, profile.Platform);
+        // The chosen platform narrows the search only; ReadProject still judges each card
+        // against what this server can run.
+        var loaders = ContentPlatformFilter.ModrinthLoaders(request.Kind, profile.Platform, request.Platform);
 
         // Facets are AND between the inner arrays and OR inside one, so this reads as:
         // "this content type, for any loader this server runs, (and for this Minecraft

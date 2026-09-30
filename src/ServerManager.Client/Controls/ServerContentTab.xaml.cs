@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Threading;
 using ServerManager.Client.Shell;
 using ServerManager.Contracts;
 using ServerManager.Core.Content;
@@ -26,34 +25,44 @@ public partial class ServerContentTab : UserControl
     private readonly ServerDetailContext _context = ServerDetailContext.Shared;
     private readonly ObservableCollection<ContentItemViewModel> _discovered = [];
     private readonly ObservableCollection<InstalledItemViewModel> _installed = [];
-    private readonly DispatcherTimer _searchDebounce = new()
-    {
-        // Providers are not hammered on every keystroke.
-        Interval = TimeSpan.FromMilliseconds(450)
-    };
+
+    // Providers are asked once typing pauses, not on every keystroke.
+    private readonly Debouncer _searchDebounce = new(TimeSpan.FromMilliseconds(400));
+    private readonly ContentSearchSession _session = new();
 
     private ServerContentProfile? _profile;
     private CancellationTokenSource? _inFlight;
     private bool _loaded;
     private bool _busy;
 
+    // Set while code rebuilds the selectors, so their selection events do not start searches.
+    private bool _updatingControls;
+
     /// <summary>The content types this server can actually use, in selector order.</summary>
     private IReadOnlyList<ContentKind> _kinds = [ContentKind.Plugin];
+
+    /// <summary>The platform choices offered for the selected type, in selector order.</summary>
+    private IReadOnlyList<string> _platformOptions = [];
 
     public ServerContentTab()
     {
         InitializeComponent();
         DiscoverList.ItemsSource = _discovered;
         InstalledList.ItemsSource = _installed;
-        _searchDebounce.Tick += async (_, _) =>
-        {
-            _searchDebounce.Stop();
-            await SearchAsync();
-        };
 
         _context.Changed += (_, _) => Dispatcher.Invoke(() =>
         {
+            // The dashboard feed raises this on every refresh, every few seconds. Only a
+            // different server, or a change in what it runs, reloads the content; anything
+            // else would restart the search under the user's hands.
+            if (!_session.ContextChanged(ContextKey()))
+            {
+                return;
+            }
+
             _loaded = false;
+            _discovered.Clear();
+            _installed.Clear();
             Localize();
             if (IsVisible)
             {
@@ -83,13 +92,16 @@ public partial class ServerContentTab : UserControl
 
         if (TabDiscover.IsChecked == true)
         {
-            await SearchAsync();
+            await SearchAsync(force: true);
         }
         else
         {
             await LoadInstalledAsync();
         }
     }
+
+    private string ContextKey() =>
+        $"{_context.ServerId}|{_context.Source?.Game}|{_context.Source?.IsInstalled}|{_context.Source?.InstalledVersion}";
 
     private void Localize()
     {
@@ -98,6 +110,19 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
+        _updatingControls = true;
+        try
+        {
+            LocalizeControls();
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    private void LocalizeControls()
+    {
         Heading.Text = LocalizationService.Get("ServerTab.Content");
         Subheading.Text = _context.Source?.Game switch
         {
@@ -110,9 +135,7 @@ public partial class ServerContentTab : UserControl
         TabInstalled.Content = LocalizationService.Get("Content.Installed");
         TabUpdates.Content = LocalizationService.Get("Content.Updates");
         CompatibleOnlyBox.Content = LocalizationService.Get("Content.CompatibleOnly");
-        SearchHint.Text = LocalizationService.Get("Content.SearchLabel");
         DiscoverList.Tag = LocalizationService.Get("Content.ResultsList");
-        AutomationProperties.SetName(SearchBox, LocalizationService.Get("Content.SearchLabel"));
         AutomationProperties.SetName(SortBox, LocalizationService.Get("Content.SortLabel"));
         AutomationProperties.SetName(ProviderBox, LocalizationService.Get("Content.ProviderLabel"));
 
@@ -139,12 +162,53 @@ public partial class ServerContentTab : UserControl
         var kindIndex = KindBox.SelectedIndex < 0 ? 0 : KindBox.SelectedIndex;
         KindBox.ItemsSource = _kinds.Select(ContentLabels.Kind).ToArray();
         KindBox.SelectedIndex = Math.Min(kindIndex, Math.Max(0, _kinds.Count - 1));
+        RefreshKindControls();
+    }
+
+    /// <summary>
+    /// The search hint and the platform choices follow the selected type: "Search modpacks"
+    /// with Fabric/Forge/NeoForge/Quilt, "Search plugins" with Paper/Purpur/Spigot/Bukkit/Folia,
+    /// and no platform choice for data packs or resource packs. A still-offered choice is kept.
+    /// </summary>
+    private void RefreshKindControls()
+    {
+        var kind = SelectedKind;
+        SearchHint.Text = ContentLabels.SearchHint(kind);
+        AutomationProperties.SetName(SearchBox, ContentLabels.SearchHint(kind));
+        AutomationProperties.SetName(PlatformBox, LocalizationService.Get("Content.PlatformLabel"));
+
+        var previous = SelectedPlatform;
+        _platformOptions = ContentPlatformFilter.Options(kind);
+        PlatformBox.ItemsSource = _platformOptions
+            .Select(option => ContentLabels.Platform(option, kind, _profile?.Platform))
+            .ToArray();
+        var kept = previous is null ? -1 : IndexOf(_platformOptions, previous);
+        PlatformBox.SelectedIndex = _platformOptions.Count == 0 ? -1 : Math.Max(0, kept);
+        PlatformBox.Visibility = _platformOptions.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static int IndexOf(IReadOnlyList<string> options, string value)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            if (options[index] == value)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private ContentKind SelectedKind =>
         KindBox.SelectedIndex >= 0 && KindBox.SelectedIndex < _kinds.Count
             ? _kinds[KindBox.SelectedIndex]
             : _kinds.FirstOrDefault();
+
+    private string? SelectedPlatform =>
+        PlatformBox.SelectedIndex >= 0 && PlatformBox.SelectedIndex < _platformOptions.Count
+            ? _platformOptions[PlatformBox.SelectedIndex]
+            : null;
 
     private async Task LoadProfileAsync()
     {
@@ -199,52 +263,52 @@ public partial class ServerContentTab : UserControl
         HideState();
     }
 
-    private async Task SearchAsync()
+    /// <summary>
+    /// One search for the current filters. The results on screen stay until the reply is in,
+    /// the box keeps its text and focus, and a reply that a newer search has overtaken is
+    /// dropped. <paramref name="force"/> repeats a search that is already current (Enter, Retry).
+    /// </summary>
+    private async Task SearchAsync(bool force = false)
     {
-        if (_profile is null || _kinds.Count == 0)
+        if (_profile is null || _kinds.Count == 0 || TabDiscover.IsChecked != true)
         {
             return;
         }
 
-        var token = BeginRequest();
-        ShowState("Content.Loading", "Content.LoadingMessage");
-        try
-        {
-            using var client = _context.CreateClient(TimeSpan.FromSeconds(30));
-            var sort = SortBox.SelectedIndex switch
+        var inputs = new ContentSearchInputs(
+            _context.ServerId,
+            SelectedKind,
+            SearchBox.Text,
+            SortBox.SelectedIndex switch
             {
                 1 => ContentSortOrder.Downloads,
                 2 => ContentSortOrder.Updated,
                 3 => ContentSortOrder.Newest,
                 _ => ContentSortOrder.Relevance
-            };
-            var provider = ProviderBox.SelectedIndex switch
+            },
+            ProviderBox.SelectedIndex switch
             {
                 1 => "Modrinth",
                 2 => "Hangar",
                 _ => null
-            };
-            var query = new List<string>
-            {
-                $"sort={sort}",
-                $"kind={SelectedKind}",
-                $"compatibleOnly={(CompatibleOnlyBox.IsChecked == true).ToString().ToLowerInvariant()}",
-                "limit=30"
-            };
-            if (!string.IsNullOrWhiteSpace(SearchBox.Text))
-            {
-                query.Add($"query={Uri.EscapeDataString(SearchBox.Text.Trim())}");
-            }
+            },
+            CompatibleOnlyBox.IsChecked == true,
+            SelectedPlatform);
+        var query = ContentSearchSession.BuildQuery(inputs);
+        if (!_session.TryBegin($"{inputs.ServerId}?{query}", force, out var generation))
+        {
+            return;
+        }
 
-            if (provider is not null)
-            {
-                query.Add($"provider={provider}");
-            }
-
+        var token = BeginRequest();
+        SetSearching(true);
+        try
+        {
+            using var client = _context.CreateClient(TimeSpan.FromSeconds(30));
             var result = await client.GetFromJsonAsync<ContentSearchResult>(
-                $"/api/v1/servers/{_context.ServerId}/content/search?{string.Join('&', query)}",
+                $"/api/v1/servers/{_context.ServerId}/content/search?{query}",
                 token);
-            if (token.IsCancellationRequested)
+            if (!_session.IsCurrent(generation))
             {
                 return;
             }
@@ -261,27 +325,74 @@ public partial class ServerContentTab : UserControl
                 _discovered.Add(item);
             }
 
+            var errors = result?.ProviderErrors ?? [];
             if (_discovered.Count == 0)
             {
+                SetNotice(null);
                 ShowState(
                     "Content.Empty.Title",
-                    result?.ProviderErrors.Count > 0
-                        ? "Content.Error.ProvidersMessage"
-                        : "Content.Empty.Message",
-                    retry: result?.ProviderErrors.Count > 0);
+                    errors.Count > 0 ? "Content.Error.ProvidersMessage" : "Content.Empty.Message",
+                    retry: errors.Count > 0);
+                if (errors.Count > 0)
+                {
+                    _session.Forget(generation);
+                }
             }
             else
             {
                 HideState();
+                SetNotice(errors.Count > 0 ? DescribeProviderFailures(errors) : null);
+                DiscoverScroller.ScrollToTop();
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
+            // A newer search replaced this one.
         }
         catch (Exception exception) when (IsTransport(exception))
         {
-            ShowState("Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage", retry: true);
+            if (!_session.IsCurrent(generation))
+            {
+                return;
+            }
+
+            _session.Forget(generation);
+            if (_discovered.Count > 0)
+            {
+                // Keep what is on screen rather than trading it for an error card.
+                SetNotice(LocalizationService.Get("Content.Notice.Unreachable"));
+            }
+            else
+            {
+                ShowState("Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage", retry: true);
+            }
         }
+        finally
+        {
+            if (_session.IsCurrent(generation))
+            {
+                SetSearching(false);
+            }
+        }
+    }
+
+    /// <summary>"Hangar could not be reached…", naming only the sites that failed.</summary>
+    private static string DescribeProviderFailures(IReadOnlyList<string> errors)
+    {
+        var names = errors
+            .Select(error => error.Split(':')[0])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return LocalizationService.Format("Content.Notice.ProviderFailed", string.Join(", ", names));
+    }
+
+    private void SetSearching(bool searching) =>
+        SearchProgress.Visibility = searching ? Visibility.Visible : Visibility.Hidden;
+
+    private void SetNotice(string? text)
+    {
+        SearchNotice.Text = text ?? string.Empty;
+        SearchNotice.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>
@@ -614,17 +725,31 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
-        _searchDebounce.Stop();
-        _searchDebounce.Start();
+        // Clearing the box also lands here and brings back the discovery list.
+        _ = _searchDebounce.RunAsync(() => SearchAsync());
     }
 
-    private void Filter_Changed(object sender, RoutedEventArgs e)
+    private void SearchBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (!_loaded || sender is not (ComboBox or CheckBox))
+        if (e.Key != System.Windows.Input.Key.Enter || !_loaded)
         {
             return;
         }
 
+        e.Handled = true;
+        _searchDebounce.Cancel();
+        _ = SearchAsync(force: true);
+    }
+
+    private void Filter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded || _updatingControls || sender is not (ComboBox or CheckBox))
+        {
+            return;
+        }
+
+        // One search per change; the pending typed search is folded into it.
+        _searchDebounce.Cancel();
         _ = SearchAsync();
     }
 
@@ -633,15 +758,34 @@ public partial class ServerContentTab : UserControl
 
     private void Kind_Changed(object sender, SelectionChangedEventArgs e)
     {
+        if (_updatingControls || PlatformBox is null)
+        {
+            return;
+        }
+
+        _updatingControls = true;
+        try
+        {
+            RefreshKindControls();
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+
         if (!_loaded)
         {
             return;
         }
 
         // Switching type changes what "compatible" even means, so the list is rebuilt rather
-        // than filtered in place.
+        // than filtered in place, and a reply for the old type is ignored.
+        _searchDebounce.Cancel();
+        _session.Invalidate();
         _discovered.Clear();
-        _ = TabDiscover.IsChecked == true ? SearchAsync() : LoadInstalledAsync();
+        SetNotice(null);
+        HideState();
+        _ = TabDiscover.IsChecked == true ? SearchAsync(force: true) : LoadInstalledAsync();
     }
 
     private async void Distribute_Click(object sender, RoutedEventArgs e)

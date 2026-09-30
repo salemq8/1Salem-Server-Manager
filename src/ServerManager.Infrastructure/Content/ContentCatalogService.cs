@@ -37,6 +37,8 @@ public sealed class ContentCatalogService(
         var selected = _providers
             .Where(provider => request.Provider is null || provider.Id == request.Provider)
             .Where(provider => ContentTypePolicy.IsServedBy(request.Kind, provider.Id))
+            .Where(provider => provider.Id != ContentProviderId.Hangar ||
+                               ContentPlatformFilter.IncludesHangar(request.Kind, request.Platform))
             .Where(provider => provider.CanServe(profile, request.Kind))
             .ToArray();
 

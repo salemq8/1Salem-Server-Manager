@@ -128,7 +128,8 @@ public sealed record ContentSearchRequest(
     ContentProviderId? Provider = null,
     int Offset = 0,
     int Limit = 20,
-    ContentKind Kind = ContentKind.Plugin);
+    ContentKind Kind = ContentKind.Plugin,
+    string? Platform = null);
 
 /// <summary>
 /// A project normalized across providers. A field the provider did not return stays null: the

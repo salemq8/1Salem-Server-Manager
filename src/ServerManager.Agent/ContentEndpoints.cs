@@ -35,6 +35,7 @@ public static class ContentEndpoints
                 bool? compatibleOnly,
                 string? provider,
                 string? kind,
+                string? platform,
                 int? offset,
                 int? limit,
                 ContentProfileService profiles,
@@ -60,7 +61,8 @@ public static class ContentEndpoints
                     limit ?? 20,
                     Enum.TryParse<ContentKind>(kind, true, out var parsedKind)
                         ? parsedKind
-                        : ContentKind.Plugin);
+                        : ContentKind.Plugin,
+                    platform);
                 return Results.Ok(await catalog.SearchAsync(request, profile, cancellationToken));
             });
 

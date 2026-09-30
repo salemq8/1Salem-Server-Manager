@@ -14,9 +14,9 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length != 3 || args[0] is not ("owner" or "friend"))
+        if (args.Length != 3 || args[0] is not ("owner" or "friend" or "content"))
         {
-            Console.Error.WriteLine("usage: ServerManager.Connect.UiReview owner|friend <output directory> <culture>");
+            Console.Error.WriteLine("usage: ServerManager.Connect.UiReview owner|friend|content <output directory> <culture>");
             return 2;
         }
 
@@ -29,7 +29,20 @@ internal static class Program
 
         Func<Task> scenarios;
         FakeAgent? agent = null;
-        if (args[0] == "owner")
+        if (args[0] == "content")
+        {
+            // The real Server Manager Content tab against the in-process fake Agent.
+            agent = new FakeAgent();
+            Environment.SetEnvironmentVariable("ONE_SALEM_AGENT_URL", agent.Url);
+            Environment.SetEnvironmentVariable("ONE_SALEM_AGENT_DATA_ROOT", agent.DataRoot);
+            Environment.SetEnvironmentVariable("ONE_SALEM_AGENT_PIPE", "1Salem.UiReview." + Guid.NewGuid().ToString("N"));
+            var app = new OwnerReviewApp { Resources = AppResources.Load(@"src\ServerManager.Client\App.xaml") };
+            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            ServerManager.Client.Shell.LocalizationService.Apply(culture.Name);
+            ServerManager.Client.Shell.ThemeService.Apply(ServerManager.Client.Shell.AppTheme.Dark);
+            scenarios = () => ContentScenarios.RunAsync(agent, report);
+        }
+        else if (args[0] == "owner")
         {
             // Point every owner client at the in-process fake before any client type is touched,
             // so no request can reach an installed Agent.
