@@ -185,6 +185,18 @@ internal static class ContentScenarios
             $"provider failure kept results and noted: '{notice.Text}'");
         await report.CaptureAsync("content-04-provider-failed", window, keyboard: false);
 
+        // Discover -> Updates ("No updates" card) -> Discover: the card must not stay behind.
+        var tabUpdates = (RadioButton)tab.FindName("TabUpdates");
+        var tabDiscover = (RadioButton)tab.FindName("TabDiscover");
+        tabUpdates.IsChecked = true;
+        await Report.SettleAsync(900);
+        var updatesCard = state.Visibility == Visibility.Visible;
+        tabDiscover.IsChecked = true;
+        await Report.SettleAsync(900);
+        var discoverScroller = (FrameworkElement)tab.FindName("DiscoverScroller");
+        report.Check(updatesCard && state.Visibility != Visibility.Visible && discoverScroller.Visibility == Visibility.Visible && list.Items.Count > 0,
+            $"back on Discover after Updates: state card hidden, {list.Items.Count} results visible");
+
         stress.Stop();
         DashboardFeed.Shared.Dispose();
         window.Close();

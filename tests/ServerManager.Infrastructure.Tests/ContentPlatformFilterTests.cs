@@ -45,15 +45,25 @@ public sealed class ContentPlatformFilterTests
         Assert.Equal(expected, string.Join(',', ContentPlatformFilter.ModrinthLoaders(ContentKind.Plugin, server, filter)));
 
     [Theory]
-    [InlineData("auto", true)]
-    [InlineData("all", true)]
-    [InlineData("paper", true)]
-    [InlineData("purpur", true)]
-    [InlineData("spigot", false)]
-    [InlineData("bukkit", false)]
-    [InlineData("folia", false)]
-    public void Hangar_IsAskedOnlyWhereItsPaperFilesApply(string filter, bool expected) =>
-        Assert.Equal(expected, ContentPlatformFilter.IncludesHangar(ContentKind.Plugin, filter));
+    [InlineData(ServerPlatform.Paper, "auto", true)]
+    [InlineData(ServerPlatform.Paper, "all", true)]
+    [InlineData(ServerPlatform.Paper, "paper", true)]
+    [InlineData(ServerPlatform.Purpur, "purpur", true)]
+    [InlineData(ServerPlatform.Paper, "spigot", false)]
+    [InlineData(ServerPlatform.Paper, "bukkit", false)]
+    [InlineData(ServerPlatform.Paper, "folia", false)]
+    [InlineData(ServerPlatform.Folia, "auto", false)]
+    [InlineData(ServerPlatform.Folia, "paper", false)]
+    public void Hangar_IsAskedOnlyWhereItsPaperFilesApply(ServerPlatform server, string filter, bool expected) =>
+        Assert.Equal(expected, ContentPlatformFilter.IncludesHangar(ContentKind.Plugin, filter, server));
+
+    [Theory]
+    [InlineData(ServerPlatform.Paper, "all", "paper,spigot,bukkit")]
+    [InlineData(ServerPlatform.Paper, "spigot", "spigot")]
+    [InlineData(ServerPlatform.Paper, "folia", "")]
+    [InlineData(ServerPlatform.Spigot, "paper", "")]
+    public void WorksWithThisServer_NarrowsThePlatformToWhatTheServerRuns(ServerPlatform server, string filter, string expected) =>
+        Assert.Equal(expected, string.Join(',', ContentPlatformFilter.ModrinthLoaders(ContentKind.Plugin, server, filter, compatibleOnly: true)));
 
     [Fact]
     public async Task Modrinth_SearchesOnlyTheChosenPlatform()
@@ -87,20 +97,25 @@ public sealed class ContentPlatformFilterTests
                          "categories": ["folia"], "versions": ["1.21.8"] }],
               "offset": 0, "limit": 20, "total_hits": 1 }
             """;
-        var provider = new ModrinthContentProvider(Client(new CapturingHandler(hit), ModrinthContentProvider.BaseAddress));
+        var handler = new CapturingHandler(hit);
+        var provider = new ModrinthContentProvider(Client(handler, ModrinthContentProvider.BaseAddress));
 
-        var result = await provider.SearchAsync(new ContentSearchRequest(Platform: "folia"), Profile(ServerPlatform.Paper));
+        var browsing = await provider.SearchAsync(new ContentSearchRequest(CompatibleOnly: false, Platform: "folia"), Profile(ServerPlatform.Paper));
+        var worksHere = await provider.SearchAsync(new ContentSearchRequest(CompatibleOnly: true, Platform: "folia"), Profile(ServerPlatform.Paper));
 
-        var project = Assert.Single(result.Projects);
-        Assert.False(project.IsCompatible);
+        // Browsing everything shows them honestly marked; "Works with this server" does not ask at all.
+        Assert.False(Assert.Single(browsing.Projects).IsCompatible);
+        Assert.Empty(worksHere.Projects);
+        Assert.Single(handler.Requests);
     }
 
     [Theory]
-    [InlineData("spigot", false)]
-    [InlineData("folia", false)]
-    [InlineData("paper", true)]
-    [InlineData(null, true)]
-    public async Task Catalog_AsksHangar_OnlyForPaperFamilyFilters(string? filter, bool hangarAsked)
+    [InlineData(ServerPlatform.Paper, "spigot", false)]
+    [InlineData(ServerPlatform.Paper, "folia", false)]
+    [InlineData(ServerPlatform.Paper, "paper", true)]
+    [InlineData(ServerPlatform.Paper, null, true)]
+    [InlineData(ServerPlatform.Folia, null, false)]
+    public async Task Catalog_AsksHangar_OnlyForPaperFamilyFilters(ServerPlatform server, string? filter, bool hangarAsked)
     {
         var modrinth = new CapturingHandler(ModrinthEmpty);
         var hangar = new CapturingHandler("""{ "result": [], "pagination": { "count": 0 } }""");
@@ -111,7 +126,7 @@ public sealed class ContentPlatformFilterTests
             ],
             NullLogger<ContentCatalogService>.Instance);
 
-        var result = await catalog.SearchAsync(new ContentSearchRequest("x", Platform: filter), Profile(ServerPlatform.Paper));
+        var result = await catalog.SearchAsync(new ContentSearchRequest("x", CompatibleOnly: false, Platform: filter), Profile(server));
 
         Assert.Empty(result.ProviderErrors);
         Assert.Single(modrinth.Requests);

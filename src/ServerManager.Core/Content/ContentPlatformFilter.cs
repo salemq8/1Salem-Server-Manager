@@ -44,11 +44,20 @@ public static class ContentPlatformFilter
         return value is not null && options.Contains(value) ? value : options[0];
     }
 
-    /// <summary>The Modrinth loaders to search for this type, server and filter.</summary>
-    public static IReadOnlyList<string> ModrinthLoaders(ContentKind kind, ServerPlatform platform, string? filter)
+    /// <summary>
+    /// The Modrinth loaders to search for this type, server and filter. With
+    /// <paramref name="compatibleOnly"/> ("Works with this server"), a plugin filter is narrowed to
+    /// what this server can run, so that list never consists of plugins that do not work here;
+    /// an empty result means nothing chosen can run on this server.
+    /// </summary>
+    public static IReadOnlyList<string> ModrinthLoaders(
+        ContentKind kind,
+        ServerPlatform platform,
+        string? filter,
+        bool compatibleOnly = false)
     {
         var chosen = Normalize(kind, filter);
-        return kind switch
+        IReadOnlyList<string> loaders = kind switch
         {
             ContentKind.Plugin => chosen switch
             {
@@ -59,16 +68,25 @@ public static class ContentPlatformFilter
             ContentKind.Modpack => chosen == All ? ModpackLoaders : [chosen],
             _ => ContentTypePolicy.ModrinthLoaders(kind, platform)
         };
+
+        if (compatibleOnly && kind == ContentKind.Plugin)
+        {
+            var runnable = PluginPlatformPolicy.ModrinthLoaders(platform);
+            loaders = loaders.Where(loader => runnable.Contains(loader, StringComparer.OrdinalIgnoreCase)).ToArray();
+        }
+
+        return loaders;
     }
 
     /// <summary>
     /// Whether Hangar belongs in the search. Hangar only publishes for PAPER: that answers
     /// Paper and its fork Purpur, but proves nothing for Spigot, Bukkit or Folia (a plugin has
-    /// to opt into Folia's threading), so those filters leave Hangar out.
+    /// to opt into Folia's threading). So those filters leave Hangar out, and so does a Folia
+    /// server whatever the filter, because its PAPER files would be shown as fitting.
     /// </summary>
-    public static bool IncludesHangar(ContentKind kind, string? filter)
+    public static bool IncludesHangar(ContentKind kind, string? filter, ServerPlatform platform)
     {
-        if (kind != ContentKind.Plugin)
+        if (kind != ContentKind.Plugin || platform == ServerPlatform.Folia)
         {
             return false;
         }

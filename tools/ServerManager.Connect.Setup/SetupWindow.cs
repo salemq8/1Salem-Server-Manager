@@ -23,10 +23,14 @@ internal sealed class SetupWindow : Window
     private readonly Button _primary = new() { MinWidth = 140, Padding = new Thickness(16, 7, 16, 7), IsDefault = true };
     private readonly Button _secondary = new() { MinWidth = 110, Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(10, 0, 0, 0), IsCancel = true };
     private bool _done;
+    private bool _busy;
 
     public SetupWindow(SetupMode mode)
     {
         _mode = mode;
+
+        // Closing mid-way would stop the copy half done; the window stays until it finishes.
+        Closing += (_, e) => e.Cancel = _busy;
         Title = T("1Salem Connect Setup", "إعداد 1Salem Connect");
         Width = 520;
         SizeToContent = SizeToContent.Height;
@@ -90,6 +94,7 @@ internal sealed class SetupWindow : Window
             return;
         }
 
+        _busy = true;
         _primary.IsEnabled = false;
         _secondary.IsEnabled = false;
         _progress.Visibility = Visibility.Visible;
@@ -126,7 +131,7 @@ internal sealed class SetupWindow : Window
         catch (InstallerBlockedException exception)
         {
             _message.Text = Program.Arabic
-                ? "1Salem Connect يعمل الآن. أغلقه (بما في ذلك أيقونته بجوار الساعة) ثم حاول مرة أخرى."
+                ? "1Salem Connect يعمل الآن. أغلق نافذته ثم حاول مرة أخرى."
                 : exception.Message;
             _secondary.IsEnabled = true;
         }
@@ -137,6 +142,7 @@ internal sealed class SetupWindow : Window
         }
         finally
         {
+            _busy = false;
             _progress.Visibility = Visibility.Hidden;
             _primary.IsEnabled = true;
         }

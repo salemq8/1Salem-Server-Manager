@@ -38,7 +38,13 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
 
         // The chosen platform narrows the search only; ReadProject still judges each card
         // against what this server can run.
-        var loaders = ContentPlatformFilter.ModrinthLoaders(request.Kind, profile.Platform, request.Platform);
+        var loaders = ContentPlatformFilter.ModrinthLoaders(
+            request.Kind, profile.Platform, request.Platform, request.CompatibleOnly);
+        if (loaders.Count == 0 && request.Kind == ContentKind.Plugin)
+        {
+            // "Works with this server" with a platform this server cannot run: nothing to ask.
+            return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
+        }
 
         // Facets are AND between the inner arrays and OR inside one, so this reads as:
         // "this content type, for any loader this server runs, (and for this Minecraft

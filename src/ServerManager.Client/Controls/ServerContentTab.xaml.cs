@@ -44,6 +44,9 @@ public partial class ServerContentTab : UserControl
     /// <summary>The platform choices offered for the selected type, in selector order.</summary>
     private IReadOnlyList<string> _platformOptions = [];
 
+    /// <summary>The platform last chosen for each content type.</summary>
+    private readonly Dictionary<ContentKind, string> _platformByKind = [];
+
     public ServerContentTab()
     {
         InitializeComponent();
@@ -60,6 +63,11 @@ public partial class ServerContentTab : UserControl
                 return;
             }
 
+            // Nothing still on its way for the previous server may land on this one.
+            _searchDebounce.Cancel();
+            _inFlight?.Cancel();
+            SetSearching(false);
+            SetNotice(null);
             _loaded = false;
             _discovered.Clear();
             _installed.Clear();
@@ -177,7 +185,9 @@ public partial class ServerContentTab : UserControl
         AutomationProperties.SetName(SearchBox, ContentLabels.SearchHint(kind));
         AutomationProperties.SetName(PlatformBox, LocalizationService.Get("Content.PlatformLabel"));
 
-        var previous = SelectedPlatform;
+        // Each type remembers its own choice: plugins and modpacks both have an "all", and a trip
+        // through modpacks must not turn the plugin filter into "All plugin platforms".
+        var previous = _platformByKind.TryGetValue(kind, out var remembered) ? remembered : null;
         _platformOptions = ContentPlatformFilter.Options(kind);
         PlatformBox.ItemsSource = _platformOptions
             .Select(option => ContentLabels.Platform(option, kind, _profile?.Platform))
@@ -347,7 +357,8 @@ public partial class ServerContentTab : UserControl
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            // A newer search replaced this one.
+            // Replaced by a newer search, a tab switch or a server switch: never "done".
+            _session.Forget(generation);
         }
         catch (Exception exception) when (IsTransport(exception))
         {
@@ -712,7 +723,9 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
-        _ = discovering ? SearchAsync() : LoadInstalledAsync();
+        // Coming back to Discover always refreshes it: the Installed/Updates state card and any
+        // search that tab switch cancelled must not be left behind.
+        _ = discovering ? SearchAsync(force: true) : LoadInstalledAsync();
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -746,6 +759,11 @@ public partial class ServerContentTab : UserControl
         if (!_loaded || _updatingControls || sender is not (ComboBox or CheckBox))
         {
             return;
+        }
+
+        if (ReferenceEquals(sender, PlatformBox) && SelectedPlatform is { } platform)
+        {
+            _platformByKind[SelectedKind] = platform;
         }
 
         // One search per change; the pending typed search is folded into it.

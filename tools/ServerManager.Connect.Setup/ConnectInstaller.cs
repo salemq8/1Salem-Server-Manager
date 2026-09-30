@@ -45,6 +45,14 @@ internal static class ConnectInstaller
         ThrowIfRunning();
 
         var parent = Path.GetDirectoryName(InstallRoot)!;
+
+        // Leftovers of an install that was stopped half way.
+        foreach (var stale in Directory.EnumerateDirectories(parent, DisplayName + ".new-*")
+                     .Concat(Directory.EnumerateDirectories(parent, DisplayName + ".old-*")))
+        {
+            TryDelete(stale);
+        }
+
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var staging = Path.Combine(parent, $"{DisplayName}.new-{suffix}");
         var previous = Path.Combine(parent, $"{DisplayName}.old-{suffix}");
@@ -119,15 +127,25 @@ internal static class ConnectInstaller
         var running = Path.GetFullPath(Environment.ProcessPath ?? string.Empty);
         if (running.StartsWith(InstallRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            // This uninstaller runs from that folder and shares its runtime, so the folder is
-            // removed right after this process exits.
-            var command = $"/d /c ping 127.0.0.1 -n 4 > nul & rmdir /s /q \"{InstallRoot}\"";
-            Process.Start(new ProcessStartInfo("cmd.exe", command)
+            // This uninstaller runs from that folder and has its runtime loaded, so a helper
+            // waits for this process to exit (however long its window stays open) and then
+            // removes the folder.
+            var root = InstallRoot.Replace("'", "''", StringComparison.Ordinal);
+            var script = $"Wait-Process -Id {Environment.ProcessId} -ErrorAction SilentlyContinue; " +
+                         "Start-Sleep -Milliseconds 500; " +
+                         $"Remove-Item -LiteralPath '{root}' -Recurse -Force -ErrorAction SilentlyContinue";
+            var helper = new ProcessStartInfo("powershell.exe")
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetTempPath()
-            });
+            };
+            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script })
+            {
+                helper.ArgumentList.Add(argument);
+            }
+
+            Process.Start(helper);
         }
         else
         {
@@ -176,7 +194,7 @@ internal static class ConnectInstaller
     {
         if (RunningFromInstallRoot().Count > 0)
         {
-            throw new InstallerBlockedException("1Salem Connect is running. Close it (including its tray icon), then try again.");
+            throw new InstallerBlockedException("1Salem Connect is running. Close its window, then try again.");
         }
     }
 

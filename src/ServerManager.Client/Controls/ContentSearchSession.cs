@@ -67,6 +67,7 @@ public sealed class ContentSearchSession
 
         _contextKey = contextKey;
         _current = null;
+        _generation++;
         return true;
     }
 

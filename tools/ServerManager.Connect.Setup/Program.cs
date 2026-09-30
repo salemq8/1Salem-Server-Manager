@@ -29,7 +29,10 @@ internal static class Program
     {
         var log = Path.Combine(Path.GetTempPath(), "1SalemConnect-Setup.log");
         void Write(string line) => File.AppendAllText(log, $"{DateTimeOffset.Now:O} {line}{Environment.NewLine}");
-        var progress = new Progress<string>(Write);
+
+        // Synchronous on purpose: Progress<T> would post to the thread pool here, where two log
+        // writes could collide and the exception would escape the try below.
+        var progress = new SynchronousProgress(Write);
         try
         {
             Write(uninstall ? "uninstall start" : "install start");
@@ -59,4 +62,17 @@ internal static class Program
 
     public static bool Arabic => CultureInfo.CurrentUICulture.TextInfo.IsRightToLeft &&
                                  CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
+    private sealed class SynchronousProgress(Action<string> report) : IProgress<string>
+    {
+        private readonly object _gate = new();
+
+        public void Report(string value)
+        {
+            lock (_gate)
+            {
+                report(value);
+            }
+        }
+    }
 }
