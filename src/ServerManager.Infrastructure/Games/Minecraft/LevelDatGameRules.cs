@@ -6,25 +6,37 @@ using System.Text;
 namespace ServerManager.Infrastructure.Games.Minecraft;
 
 /// <summary>
-/// Reads the gamerules a world has saved in its level.dat (gzip-compressed NBT, root compound ->
-/// "Data" -> "GameRules"). This is how the Gameplay page shows real values while the server is not
-/// answering. It only ever reads: the file is opened shared and never written.
+/// Reads the gamerules a world has saved (gzip-compressed NBT). Minecraft 26.x keeps them in
+/// data/minecraft/game_rules.dat (root -> "data", named "minecraft:keep_inventory" and so on);
+/// older versions keep them in level.dat (root -> "Data" -> "GameRules"). This is how the Gameplay
+/// page shows real values while the server is not answering. It only ever reads: files are opened
+/// shared and never written.
 /// </summary>
 public static class LevelDatGameRules
 {
     private const int MaximumDepth = 64;
 
-    /// <summary>The saved gamerules by the name the world uses, or null when there is no readable level.dat.</summary>
-    public static IReadOnlyDictionary<string, string>? Read(string levelDatPath)
+    /// <summary>The saved gamerules of the world folder, from whichever file its version uses; null when neither is readable.</summary>
+    public static IReadOnlyDictionary<string, string>? ReadWorld(string worldDirectory)
     {
-        if (!File.Exists(levelDatPath))
+        var registry = Path.Combine(worldDirectory, "data", "minecraft", "game_rules.dat");
+        return ReadCompound(registry, "data") ?? Read(Path.Combine(worldDirectory, "level.dat"));
+    }
+
+    /// <summary>The gamerules in a level.dat, by the name the world uses, or null when there are none to read.</summary>
+    public static IReadOnlyDictionary<string, string>? Read(string levelDatPath) =>
+        ReadCompound(levelDatPath, "Data", "GameRules");
+
+    private static IReadOnlyDictionary<string, string>? ReadCompound(string path, params string[] compoundPath)
+    {
+        if (!File.Exists(path))
         {
             return null;
         }
 
         try
         {
-            using var file = new FileStream(levelDatPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var gzip = new GZipStream(file, CompressionMode.Decompress);
             using var buffer = new MemoryStream();
             gzip.CopyTo(buffer);
@@ -37,7 +49,7 @@ public static class LevelDatGameRules
             }
 
             reader.ReadString();
-            return reader.FindGameRules();
+            return reader.FindRules(compoundPath, 0);
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
                                               FormatException or ArgumentOutOfRangeException or OverflowException)
@@ -79,8 +91,8 @@ public static class LevelDatGameRules
             return text;
         }
 
-        /// <summary>Walks the root compound looking for Data.GameRules.</summary>
-        public IReadOnlyDictionary<string, string>? FindGameRules()
+        /// <summary>Walks into the named compounds, in order, and reads the last one's values.</summary>
+        public IReadOnlyDictionary<string, string>? FindRules(IReadOnlyList<string> path, int index)
         {
             while (true)
             {
@@ -91,29 +103,9 @@ public static class LevelDatGameRules
                 }
 
                 var name = ReadString();
-                if (type == TagCompound && name == "Data")
+                if (type == TagCompound && name == path[index])
                 {
-                    return FindInData();
-                }
-
-                Skip(type, 0);
-            }
-        }
-
-        private IReadOnlyDictionary<string, string>? FindInData()
-        {
-            while (true)
-            {
-                var type = ReadByte();
-                if (type == TagEnd)
-                {
-                    return null;
-                }
-
-                var name = ReadString();
-                if (type == TagCompound && name == "GameRules")
-                {
-                    return ReadRules();
+                    return index == path.Count - 1 ? ReadRules() : FindRules(path, index + 1);
                 }
 
                 Skip(type, 0);

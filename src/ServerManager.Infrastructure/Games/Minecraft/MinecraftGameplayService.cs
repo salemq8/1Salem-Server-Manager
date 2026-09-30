@@ -532,9 +532,10 @@ public sealed class MinecraftGameplayService : IDisposable
     }
 
     /// <summary>
-    /// The rule as the world last saved it. Worlds saved with the classic camelCase names list
-    /// every rule their version has, so a missing one is not supported there; with any other
-    /// layout a missing rule is only unknown.
+    /// The rule as the world last saved it. A world's saved rules list every rule its version has
+    /// (level.dat's GameRules in older versions, game_rules.dat in 26.x), so once the list is
+    /// recognisably complete a missing rule is not supported there. A rule saved as a number rather
+    /// than on/off is not offered as a switch. With too little to go on, the rule is only unknown.
     /// </summary>
     internal static MinecraftGameRuleState FromWorld(MinecraftGameRuleDefinition rule, IReadOnlyDictionary<string, string>? worldRules)
     {
@@ -544,13 +545,15 @@ public sealed class MinecraftGameplayService : IDisposable
         }
 
         var name = MinecraftGameRuleCatalog.ResolveName(rule, worldRules.Keys.ToArray());
-        if (name is not null && MinecraftGameRuleCatalog.TryParseValue(worldRules[name], out var value))
+        if (name is not null)
         {
-            return new MinecraftGameRuleState(rule.Key, name, true, value, MinecraftValueSource.WorldFile, null);
+            return MinecraftGameRuleCatalog.TryParseValue(worldRules[name], out var value)
+                ? new MinecraftGameRuleState(rule.Key, name, true, value, MinecraftValueSource.WorldFile, null)
+                : new MinecraftGameRuleState(rule.Key, name, false, null, MinecraftValueSource.WorldFile, null);
         }
 
-        var classicLayout = MinecraftGameRuleCatalog.All.Count(known => worldRules.ContainsKey(known.Key)) >= 5;
-        return classicLayout
+        var completeList = MinecraftGameRuleCatalog.All.Count(known => known.Names.Any(worldRules.ContainsKey)) >= 5;
+        return completeList
             ? new MinecraftGameRuleState(rule.Key, null, false, null, MinecraftValueSource.WorldFile, null)
             : new MinecraftGameRuleState(rule.Key, null, true, null, MinecraftValueSource.Unknown, null);
     }
@@ -567,7 +570,7 @@ public sealed class MinecraftGameplayService : IDisposable
             return null;
         }
 
-        return LevelDatGameRules.Read(Path.Combine(rootPath, levelName, "level.dat"));
+        return LevelDatGameRules.ReadWorld(Path.Combine(rootPath, levelName));
     }
 
     private async Task<IReadOnlyDictionary<string, bool>> ReadPendingAsync(Guid serverId, CancellationToken cancellationToken)

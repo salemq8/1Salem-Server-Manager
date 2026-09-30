@@ -74,6 +74,31 @@ public sealed class MinecraftGameplayPresentationTests
         Assert.False(MinecraftGameplayPresentation.IsShown(null));
     }
 
+    [Fact]
+    public void PvP_IsTheGameruleWhereTheServerHasItAndTheSettingElsewhere()
+    {
+        var modern = Snapshot(Rule("pvp", true) with { Source = MinecraftValueSource.WorldFile });
+        var classic = Snapshot(Rule("pvp", null) with { Supported = false, Source = MinecraftValueSource.WorldFile });
+        var noWorld = Snapshot(Rule("pvp", null) with { Source = MinecraftValueSource.Unknown });
+
+        Assert.True(MinecraftGameplayPresentation.ShowsRuleRow("pvp", modern));
+        Assert.True(MinecraftGameplayPresentation.IsReplacedByGameRule("pvp", modern));
+        Assert.False(MinecraftGameplayPresentation.ShowsRuleRow("pvp", classic));
+        Assert.False(MinecraftGameplayPresentation.IsReplacedByGameRule("pvp", classic));
+        Assert.False(MinecraftGameplayPresentation.ShowsRuleRow("pvp", noWorld));
+        Assert.False(MinecraftGameplayPresentation.IsReplacedByGameRule("pvp", noWorld));
+        Assert.Equal(0, MinecraftGameplayPresentation.MissingRuleCount(classic));
+    }
+
+    [Fact]
+    public void RulesWithoutASettingCounterpart_AreNeverReplacedOrHiddenByIt()
+    {
+        var snapshot = Snapshot(Rule("keepInventory", null) with { Source = MinecraftValueSource.Unknown });
+
+        Assert.True(MinecraftGameplayPresentation.ShowsRuleRow("keepInventory", snapshot));
+        Assert.False(MinecraftGameplayPresentation.IsReplacedByGameRule("difficulty", snapshot));
+    }
+
     [Theory]
     [InlineData(MinecraftLiveControl.Live, true)]
     [InlineData(MinecraftLiveControl.Stopped, false)]
@@ -194,6 +219,10 @@ public sealed class MinecraftGameplayPresentationTests
 
     private static MinecraftGameRuleState Rule(string key, bool? value) =>
         new(key, key, true, value, MinecraftValueSource.Live, null);
+
+    private static MinecraftGameplaySnapshot Snapshot(params MinecraftGameRuleState[] rules) =>
+        new(Guid.NewGuid(), "26.3", ServerPlatform.Vanilla, MinecraftLiveControl.Stopped, true, rules, [],
+            new MinecraftFallDamageCapability(false, []), DateTimeOffset.UtcNow);
 
     private static void WithCulture(string name, Action action)
     {

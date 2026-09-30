@@ -12,14 +12,24 @@ public enum MinecraftRuleGroup
 }
 
 /// <summary>
-/// A boolean gamerule the Gameplay page offers. <see cref="Key"/> is the classic camelCase name;
-/// newer Minecraft versions may know the rule by its snake_case form instead. Which one a server
-/// actually has is never assumed: it is read from the server's own answers or its level.dat.
+/// A boolean gamerule the Gameplay page offers. <see cref="Key"/> is the classic camelCase name.
+/// Since the gamerule registry (Minecraft 1.21.11 and the 26.x releases) rules are named
+/// "minecraft:snake_case", and some were renamed on the way (doDaylightCycle is now advance_time);
+/// <see cref="ModernName"/> holds that newer name when it is not simply the snake_case key. Which
+/// name a server actually has is never assumed: it is read from its answers or its world files.
 /// </summary>
-public sealed record MinecraftGameRuleDefinition(string Key, MinecraftRuleGroup Group, bool Common)
+public sealed record MinecraftGameRuleDefinition(string Key, MinecraftRuleGroup Group, bool Common, string? ModernName = null)
 {
-    public IReadOnlyList<string> Names { get; } =
-        [Key, MinecraftGameRuleCatalog.SnakeCase(Key), "minecraft:" + MinecraftGameRuleCatalog.SnakeCase(Key)];
+    public IReadOnlyList<string> Names { get; } = BuildNames(Key, ModernName);
+
+    private static string[] BuildNames(string key, string? modernName)
+    {
+        var snake = MinecraftGameRuleCatalog.SnakeCase(key);
+        var modern = modernName ?? snake;
+        return new[] { key, snake, "minecraft:" + snake, modern, "minecraft:" + modern }
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
 }
 
 /// <summary>The gamerules shown on the Gameplay page, grouped, with the common ones first.</summary>
@@ -27,26 +37,31 @@ public static class MinecraftGameRuleCatalog
 {
     public static IReadOnlyList<MinecraftGameRuleDefinition> All { get; } =
     [
+        // PvP moved from server.properties to a gamerule in 1.21.9; older servers do not have it.
+        new("pvp", MinecraftRuleGroup.Players, Common: true),
         new("keepInventory", MinecraftRuleGroup.Players, Common: true),
-        new("doImmediateRespawn", MinecraftRuleGroup.Players, Common: true),
-        new("naturalRegeneration", MinecraftRuleGroup.Players, Common: true),
+        new("doImmediateRespawn", MinecraftRuleGroup.Players, Common: true, ModernName: "immediate_respawn"),
+        new("naturalRegeneration", MinecraftRuleGroup.Players, Common: true, ModernName: "natural_health_regeneration"),
         new("showDeathMessages", MinecraftRuleGroup.Players, Common: false),
-        new("announceAdvancements", MinecraftRuleGroup.Players, Common: false),
-        new("doDaylightCycle", MinecraftRuleGroup.World, Common: true),
-        new("doWeatherCycle", MinecraftRuleGroup.World, Common: true),
+        new("announceAdvancements", MinecraftRuleGroup.Players, Common: false, ModernName: "show_advancement_messages"),
+        new("doDaylightCycle", MinecraftRuleGroup.World, Common: true, ModernName: "advance_time"),
+        new("doWeatherCycle", MinecraftRuleGroup.World, Common: true, ModernName: "advance_weather"),
+
+        // Newer versions replaced it with fire_spread_radius_around_player, a number rather than
+        // on/off, so it is offered only where the switch really exists.
         new("doFireTick", MinecraftRuleGroup.World, Common: true),
-        new("doInsomnia", MinecraftRuleGroup.World, Common: false),
+        new("doInsomnia", MinecraftRuleGroup.World, Common: false, ModernName: "spawn_phantoms"),
         new("fallDamage", MinecraftRuleGroup.Damage, Common: true),
         new("fireDamage", MinecraftRuleGroup.Damage, Common: false),
         new("drowningDamage", MinecraftRuleGroup.Damage, Common: false),
         new("freezeDamage", MinecraftRuleGroup.Damage, Common: false),
-        new("doMobSpawning", MinecraftRuleGroup.Mobs, Common: true),
+        new("doMobSpawning", MinecraftRuleGroup.Mobs, Common: true, ModernName: "spawn_mobs"),
         new("mobGriefing", MinecraftRuleGroup.Mobs, Common: true),
-        new("doPatrolSpawning", MinecraftRuleGroup.Mobs, Common: false),
-        new("doTraderSpawning", MinecraftRuleGroup.Mobs, Common: false),
-        new("doMobLoot", MinecraftRuleGroup.Drops, Common: false),
-        new("doTileDrops", MinecraftRuleGroup.Drops, Common: false),
-        new("doEntityDrops", MinecraftRuleGroup.Drops, Common: false)
+        new("doPatrolSpawning", MinecraftRuleGroup.Mobs, Common: false, ModernName: "spawn_patrols"),
+        new("doTraderSpawning", MinecraftRuleGroup.Mobs, Common: false, ModernName: "spawn_wandering_traders"),
+        new("doMobLoot", MinecraftRuleGroup.Drops, Common: false, ModernName: "mob_drops"),
+        new("doTileDrops", MinecraftRuleGroup.Drops, Common: false, ModernName: "block_drops"),
+        new("doEntityDrops", MinecraftRuleGroup.Drops, Common: false, ModernName: "entity_drops")
     ];
 
     public static MinecraftGameRuleDefinition? Find(string? key) =>

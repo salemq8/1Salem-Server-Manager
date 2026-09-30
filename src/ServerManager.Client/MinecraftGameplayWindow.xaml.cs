@@ -186,7 +186,7 @@ public partial class MinecraftGameplayWindow : Window
             _fallDamageStatus = null;
             GameplayPanel.Children.Clear();
 
-            var hidden = snapshot.GameRules.Count(rule => !rule.Supported);
+            var hidden = MinecraftGameplayPresentation.MissingRuleCount(snapshot);
             foreach (var section in MinecraftGameplayPresentation.Sections)
             {
                 var rows = new StackPanel();
@@ -280,7 +280,7 @@ public partial class MinecraftGameplayWindow : Window
             case GameplayRowKind.GameRule:
                 {
                     var rule = snapshot.GameRules.FirstOrDefault(item => item.Key == row.Key);
-                    if (!MinecraftGameplayPresentation.IsShown(rule))
+                    if (!MinecraftGameplayPresentation.ShowsRuleRow(row.Key, snapshot))
                     {
                         return null;
                     }
@@ -338,6 +338,11 @@ public partial class MinecraftGameplayWindow : Window
             default:
                 {
                     var definition = MinecraftGameplayPropertyPolicy.Find(row.Key);
+                    if (MinecraftGameplayPresentation.IsReplacedByGameRule(row.Key, snapshot))
+                    {
+                        return null;
+                    }
+
                     if (definition is null)
                     {
                         return null;

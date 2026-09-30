@@ -40,7 +40,7 @@ public static class MinecraftGameplayPresentation
         new("General", false,
         [
             Property("difficulty"), Property("gamemode"), Property("force-gamemode"),
-            Property("hardcore"), Property("pvp"), Property("allow-flight")
+            Property("hardcore"), Rule("pvp"), Property("pvp"), Property("allow-flight")
         ]),
         new("Players", false,
         [
@@ -89,6 +89,26 @@ public static class MinecraftGameplayPresentation
 
     /// <summary>Whether a rule gets a row: rules this server's version does not have are left out.</summary>
     public static bool IsShown(MinecraftGameRuleState? rule) => rule is { Supported: true };
+
+    /// <summary>
+    /// Whether a gamerule row is shown. A rule that replaced a server.properties value (PvP since
+    /// Minecraft 1.21.9) is shown only once the server or its world confirms it exists; until
+    /// then the server.properties row stands in, so one setting never gets two controls.
+    /// </summary>
+    public static bool ShowsRuleRow(string ruleKey, MinecraftGameplaySnapshot snapshot)
+    {
+        var rule = snapshot.GameRules.FirstOrDefault(item => item.Key == ruleKey);
+        return IsShown(rule) &&
+               (MinecraftGameplayPropertyPolicy.Find(ruleKey) is null || rule!.Source != MinecraftValueSource.Unknown);
+    }
+
+    /// <summary>A server.properties value this server no longer reads because a gamerule replaced it.</summary>
+    public static bool IsReplacedByGameRule(string propertyKey, MinecraftGameplaySnapshot snapshot) =>
+        MinecraftGameRuleCatalog.Find(propertyKey) is not null && ShowsRuleRow(propertyKey, snapshot);
+
+    /// <summary>Rules left out because this version lacks them (not counting ones a setting stands in for).</summary>
+    public static int MissingRuleCount(MinecraftGameplaySnapshot snapshot) =>
+        snapshot.GameRules.Count(rule => !rule.Supported && MinecraftGameplayPropertyPolicy.Find(rule.Key) is null);
 
     public static string RuleStatus(MinecraftGameRuleState rule) =>
         rule.PendingValue switch

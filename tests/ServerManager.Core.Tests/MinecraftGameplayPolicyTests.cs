@@ -13,7 +13,7 @@ public sealed class MinecraftGameplayPolicyTests
 
         Assert.Equal(
             [
-                "keepInventory", "doImmediateRespawn", "naturalRegeneration", "showDeathMessages", "announceAdvancements",
+                "pvp", "keepInventory", "doImmediateRespawn", "naturalRegeneration", "showDeathMessages", "announceAdvancements",
                 "doDaylightCycle", "doWeatherCycle", "doFireTick", "doInsomnia",
                 "fallDamage", "fireDamage", "drowningDamage", "freezeDamage",
                 "doMobSpawning", "mobGriefing", "doPatrolSpawning", "doTraderSpawning",
@@ -22,6 +22,37 @@ public sealed class MinecraftGameplayPolicyTests
             keys);
         Assert.Equal("keep_inventory", MinecraftGameRuleCatalog.SnakeCase("keepInventory"));
         Assert.Equal("do_daylight_cycle", MinecraftGameRuleCatalog.SnakeCase("doDaylightCycle"));
+    }
+
+    [Theory]
+    [InlineData("keepInventory", "minecraft:keep_inventory")]
+    [InlineData("doDaylightCycle", "minecraft:advance_time")]
+    [InlineData("doWeatherCycle", "minecraft:advance_weather")]
+    [InlineData("doMobSpawning", "minecraft:spawn_mobs")]
+    [InlineData("doInsomnia", "minecraft:spawn_phantoms")]
+    [InlineData("naturalRegeneration", "minecraft:natural_health_regeneration")]
+    [InlineData("announceAdvancements", "minecraft:show_advancement_messages")]
+    [InlineData("doImmediateRespawn", "minecraft:immediate_respawn")]
+    [InlineData("doPatrolSpawning", "minecraft:spawn_patrols")]
+    [InlineData("doTraderSpawning", "minecraft:spawn_wandering_traders")]
+    [InlineData("doMobLoot", "minecraft:mob_drops")]
+    [InlineData("doTileDrops", "minecraft:block_drops")]
+    [InlineData("doEntityDrops", "minecraft:entity_drops")]
+    [InlineData("pvp", "minecraft:pvp")]
+    public void RegistryNames_OfMinecraft26_AreKnown(string key, string registryName)
+    {
+        var rule = MinecraftGameRuleCatalog.Find(key)!;
+
+        Assert.Contains(registryName, rule.Names);
+        Assert.Equal(registryName, MinecraftGameRuleCatalog.ResolveName(rule, [registryName, "minecraft:fire_spread_radius_around_player"]));
+    }
+
+    [Fact]
+    public void FireTick_IsNotMappedOntoTheNumericFireSpreadRule()
+    {
+        var fire = MinecraftGameRuleCatalog.Find("doFireTick")!;
+
+        Assert.Null(MinecraftGameRuleCatalog.ResolveName(fire, ["minecraft:fire_spread_radius_around_player"]));
     }
 
     [Fact]

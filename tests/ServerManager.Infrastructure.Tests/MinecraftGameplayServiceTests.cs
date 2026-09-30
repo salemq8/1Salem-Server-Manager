@@ -324,6 +324,63 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Stopped_ReadsTheMinecraft26WorldFormat()
+    {
+        // 26.x: data/minecraft/game_rules.dat, registry names, bytes; level.dat has no GameRules.
+        WriteLevelDat(new Dictionary<string, string>(), includeGameRules: false);
+        WriteRegistryRules(new Dictionary<string, object>
+        {
+            ["minecraft:keep_inventory"] = (byte)1,
+            ["minecraft:advance_time"] = (byte)0,
+            ["minecraft:advance_weather"] = (byte)1,
+            ["minecraft:fall_damage"] = (byte)1,
+            ["minecraft:pvp"] = (byte)0,
+            ["minecraft:mob_griefing"] = (byte)1,
+            ["minecraft:spawn_mobs"] = (byte)1,
+            ["minecraft:fire_spread_radius_around_player"] = 128,
+            ["minecraft:random_tick_speed"] = 3
+        });
+
+        var snapshot = await _service.GetAsync(_server.Id);
+        MinecraftGameRuleState Rule(string key) => Assert.Single(snapshot.GameRules, rule => rule.Key == key);
+
+        Assert.True(snapshot.GameRulesKnown);
+        Assert.Equal((true, "minecraft:keep_inventory", MinecraftValueSource.WorldFile), (Rule("keepInventory").Value!.Value, Rule("keepInventory").ServerName, Rule("keepInventory").Source));
+        Assert.Equal((false, "minecraft:advance_time"), (Rule("doDaylightCycle").Value!.Value, Rule("doDaylightCycle").ServerName));
+        Assert.False(Rule("pvp").Value);
+        Assert.False(Rule("doFireTick").Supported);
+        Assert.False(Rule("freezeDamage").Supported);
+        Assert.Equal([100, 0], snapshot.FallDamage.Percentages);
+    }
+
+    [Fact]
+    public async Task Stopped_Minecraft26ChangeIsKeptUnderItsRegistryName()
+    {
+        WriteLevelDat(new Dictionary<string, string>(), includeGameRules: false);
+        WriteRegistryRules(new Dictionary<string, object>
+        {
+            ["minecraft:keep_inventory"] = (byte)0,
+            ["minecraft:advance_time"] = (byte)1,
+            ["minecraft:fall_damage"] = (byte)1,
+            ["minecraft:mob_griefing"] = (byte)1,
+            ["minecraft:spawn_mobs"] = (byte)1
+        });
+
+        var saved = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("keepInventory", true));
+        _console.State = MinecraftConsoleState.Ready;
+        _console.Rules["minecraft:keep_inventory"] = "false";
+        _console.Rules["minecraft:advance_time"] = "true";
+        await _service.ApplyPendingAsync(_server.Id);
+        var daylight = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("doDaylightCycle", false));
+
+        Assert.Equal(MinecraftChangeOutcome.PendingNextStart, saved.Outcome);
+        Assert.Contains("gamerule minecraft:keep_inventory true", _console.Sent);
+        Assert.Equal("true", _console.Rules["minecraft:keep_inventory"]);
+        Assert.Equal(MinecraftChangeOutcome.AppliedLive, daylight.Outcome);
+        Assert.Contains("gamerule minecraft:advance_time false", _console.Sent);
+    }
+
+    [Fact]
     public void LevelDat_MissingOrDamagedFilesReadAsNothing()
     {
         var path = Path.Combine(_root, "world", "level.dat");
@@ -355,7 +412,7 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
         Assert.Equal("3", parsed["op-permission-level"]);
     }
 
-    private void WriteLevelDat(IReadOnlyDictionary<string, string> stringRules, bool addTypedFallDamage = false)
+    private void WriteLevelDat(IReadOnlyDictionary<string, string> stringRules, bool addTypedFallDamage = false, bool includeGameRules = true)
     {
         var path = Path.Combine(_root, "world", "level.dat");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -377,22 +434,61 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
         nbt.Begin(4, "seed");
         nbt.Long(42);
         raw.WriteByte(0);
-        nbt.Begin(10, "GameRules");
-        foreach (var (key, value) in stringRules)
+        if (includeGameRules)
         {
-            nbt.Begin(8, key);
-            nbt.String(value);
-        }
+            nbt.Begin(10, "GameRules");
+            foreach (var (key, value) in stringRules)
+            {
+                nbt.Begin(8, key);
+                nbt.String(value);
+            }
 
-        if (addTypedFallDamage)
-        {
-            nbt.Begin(1, "minecraft:fall_damage");
+            if (addTypedFallDamage)
+            {
+                nbt.Begin(1, "minecraft:fall_damage");
+                raw.WriteByte(0);
+            }
+
             raw.WriteByte(0);
         }
 
         raw.WriteByte(0);
         raw.WriteByte(0);
+        WriteGzip(path, raw);
+    }
+
+    /// <summary>Minecraft 26.x: world/data/minecraft/game_rules.dat, root -> "data", registry names.</summary>
+    private void WriteRegistryRules(IReadOnlyDictionary<string, object> rules)
+    {
+        var path = Path.Combine(_root, "world", "data", "minecraft", "game_rules.dat");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var raw = new MemoryStream();
+        var nbt = new NbtWriter(raw);
+        nbt.Begin(10, string.Empty);
+        nbt.Begin(10, "data");
+        foreach (var (key, value) in rules)
+        {
+            if (value is byte flag)
+            {
+                nbt.Begin(1, key);
+                raw.WriteByte(flag);
+            }
+            else
+            {
+                nbt.Begin(3, key);
+                nbt.Int((int)value);
+            }
+        }
+
         raw.WriteByte(0);
+        nbt.Begin(3, "DataVersion");
+        nbt.Int(5023);
+        raw.WriteByte(0);
+        WriteGzip(path, raw);
+    }
+
+    private static void WriteGzip(string path, MemoryStream raw)
+    {
         using var file = File.Create(path);
         using var gzip = new GZipStream(file, CompressionLevel.Fastest);
         gzip.Write(raw.ToArray());
