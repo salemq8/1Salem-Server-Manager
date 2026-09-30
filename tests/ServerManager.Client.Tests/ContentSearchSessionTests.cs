@@ -162,6 +162,36 @@ public sealed class ContentSearchSessionTests
         }
     }
 
+    [Theory]
+    [InlineData(ContentKind.Plugin, "Plugins for this Minecraft server, from Hangar and Modrinth.")]
+    [InlineData(ContentKind.Modpack, "Modpacks compatible with this Minecraft server. A modpack builds a new server.")]
+    [InlineData(ContentKind.DataPack, "Data packs for this Minecraft server's world.")]
+    [InlineData(ContentKind.ResourcePack, "Resource packs for this Minecraft server's players.")]
+    public void Subtitle_FollowsTheSelectedType(ContentKind kind, string expected)
+    {
+        var original = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = new CultureInfo("en-US");
+            Assert.Equal(expected, ContentLabels.Subtitle(kind));
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = original;
+        }
+    }
+
+    [Fact]
+    public void ContentTab_ListsPluginForEveryMinecraftServer()
+    {
+        var code = ReadSource("src", "ServerManager.Client", "Controls", "ServerContentTab.xaml.cs");
+
+        Assert.Contains(".Where(kind => ContentTypePolicy.IsBrowsableBy(kind, _profile))", code, StringComparison.Ordinal);
+        Assert.Equal(
+            [ContentKind.Plugin, ContentKind.Modpack, ContentKind.DataPack, ContentKind.ResourcePack],
+            ContentLabels.SelectableKinds);
+    }
+
     [Fact]
     public void AutomaticPlatform_NamesWhatThisServerRuns()
     {
@@ -202,7 +232,9 @@ public sealed class ContentSearchSessionTests
                      "Content.Search.Plugin", "Content.Search.Modpack", "Content.Search.DataPack",
                      "Content.Search.ResourcePack", "Content.PlatformLabel", "Content.Platform.Auto",
                      "Content.Platform.AllPlugins", "Content.Platform.AllLoaders",
-                     "Content.Notice.ProviderFailed", "Content.Notice.Unreachable"
+                     "Content.Notice.ProviderFailed", "Content.Notice.Unreachable",
+                     "Content.Subtitle.Plugin", "Content.Subtitle.Modpack", "Content.Subtitle.DataPack",
+                     "Content.Subtitle.ResourcePack", "Content.Notice.PluginsNeedPlatform"
                  })
         {
             var original = CultureInfo.CurrentUICulture;

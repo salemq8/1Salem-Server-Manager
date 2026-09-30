@@ -47,6 +47,21 @@ public static class ContentTypePolicy
         };
     }
 
+    /// <summary>
+    /// Whether this type can be browsed for this server. Plugins can be looked at on any
+    /// Minecraft server, so the type is never missing from the selector; on a server that cannot
+    /// load plugins (Vanilla) every plugin card says it cannot be installed here, and
+    /// <see cref="IsSupportedBy"/> still refuses the install. Everything else is browsed where it
+    /// can be used.
+    /// </summary>
+    public static bool IsBrowsableBy(ContentKind kind, ServerContentProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return kind == ContentKind.Plugin
+            ? profile.Game == GameType.Minecraft
+            : IsSupportedBy(kind, profile);
+    }
+
     /// <summary>The file extension the manager writes for this kind.</summary>
     public static string FileExtension(ContentKind kind) =>
         kind switch

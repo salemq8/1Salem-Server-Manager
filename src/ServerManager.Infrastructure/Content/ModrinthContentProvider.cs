@@ -31,7 +31,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(profile);
-        if (!CanServe(profile, request.Kind))
+        if (!ContentTypePolicy.IsBrowsableBy(request.Kind, profile))
         {
             return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
         }
@@ -296,8 +296,15 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var runnable = ContentTypePolicy.ModrinthLoaders(kind, profile.Platform);
+        var fits = loaders.Any(loader => runnable.Contains(loader, StringComparer.OrdinalIgnoreCase));
+
+        // A plugin seen from a server that runs no plugin platform names the platforms it
+        // needs instead, so the card can say why it cannot be installed here.
+        var shown = kind == ContentKind.Plugin && runnable.Count == 0
+            ? ContentPlatformFilter.PluginPlatformNames
+            : runnable;
         var platforms = loaders
-            .Where(loader => runnable.Contains(loader, StringComparer.OrdinalIgnoreCase))
+            .Where(loader => shown.Contains(loader, StringComparer.OrdinalIgnoreCase))
             .ToArray();
         var gameVersions = element.Strings("versions").Concat(element.Strings("game_versions"))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -308,7 +315,7 @@ public sealed class ModrinthContentProvider(HttpClient client) : IContentProvide
             ? licenseElement.Value.String("name") ?? licenseElement.Value.String("id")
             : element.String("license");
 
-        var compatible = platforms.Length > 0 &&
+        var compatible = fits &&
                          (profile.MinecraftVersion is null ||
                           gameVersions.Contains(profile.MinecraftVersion, StringComparer.OrdinalIgnoreCase));
 

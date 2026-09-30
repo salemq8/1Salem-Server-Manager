@@ -17,6 +17,7 @@ namespace ServerManager.Connect.UiReview;
 internal static class ContentScenarios
 {
     private static readonly Guid ServerId = Guid.Parse("7e57c0de-0000-4000-8000-000000000001");
+    private static readonly Guid VanillaId = Guid.Parse("7e57c0de-0000-4000-8000-000000000002");
 
     public static async Task RunAsync(FakeAgent agent, Report report)
     {
@@ -41,12 +42,19 @@ internal static class ContentScenarios
                     @"C:\review\mc", @"C:\review\mc\plugins", SupportsPlugins: true, IsRunning: false));
             }
 
-            if (path.StartsWith($"/api/v1/servers/{ServerId}/content/installed", StringComparison.Ordinal))
+            if (path == $"/api/v1/servers/{VanillaId}/content/profile")
+            {
+                return (200, new ServerContentProfile(VanillaId, GameType.Minecraft, ServerPlatform.Vanilla, "1.21.8", null,
+                    @"C:\review\vanilla", @"C:\review\vanilla\plugins", SupportsPlugins: false, IsRunning: false));
+            }
+
+            if (path.Contains("/content/installed", StringComparison.Ordinal))
             {
                 return (200, Array.Empty<InstalledContent>());
             }
 
-            if (path.StartsWith($"/api/v1/servers/{ServerId}/content/search?", StringComparison.Ordinal))
+            if (path.StartsWith($"/api/v1/servers/{ServerId}/content/search?", StringComparison.Ordinal) ||
+                path.StartsWith($"/api/v1/servers/{VanillaId}/content/search?", StringComparison.Ordinal))
             {
                 var query = path[(path.IndexOf('?') + 1)..];
                 lock (searches)
@@ -197,6 +205,40 @@ internal static class ContentScenarios
         report.Check(updatesCard && state.Visibility != Visibility.Visible && discoverScroller.Visibility == Visibility.Visible && list.Items.Count > 0,
             $"back on Discover after Updates: state card hidden, {list.Items.Count} results visible");
 
+        // A Vanilla server: every type is listed with Plugin first, plugins are browsable but
+        // said to need a plugin platform, and the page describes the selected type.
+        var subheading = (TextBlock)tab.FindName("Subheading");
+        var kindNotice = (TextBlock)tab.FindName("KindNotice");
+        ServerDetailContext.Shared.Select(VanillaId);
+        for (var i = 0; i < 20 && (kind.Items.Count == 0 || kind.SelectedIndex != 2 || list.Items.Count == 0); i++)
+        {
+            await Report.SettleAsync(300);
+        }
+
+        var kinds = kind.Items.Cast<string>().ToArray();
+        report.Check(kinds.Length == 4 && kinds[0] == ContentLabels.Kind(ContentKind.Plugin),
+            $"vanilla: content types listed: {string.Join(", ", kinds)}");
+        report.Check(kind.SelectedIndex == 2 && subheading.Text == ContentLabels.Subtitle(ContentKind.DataPack),
+            $"vanilla: starts on Data Pack with its description: '{subheading.Text}'");
+        var beforePlugin = SearchCount();
+        kind.SelectedIndex = 0;
+        await Report.SettleAsync(800);
+        var pluginSearches = searches.Skip(beforePlugin).ToArray();
+        var platforms = platform.Items.Cast<string>().ToArray();
+        report.Check(hint.Text == ContentLabels.SearchHint(ContentKind.Plugin) && subheading.Text == ContentLabels.Subtitle(ContentKind.Plugin),
+            $"vanilla plugin: hint '{hint.Text}', description '{subheading.Text}'");
+        report.Check(platform.Visibility == Visibility.Visible && platforms.Length == 6 && platforms[0] == ContentLabels.Platform("all", ContentKind.Plugin, ServerPlatform.Vanilla) &&
+                     platforms.Contains("Paper") && platforms.Contains("Purpur") && platforms.Contains("Spigot") && platforms.Contains("Bukkit") && platforms.Contains("Folia"),
+            $"vanilla plugin platforms: {string.Join(", ", platforms)}");
+        report.Check(kindNotice.Visibility == Visibility.Visible, $"vanilla plugin notice: '{kindNotice.Text}'");
+        report.Check(pluginSearches.Length == 1 && Param(pluginSearches[0], "kind") == "Plugin" && Param(pluginSearches[0], "platform") == "all" && list.Items.Count > 0,
+            $"vanilla plugin search ran once: {string.Join(" | ", pluginSearches)}");
+        kind.SelectedIndex = 3;   // Resource pack
+        await Report.SettleAsync(700);
+        report.Check(subheading.Text == ContentLabels.Subtitle(ContentKind.ResourcePack) && kindNotice.Visibility == Visibility.Collapsed && platform.Visibility == Visibility.Collapsed,
+            $"vanilla resource packs: '{subheading.Text}', no notice, no platform choice");
+        await report.CaptureAsync("content-05-vanilla-resource-packs", window, keyboard: false);
+
         stress.Stop();
         DashboardFeed.Shared.Dispose();
         window.Close();
@@ -251,7 +293,8 @@ internal static class ContentScenarios
         warnings = Array.Empty<string>(),
         servers = new[]
         {
-            new { serverId = ServerId, game = 1, isInstalled = true, name = "Review Paper", state = 1, installedVersion = "1.21.8", port = 25565 }
+            new { serverId = ServerId, game = 1, isInstalled = true, name = "Review Paper", state = 1, installedVersion = "1.21.8", port = 25565 },
+            new { serverId = VanillaId, game = 1, isInstalled = true, name = "Review Vanilla", state = 1, installedVersion = "1.21.8", port = 25566 }
         }
     };
 }

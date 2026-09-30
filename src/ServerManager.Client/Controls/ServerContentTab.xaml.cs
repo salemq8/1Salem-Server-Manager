@@ -38,6 +38,9 @@ public partial class ServerContentTab : UserControl
     // Set while code rebuilds the selectors, so their selection events do not start searches.
     private bool _updatingControls;
 
+    // A newly selected server starts on its default content type once its profile is known.
+    private bool _chooseDefaultKind = true;
+
     /// <summary>The content types this server can actually use, in selector order.</summary>
     private IReadOnlyList<ContentKind> _kinds = [ContentKind.Plugin];
 
@@ -69,6 +72,10 @@ public partial class ServerContentTab : UserControl
             SetSearching(false);
             SetNotice(null);
             _loaded = false;
+            _chooseDefaultKind = true;
+
+            // Platform choices are about this server's software, so a new server starts fresh.
+            _platformByKind.Clear();
             _discovered.Clear();
             _installed.Clear();
             Localize();
@@ -188,13 +195,41 @@ public partial class ServerContentTab : UserControl
         // Each type remembers its own choice: plugins and modpacks both have an "all", and a trip
         // through modpacks must not turn the plugin filter into "All plugin platforms".
         var previous = _platformByKind.TryGetValue(kind, out var remembered) ? remembered : null;
-        _platformOptions = ContentPlatformFilter.Options(kind);
+        _platformOptions = ContentPlatformFilter.Options(kind, _profile?.Platform);
         PlatformBox.ItemsSource = _platformOptions
             .Select(option => ContentLabels.Platform(option, kind, _profile?.Platform))
             .ToArray();
         var kept = previous is null ? -1 : IndexOf(_platformOptions, previous);
         PlatformBox.SelectedIndex = _platformOptions.Count == 0 ? -1 : Math.Max(0, kept);
         PlatformBox.Visibility = _platformOptions.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        // The page says what it is showing: plugins, modpacks, data packs or resource packs.
+        if (_context.Source?.Game is GameType.Minecraft || _profile?.Game is GameType.Minecraft)
+        {
+            Subheading.Text = ContentLabels.Subtitle(kind);
+        }
+
+        // Plugins on a server that cannot load them: browsable, never installable, and said so.
+        var pluginsUnavailable = kind == ContentKind.Plugin && _profile is { SupportsPlugins: false };
+        KindNotice.Text = pluginsUnavailable
+            ? LocalizationService.Format(
+                "Content.Notice.PluginsNeedPlatform",
+                PluginPlatformPolicy.DisplayName(_profile!.Platform))
+            : string.Empty;
+        KindNotice.Visibility = pluginsUnavailable ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private int IndexOfKind(ContentKind kind)
+    {
+        for (var index = 0; index < _kinds.Count; index++)
+        {
+            if (_kinds[index] == kind)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static int IndexOf(IReadOnlyList<string> options, string value)
@@ -246,12 +281,33 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
-        // A Vanilla server cannot run plugins but can still take data packs and resource
-        // packs, so the selector offers whatever this server genuinely supports.
+        // Every Minecraft server lists all four types. A Vanilla server can browse plugins but
+        // not install them (each card and a notice say so), so Plugin is never missing.
         _kinds = ContentLabels.SelectableKinds
-            .Where(kind => ContentTypePolicy.IsSupportedBy(kind, _profile))
+            .Where(kind => ContentTypePolicy.IsBrowsableBy(kind, _profile))
             .ToArray();
         Localize();
+        if (_chooseDefaultKind && _kinds.Count > 0)
+        {
+            // A newly opened server starts on Plugin where it can run plugins, otherwise on the
+            // first type it can actually install (data packs on Vanilla).
+            _chooseDefaultKind = false;
+            var preferred = _profile.SupportsPlugins
+                ? ContentKind.Plugin
+                : _kinds.FirstOrDefault(kind => kind != ContentKind.Plugin && kind != ContentKind.Modpack &&
+                                                ContentTypePolicy.IsSupportedBy(kind, _profile));
+            var index = IndexOfKind(preferred);
+            _updatingControls = true;
+            try
+            {
+                KindBox.SelectedIndex = index < 0 ? 0 : index;
+                RefreshKindControls();
+            }
+            finally
+            {
+                _updatingControls = false;
+            }
+        }
 
         if (_kinds.Count == 0)
         {

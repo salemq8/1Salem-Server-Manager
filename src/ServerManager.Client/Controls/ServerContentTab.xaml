@@ -100,6 +100,12 @@
                               Click="Filter_Changed" />
                 </StackPanel>
 
+                <!-- Plugins on a server that cannot load them: browse only, and said so. -->
+                <TextBlock x:Name="KindNotice"
+                           Style="{StaticResource SecondaryTextStyle}"
+                           Margin="0,8,0,0"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed" />
                 <!-- A search in progress keeps the current results visible; only this bar moves. -->
                 <ProgressBar x:Name="SearchProgress"
                              Height="3"

@@ -19,6 +19,18 @@ public static class ContentPlatformFilter
     private static readonly string[] PluginPlatforms = ["paper", "purpur", "spigot", "bukkit", "folia"];
     private static readonly string[] ModpackLoaders = ["fabric", "forge", "neoforge", "quilt"];
 
+    /// <summary>The plugin platforms the providers publish for, in menu order.</summary>
+    public static IReadOnlyList<string> PluginPlatformNames => PluginPlatforms;
+
+    /// <summary>
+    /// The choices for a type on this server. A server that runs no plugin platform (Vanilla)
+    /// has no "Automatic" for plugins, because nothing would match; it starts at "All".
+    /// </summary>
+    public static IReadOnlyList<string> Options(ContentKind kind, ServerPlatform? platform) =>
+        kind == ContentKind.Plugin && platform is { } known && !PluginPlatformPolicy.SupportsPlugins(known)
+            ? [All, .. PluginPlatforms]
+            : Options(kind);
+
     /// <summary>
     /// The choices that mean something for a content type, in menu order. Data packs and
     /// resource packs have one fixed Modrinth loader each, so they offer no choice at all.
@@ -61,7 +73,8 @@ public static class ContentPlatformFilter
         {
             ContentKind.Plugin => chosen switch
             {
-                Automatic => PluginPlatformPolicy.ModrinthLoaders(platform),
+                // A server that runs no plugin platform browses them all instead of nothing.
+                Automatic => PluginPlatformPolicy.ModrinthLoaders(platform) is { Count: > 0 } own ? own : PluginPlatforms,
                 All => PluginPlatforms,
                 _ => [chosen]
             },
@@ -69,9 +82,10 @@ public static class ContentPlatformFilter
             _ => ContentTypePolicy.ModrinthLoaders(kind, platform)
         };
 
-        if (compatibleOnly && kind == ContentKind.Plugin)
+        var runnable = PluginPlatformPolicy.ModrinthLoaders(platform);
+        if (compatibleOnly && kind == ContentKind.Plugin && runnable.Count > 0)
         {
-            var runnable = PluginPlatformPolicy.ModrinthLoaders(platform);
+            // Where nothing can run (Vanilla) this is browsing only; each card says so.
             loaders = loaders.Where(loader => runnable.Contains(loader, StringComparer.OrdinalIgnoreCase)).ToArray();
         }
 

@@ -29,17 +29,20 @@ public sealed class ContentCatalogService(
         // Plugins need a plugin-capable server; data and resource packs work on any
         // Minecraft server, including Vanilla, which is why this asks the type rather than
         // the plugin flag.
-        if (!ContentTypePolicy.IsSupportedBy(request.Kind, profile))
+        if (!ContentTypePolicy.IsBrowsableBy(request.Kind, profile))
         {
             return new ContentSearchResult([], request.Offset, request.Limit, 0, []);
         }
 
+        // Plugins on a server that cannot load them are browsed through Modrinth only, which
+        // models every plugin platform; Hangar's PAPER files are offered only where they apply.
         var selected = _providers
             .Where(provider => request.Provider is null || provider.Id == request.Provider)
             .Where(provider => ContentTypePolicy.IsServedBy(request.Kind, provider.Id))
             .Where(provider => provider.Id != ContentProviderId.Hangar ||
                                ContentPlatformFilter.IncludesHangar(request.Kind, request.Platform, profile.Platform))
-            .Where(provider => provider.CanServe(profile, request.Kind))
+            .Where(provider => provider.CanServe(profile, request.Kind) ||
+                               (provider.Id == ContentProviderId.Modrinth && ContentTypePolicy.IsBrowsableBy(request.Kind, profile)))
             .ToArray();
 
         var tasks = selected.Select(async provider =>

@@ -133,6 +133,49 @@ public sealed class ContentPlatformFilterTests
         Assert.Equal(hangarAsked ? 1 : 0, hangar.Requests.Count);
     }
 
+    [Fact]
+    public void Plugins_AreBrowsableOnVanilla_ButNeverInstallable()
+    {
+        var vanilla = Profile(ServerPlatform.Vanilla) with { SupportsPlugins = false };
+
+        Assert.True(ContentTypePolicy.IsBrowsableBy(ContentKind.Plugin, vanilla));
+        Assert.False(ContentTypePolicy.IsSupportedBy(ContentKind.Plugin, vanilla));
+        Assert.Equal(["all", "paper", "purpur", "spigot", "bukkit", "folia"], ContentPlatformFilter.Options(ContentKind.Plugin, ServerPlatform.Vanilla));
+        Assert.Equal(ContentPlatformFilter.Options(ContentKind.Plugin), ContentPlatformFilter.Options(ContentKind.Plugin, ServerPlatform.Paper));
+        Assert.Equal("paper,purpur,spigot,bukkit,folia",
+            string.Join(',', ContentPlatformFilter.ModrinthLoaders(ContentKind.Plugin, ServerPlatform.Vanilla, "auto", compatibleOnly: true)));
+        Assert.Equal("spigot",
+            string.Join(',', ContentPlatformFilter.ModrinthLoaders(ContentKind.Plugin, ServerPlatform.Vanilla, "spigot", compatibleOnly: true)));
+    }
+
+    [Fact]
+    public async Task Catalog_BrowsesPluginsOnVanilla_ThroughModrinthOnly_WithCardsThatCannotInstall()
+    {
+        const string hit = """
+            { "hits": [{ "project_id": "lp", "slug": "luckperms", "title": "LuckPerms",
+                         "categories": ["paper", "spigot", "fabric"], "versions": ["1.21.8"] }],
+              "offset": 0, "limit": 20, "total_hits": 1 }
+            """;
+        var modrinth = new CapturingHandler(hit);
+        var hangar = new CapturingHandler("""{ "result": [], "pagination": { "count": 0 } }""");
+        var catalog = new ContentCatalogService(
+            [
+                new ModrinthContentProvider(Client(modrinth, ModrinthContentProvider.BaseAddress)),
+                new HangarContentProvider(Client(hangar, HangarContentProvider.BaseAddress))
+            ],
+            NullLogger<ContentCatalogService>.Instance);
+        var vanilla = Profile(ServerPlatform.Vanilla) with { SupportsPlugins = false };
+
+        var result = await catalog.SearchAsync(new ContentSearchRequest("luck", Platform: "all"), vanilla);
+
+        var project = Assert.Single(result.Projects);
+        Assert.False(project.IsCompatible);
+        Assert.Equal(["paper", "spigot"], project.Platforms);
+        Assert.Empty(hangar.Requests);
+        Assert.Contains("\"categories:paper\",\"categories:purpur\",\"categories:spigot\",\"categories:bukkit\",\"categories:folia\"",
+            Uri.UnescapeDataString(Assert.Single(modrinth.Requests)), StringComparison.Ordinal);
+    }
+
     private const string ModrinthEmpty = """{ "hits": [], "offset": 0, "limit": 20, "total_hits": 0 }""";
 
     private static ServerContentProfile Profile(ServerPlatform platform) =>

@@ -18,6 +18,16 @@ public static class ContentLabels
             _ => "Content.Kind.Plugin"
         });
 
+    /// <summary>The page description for a type, so it never says "Plugins" while showing packs.</summary>
+    public static string Subtitle(ContentKind kind) =>
+        LocalizationService.Get(kind switch
+        {
+            ContentKind.Modpack => "Content.Subtitle.Modpack",
+            ContentKind.DataPack => "Content.Subtitle.DataPack",
+            ContentKind.ResourcePack => "Content.Subtitle.ResourcePack",
+            _ => "Content.Subtitle.Plugin"
+        });
+
     /// <summary>The search box hint for a type: "Search plugins", "Search modpacks", …</summary>
     public static string SearchHint(ContentKind kind) =>
         LocalizationService.Get(kind switch
