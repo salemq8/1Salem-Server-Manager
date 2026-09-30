@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.5 — Build 11
+
+- Content: the content type list offers Plugin, Modpack, Data Pack and Resource Pack for every
+  Minecraft server again, and Plugin is the default wherever plugins can run. On a Vanilla server
+  plugins can be browsed with a note that installing one needs a plugin server. The subtitle
+  follows the selected type. Search behaviour (debounce, Enter, stale-reply protection, kept text
+  and results) is unchanged, with no loading loop.
+- Minecraft: a new Gameplay and players page (Settings → Game). Real gamerules (Keep Inventory,
+  daylight and weather cycles, mob spawning and griefing, fire, damage and drop rules, and more)
+  are asked of the running server and read back after each change, or read from the world's
+  level.dat while the server is not answering; changes made then are applied and verified the
+  next time 1Salem starts the server. Nothing on the page restarts a server.
+- Fall damage offers Normal (100%) and Disabled (0%) only, through the fallDamage gamerule;
+  Minecraft has no real percentage setting. Rules a server's version lacks are not offered.
+- Minecraft 26.x: gamerules are read from data/minecraft/game_rules.dat under their registry
+  names (advance_time, spawn_mobs and the rest); PvP is shown as the gamerule that replaced the
+  server.properties value, and the numeric fire-spread rule is not presented as a switch.
+- server.properties settings (PvP, hardcore, difficulty, game mode, forced game mode, flight,
+  spawn protection, view and simulation distance, max players, whitelist, command blocks, online
+  mode and operator level) are saved with a restore point; difficulty and the whitelist switch
+  also apply live, the rest at the next start.
+- Players: who is online (only when the server says so), operators, whitelist and bans, with
+  Make operator, Remove operator, whitelist add and remove, Kick, Ban and Unban for valid Java
+  names. Removing, kicking and banning are confirmed. A server re-adopted after an Agent restart
+  says its live controls need a restart from 1Salem instead of failing.
+
 ## 1.5 — Build 10
 
 - Content: the Discover page no longer reloads on every dashboard refresh, which had reset it to

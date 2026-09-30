@@ -1,4 +1,4 @@
-# 1Salem Server Manager 1.5 — Build 10
+# 1Salem Server Manager 1.5 — Build 11
 
 ## Downloads
 
@@ -10,6 +10,47 @@
 The other files are for advanced use: `Portable.zip` and `1SalemConnect-Portable.zip` run without
 installing, `1SalemServerManager-Update-1.5.zip` is the update package, `Source.zip` is the source,
 and `SHA256SUMS.txt` lists every file's SHA-256.
+
+## Minecraft: Gameplay and players (Build 11)
+
+Open a Minecraft server, go to **Settings → Game** and choose **Gameplay and players…**.
+
+- **Gamerules that are real.** Keep Inventory, Immediate respawn, Natural regeneration, Death
+  messages, Announce advancements, Daylight and Weather cycles, Fire spread, Phantoms, Block
+  drops, Fire, Drowning and Freeze damage, Mob spawning, Mob griefing, Pillager patrols,
+  Wandering traders, Mob loot and Entity drops. While the server runs from 1Salem, each switch
+  asks the server, applies the change and reads it back. While it is stopped, the page shows the
+  values saved in the world and applies your change, then checks it, the next time 1Salem starts
+  the server. Each row says which of these you are looking at. Nothing here restarts the server.
+- **Fall damage** is **Normal (100%)** or **Disabled (0%)**. Minecraft only has an on/off fall
+  damage rule, so the page does not pretend to offer 75%, 50% or 25%.
+- A rule your server's Minecraft version does not have is not shown. Minecraft 26.x servers are
+  read from their new gamerule file and names. There, **PvP** is a gamerule and appears as a
+  switch like the others, and fire spread is a distance rather than an on/off switch, so it is
+  not offered.
+- **Server settings** in grouped cards: difficulty, default and forced game mode, hardcore, PvP,
+  flight, max players, whitelist, spawn protection, view and simulation distance, and under
+  **Advanced** command blocks, online mode and the operator permission level. Changes are saved
+  together with **Save server settings**, with a restore point first. Difficulty and the
+  whitelist switch also apply straight away; the rest apply when the server next starts, and the
+  page tells you so.
+- **Players**: who is online (only when the server reports it), operators, the whitelist and
+  bans. **Make operator**, **Remove operator**, **Add to whitelist**, **Remove from whitelist**,
+  **Kick**, **Ban** and **Unban** work on the running server; removing, kicking and banning ask
+  first.
+- A server that was already running when 1Salem's Agent restarted (for example after an update)
+  keeps running, but its live controls connect only after you restart it from 1Salem. The page
+  says so and still shows the saved values.
+
+## Content: every type is listed again (Build 11)
+
+- The content type list offers **Plugin**, **Modpack**, **Data Pack** and **Resource Pack** for
+  every Minecraft server, and **Plugin** is chosen first wherever plugins can run. On a Vanilla
+  server you can still browse plugins, with a note that installing one needs Paper, Purpur,
+  Spigot, Bukkit or Folia.
+- The line under the title follows the type: "Plugins for this Minecraft server, from Hangar and
+  Modrinth.", "Modpacks compatible with this Minecraft server.", "Data packs for this Minecraft
+  server." or "Resource packs for this Minecraft server."
 
 ## Content: search you can type into, and a server-software filter (Build 10)
 

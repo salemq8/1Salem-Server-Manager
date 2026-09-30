@@ -10,10 +10,10 @@ public sealed class FixedVersionPolicyTests
         var root = FindRepositoryRoot();
 
         Assert.Equal("1.5", File.ReadAllText(Path.Combine(root, "VERSION")).Trim());
-        Assert.Equal("10", File.ReadAllText(Path.Combine(root, "BUILD_REVISION")).Trim());
+        Assert.Equal("11", File.ReadAllText(Path.Combine(root, "BUILD_REVISION")).Trim());
         var info = File.ReadAllText(Path.Combine(root, "build-info.json"));
         Assert.Contains("\"productVersion\": \"1.5\"", info, StringComparison.Ordinal);
-        Assert.Contains("\"buildRevision\": 10", info, StringComparison.Ordinal);
+        Assert.Contains("\"buildRevision\": 11", info, StringComparison.Ordinal);
         Assert.DoesNotContain("1.5.1", info, StringComparison.Ordinal);
     }
 
