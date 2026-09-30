@@ -1,4 +1,43 @@
-# 1Salem Server Manager 1.5 — Build 9
+# 1Salem Server Manager 1.5 — Build 10
+
+## Downloads
+
+| Who | Download | What it does |
+|---|---|---|
+| **Server owners** | **`Setup.exe`** | Installs 1Salem Server Manager. Already installed? It updates itself from Settings → Updates. |
+| **Friends** | **`1SalemConnect-Setup.exe`** | Installs 1Salem Connect, the free app for joining a friend's Minecraft server privately. |
+
+The other files are for advanced use: `Portable.zip` and `1SalemConnect-Portable.zip` run without
+installing, `1SalemServerManager-Update-1.5.zip` is the update package, `Source.zip` is the source,
+and `SHA256SUMS.txt` lists every file's SHA-256.
+
+## Content: search you can type into, and a server-software filter (Build 10)
+
+- The **Content** page no longer returns to "Loading" every few seconds. It used to reload whenever
+  the dashboard refreshed, which interrupted typing; now it reloads only when you open a different
+  server.
+- Search waits until you pause typing, and **Enter** searches straight away. Your text and the
+  cursor stay where they are, the current results stay visible with a thin progress bar while
+  new ones load, and a slower older answer can never replace a newer one. Clearing the box brings
+  back the browse list.
+- The search box says what it searches: **Search plugins**, **Search modpacks**, **Search data
+  packs** or **Search resource packs**.
+- New **server software** filter. For plugins: **Automatic** (what this server runs), **Paper**,
+  **Purpur**, **Spigot**, **Bukkit**, **Folia** or **All plugin platforms**. For modpacks:
+  **Fabric**, **Forge**, **NeoForge**, **Quilt** or **All loaders**. Data packs and resource packs
+  have no such choice. Each result still says honestly whether it works on your server.
+- If one plugin site cannot be reached, the other site's results stay on screen with a short note.
+
+## 1Salem Connect: a normal installer (Build 10)
+
+- Friends now download one file, **`1SalemConnect-Setup.exe`**. It installs 1Salem Connect in
+  `C:\Program Files\1Salem Connect`, adds it to the Start menu and the desktop, and lists it
+  under **Installed apps** so it can be removed like any other program. The app's own files stay
+  inside that folder.
+- The app runs as the normal signed-in user; only the installer asks for administrator rights.
+  Each person's settings stay in their own user folder.
+- The invitation page now has a **Download 1Salem Connect** button that fetches this installer.
+- For advanced users, `1SalemConnect-Portable.zip` still runs from any folder.
 
 ## Create Minecraft Server: every server gets its own folder (Build 9)
 
@@ -23,7 +62,7 @@ or a VPN on their PC.
   never shown again). Then, per Minecraft server, turn **Private friend access** on, **Invite
   friend** to create a one-time invitation link or code, and approve, rename or revoke friends
   from **Friends**.
-- **For the friend**, the separate **1Salem Connect** app (`1SalemConnect-1.5.zip`): paste the
+- **For the friend**, the separate **1Salem Connect** app (`1SalemConnect-Setup.exe` from Build 10): paste the
   invitation, wait for the owner's approval, then **Connect**. Minecraft connects to a local
   address such as `127.0.0.1:18211`. Only that game connection goes through 1Salem Connect;
   the rest of the friend's internet traffic, routes, DNS and proxy settings are left alone.
@@ -240,5 +279,6 @@ update tooling — no change to the visible Version 1.5 identity:
 - Uses the rolling `artifacts/release/1.5` release directory.
 - Builds a validated candidate first and promotes it only after the installed update and rollback snapshot are verified.
 - Adds `BUILD_REVISION` and `build-info.json` without presenting Build 1 as product version 1.5.1.
-- From Build 8, also contains `1SalemConnect-1.5.zip`, the 1Salem Connect friend app, and the Agent
-  includes the Connect host transport.
+- From Build 8, the Agent includes the Connect host transport. From Build 10, the friend app is
+  `1SalemConnect-Setup.exe` (installer) and `1SalemConnect-Portable.zip`; Builds 8 and 9 shipped it
+  as `1SalemConnect-1.5.zip`.

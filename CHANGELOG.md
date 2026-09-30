@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5 — Build 10
+
+- Content: the Discover page no longer reloads on every dashboard refresh, which had reset it to
+  "Loading" every few seconds and interrupted typing. Search is debounced; Enter searches at
+  once; stale replies are dropped; results stay visible while loading; one provider failing keeps
+  the other's results. The search hint follows the content type.
+- Content: a server-software filter. Plugins: Automatic, Paper, Purpur, Spigot, Bukkit, Folia or
+  all. Modpacks: Fabric, Forge, NeoForge, Quilt or all. It maps onto Modrinth loader facets, and
+  Hangar is asked only where its Paper files apply. Per-card compatibility is unchanged.
+- 1Salem Connect: `1SalemConnect-Setup.exe`, a normal Windows installer. It installs to Program
+  Files and adds Start menu and desktop shortcuts, an Installed apps entry with an uninstaller and
+  a non-elevated launch. `1SalemConnect-Portable.zip` replaces `1SalemConnect-1.5.zip`.
+- The invite page offers "Download 1Salem Connect", pointing at the Build 10 installer.
+
 ## 1.5 — Build 9
 
 - Create Minecraft Server gives each new server its own unique folder,
