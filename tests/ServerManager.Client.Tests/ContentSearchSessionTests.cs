@@ -164,9 +164,9 @@ public sealed class ContentSearchSessionTests
 
     [Theory]
     [InlineData(ContentKind.Plugin, "Plugins for this Minecraft server, from Hangar and Modrinth.")]
-    [InlineData(ContentKind.Modpack, "Modpacks compatible with this Minecraft server. A modpack builds a new server.")]
-    [InlineData(ContentKind.DataPack, "Data packs for this Minecraft server's world.")]
-    [InlineData(ContentKind.ResourcePack, "Resource packs for this Minecraft server's players.")]
+    [InlineData(ContentKind.Modpack, "Modpacks compatible with this Minecraft server.")]
+    [InlineData(ContentKind.DataPack, "Data packs for this Minecraft server.")]
+    [InlineData(ContentKind.ResourcePack, "Resource packs for this Minecraft server.")]
     public void Subtitle_FollowsTheSelectedType(ContentKind kind, string expected)
     {
         var original = CultureInfo.CurrentUICulture;

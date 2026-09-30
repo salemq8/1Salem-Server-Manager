@@ -471,15 +471,15 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
         private string Answer(string[] words) =>
             words switch
             {
-                ["gamerule", var name] when Rules.TryGetValue(name, out var value) => $"Gamerule {name} is currently set to: {value}",
-                ["gamerule", var name, var value] when Rules.ContainsKey(name) => Set(name, value),
-                ["gamerule", ..] => "Incorrect argument for command",
-                ["list"] => $"There are {Online.Count} of a max of 20 players online: {string.Join(", ", Online)}",
-                ["op", "Nobody_Here"] => "That player does not exist",
-                ["op", var player] => $"Made {player} a server operator",
-                ["ban", var player] => $"Banned {player}: Banned by an operator.",
-                ["kick", var player] => $"Kicked {player}: Kicked by an operator",
-                ["difficulty", var level] => $"The difficulty has been set to {level}",
+            ["gamerule", var name] when Rules.TryGetValue(name, out var value) => $"Gamerule {name} is currently set to: {value}",
+            ["gamerule", var name, var value] when Rules.ContainsKey(name) => Set(name, value),
+            ["gamerule", ..] => "Incorrect argument for command",
+            ["list"] => $"There are {Online.Count} of a max of 20 players online: {string.Join(", ", Online)}",
+            ["op", "Nobody_Here"] => "That player does not exist",
+            ["op", var player] => $"Made {player} a server operator",
+            ["ban", var player] => $"Banned {player}: Banned by an operator.",
+            ["kick", var player] => $"Kicked {player}: Kicked by an operator",
+            ["difficulty", var level] => $"The difficulty has been set to {level}",
                 _ => "Unknown or incomplete command, see below for error"
             };
 

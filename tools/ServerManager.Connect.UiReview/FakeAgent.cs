@@ -43,6 +43,9 @@ internal sealed class FakeAgent : IDisposable
 
     public List<string> Requests { get; } = [];
 
+    /// <summary>Request bodies by path, for scenarios that check what was sent.</summary>
+    public List<(string Path, string Text)> Bodies { get; } = [];
+
     /// <summary>Optional routes tried first (the Content scenario); may delay to simulate a slow site.</summary>
     public Func<string, string, Task<(int Status, object? Payload)?>>? Extra { get; set; }
 
@@ -87,12 +90,14 @@ internal sealed class FakeAgent : IDisposable
                        !tail.ToString().Equals("0\r\n\r\n", StringComparison.Ordinal) &&
                        await stream.ReadAsync(buffer) == 1)
                     tail.Append((char)buffer[0]);
+                lock (Bodies) Bodies.Add((request[1], tail.ToString()));
             }
             else
             {
                 var length = int.Parse(Header("Content-Length") ?? "0");
                 var body = new byte[length];
                 for (var read = 0; read < length;) read += await stream.ReadAsync(body.AsMemory(read));
+                if (length > 0) lock (Bodies) Bodies.Add((request[1], Encoding.UTF8.GetString(body)));
             }
             var (status, payload) = (Extra is null ? null : await Extra(request[0], request[1])) ?? Route(request[0], request[1]);
             lock (Requests) Requests.Add(request[0] + " " + request[1] + " -> " + status);

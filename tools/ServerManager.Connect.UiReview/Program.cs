@@ -14,9 +14,9 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length != 3 || args[0] is not ("owner" or "friend" or "content"))
+        if (args.Length != 3 || args[0] is not ("owner" or "friend" or "content" or "gameplay"))
         {
-            Console.Error.WriteLine("usage: ServerManager.Connect.UiReview owner|friend|content <output directory> <culture>");
+            Console.Error.WriteLine("usage: ServerManager.Connect.UiReview owner|friend|content|gameplay <output directory> <culture>");
             return 2;
         }
 
@@ -29,7 +29,7 @@ internal static class Program
 
         Func<Task> scenarios;
         FakeAgent? agent = null;
-        if (args[0] == "content")
+        if (args[0] is "content" or "gameplay")
         {
             // The real Server Manager Content tab against the in-process fake Agent.
             agent = new FakeAgent();
@@ -40,7 +40,9 @@ internal static class Program
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             ServerManager.Client.Shell.LocalizationService.Apply(culture.Name);
             ServerManager.Client.Shell.ThemeService.Apply(ServerManager.Client.Shell.AppTheme.Dark);
-            scenarios = () => ContentScenarios.RunAsync(agent, report);
+            scenarios = args[0] == "content"
+                ? () => ContentScenarios.RunAsync(agent, report)
+                : () => GameplayScenarios.RunAsync(agent, report);
         }
         else if (args[0] == "owner")
         {

@@ -195,6 +195,19 @@ public partial class ServerSettingsTab : UserControl
                 GroupPrimaryButton.Content = LocalizationService.Get("Action.Configure");
                 GroupPrimaryButton.Tag = "legacy-settings";
                 GroupPrimaryButton.IsEnabled = _context.Card is not null;
+                if (_context.Source?.Game == GameType.Minecraft)
+                {
+                    // Minecraft's gamerules, gameplay settings and players have their own page;
+                    // the full settings editor stays one click away.
+                    GroupBody.Text = LocalizationService.Get("ServerSettings.GameBodyMinecraft");
+                    GroupPrimaryButton.Content = LocalizationService.Get("Gameplay.Open");
+                    GroupPrimaryButton.Tag = "minecraft-gameplay";
+                    GroupSecondaryButton.Visibility = Visibility.Visible;
+                    GroupSecondaryButton.Content = LocalizationService.Get("Action.Configure");
+                    GroupSecondaryButton.Tag = "legacy-settings";
+                    GroupSecondaryButton.IsEnabled = _context.Card is not null;
+                }
+
                 break;
 
             case "Network":
@@ -479,6 +492,14 @@ public partial class ServerSettingsTab : UserControl
 
             case "legacy-settings":
                 OpenLegacy(LegacyServerEditorWindow.SettingsTab, "ServerSettings.Game");
+                break;
+
+            case "minecraft-gameplay":
+                if (_context.Source is { Game: GameType.Minecraft } minecraft)
+                {
+                    MinecraftGameplayWindow.Open(Window.GetWindow(this), minecraft.ServerId, minecraft.Name);
+                }
+
                 break;
 
             case "legacy-network":
