@@ -1,4 +1,17 @@
-# 1Salem Server Manager 1.5 — Build 8
+# 1Salem Server Manager 1.5 — Build 9
+
+## Create Minecraft Server: every server gets its own folder (Build 9)
+
+- **Create Minecraft Server** now picks a new folder for each server by itself:
+  `C:\ProgramData\1SalemServerManager\MinecraftServers\<server name>`. Before, every new server
+  was offered the first server's folder, so a second server stopped with "The Minecraft
+  destination already exists".
+- The folder follows the server name as you type it. Characters Windows does not allow in folder
+  names are replaced, and if a folder with that name already exists, `-2`, `-3`, … is added.
+- **Browse** still lets you choose where the server goes; a folder named after the server is made
+  inside the one you pick. A folder that already exists is never reused or overwritten. Existing
+  servers are added with **Import** as before.
+- Existing servers are not moved or changed.
 
 ## 1Salem Connect: private friend access (Build 8)
 

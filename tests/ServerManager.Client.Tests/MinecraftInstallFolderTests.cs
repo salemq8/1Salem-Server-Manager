@@ -2,7 +2,7 @@ namespace ServerManager.Client.Tests;
 
 /// <summary>
 /// Create Minecraft Server: each new server gets its own unique folder named after it, instead of
-/// the first server's ProgramData\1SalemServerManager\Minecraft root (Build 8 usability fix).
+/// the first server's ProgramData\1SalemServerManager\Minecraft root (found in Build 8, fixed in Build 9).
 /// </summary>
 public sealed class MinecraftInstallFolderTests
 {

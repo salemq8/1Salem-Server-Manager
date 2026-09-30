@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5 — Build 9
+
+- Create Minecraft Server gives each new server its own unique folder,
+  `ProgramData\1SalemServerManager\MinecraftServers\<server name>` with `-2`, `-3`… when taken,
+  instead of the first server's `…\Minecraft` folder. A second Minecraft server can now be created
+  without choosing a folder by hand. The folder follows the server name until one is chosen with
+  Browse; existing folders are never reused.
+
 ## 1.5 — Build 8
 
 - Added 1Salem Connect private friend access for Minecraft: owner setup with the owner's own
