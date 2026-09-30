@@ -16,6 +16,7 @@ public partial class MinecraftInstallWindow : Window
     private readonly HttpClient _httpClient =
         AgentTransportDefaults.CreateLoopbackHttpClient(TimeSpan.FromMinutes(30));
     private readonly List<string> _progressLines = [];
+    private readonly MinecraftInstallFolder _folder = new(MinecraftInstallFolder.DefaultParentFolder);
     private MinecraftCreationPlan? _plan;
     private MinecraftCreationProgress? _lastProgress;
     private int _step = 1;
@@ -23,6 +24,9 @@ public partial class MinecraftInstallWindow : Window
     public MinecraftInstallWindow()
     {
         InitializeComponent();
+        RefreshFolder();
+        ServerNameBox.TextChanged += (_, _) => RefreshFolder();
+        FolderBox.TextChanged += (_, _) => _folder.PathChanged(FolderBox.Text);
         Loaded += OnLoaded;
         Closed += (_, _) => _httpClient.Dispose();
         RenderStep();
@@ -63,7 +67,16 @@ public partial class MinecraftInstallWindow : Window
         };
         if (dialog.ShowDialog() == Forms.DialogResult.OK)
         {
-            FolderBox.Text = Path.Combine(dialog.SelectedPath, "Minecraft");
+            FolderBox.Text = _folder.ChooseParent(dialog.SelectedPath, ServerNameBox.Text);
+        }
+    }
+
+    // Keeps the automatic folder in step with the server name and re-checks it is still free.
+    private void RefreshFolder()
+    {
+        if (_folder.Suggest(ServerNameBox.Text) is { } path)
+        {
+            FolderBox.Text = path;
         }
     }
 
@@ -109,6 +122,13 @@ public partial class MinecraftInstallWindow : Window
         FooterStatusText.Text = string.Empty;
         if (step == 1)
         {
+            // Only when leaving step 1: after the Review the destination must not change silently;
+            // a folder that appears later is refused by the Agent instead.
+            if (_step == 1)
+            {
+                RefreshFolder();
+            }
+
             if (string.IsNullOrWhiteSpace(ServerNameBox.Text) ||
                 string.IsNullOrWhiteSpace(FolderBox.Text) ||
                 VersionBox.SelectedItem is not MinecraftVersionDescriptor ||

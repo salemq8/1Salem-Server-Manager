@@ -58,7 +58,6 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="FolderBox"
-                                     Text="C:\ProgramData\1SalemServerManager\Minecraft"
                                      Padding="9" />
                             <Button Grid.Column="1"
                                     Content="Browse"
