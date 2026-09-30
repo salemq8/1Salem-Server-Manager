@@ -760,8 +760,15 @@ public sealed class ProcessSupervisor(
         ManagedProcess managed,
         CancellationToken cancellationToken)
     {
-        if (managed.Server.Game == GameType.Minecraft && managed.Spec.RedirectStandardInput && managed.HasConsole)
+        if (managed.Server.Game == GameType.Minecraft && managed.Spec.RedirectStandardInput)
         {
+            // A re-adopted server has no stdin. Failing here keeps it running, as before; falling
+            // through would end in a kill after the timeout without Minecraft saving the world.
+            if (!managed.HasConsole)
+            {
+                throw new InvalidOperationException(NoConsoleMessage);
+            }
+
             await managed.InputLock.WaitAsync(cancellationToken);
             try
             {

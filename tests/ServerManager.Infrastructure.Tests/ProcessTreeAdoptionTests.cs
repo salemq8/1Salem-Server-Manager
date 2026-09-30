@@ -98,6 +98,38 @@ public sealed class ProcessTreeAdoptionTests : IDisposable
     }
 
     [Fact]
+    public async Task AdoptedMinecraft_GracefulStopFailsInsteadOfKillingTheServer()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var (rootProcessId, _) = await StartRootWithChildAsync();
+        var supervisor = new ProcessSupervisor(
+            NullLogger<ProcessSupervisor>.Instance,
+            new NoOpAuditLogStore());
+        try
+        {
+            // Without a console there is no way to ask Minecraft to save and stop, so the stop
+            // is refused rather than ending in a kill after the timeout.
+            var server = CreateServer() with { Game = GameType.Minecraft };
+            await supervisor.AdoptAsync(server, CreateRootSpec() with { RedirectStandardInput = true }, rootProcessId);
+
+            var stopped = await supervisor.StopAsync(server.Id, force: false);
+
+            Assert.False(stopped.Success);
+            Assert.Equal("ProcessStopFailed", stopped.ErrorCode);
+            using var root = Process.GetProcessById(rootProcessId);
+            Assert.False(root.HasExited);
+        }
+        finally
+        {
+            supervisor.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task AdoptedRoot_ReportsTelemetryFromTheWholeTreeNotJustTheRoot()
     {
         if (!OperatingSystem.IsWindows())
