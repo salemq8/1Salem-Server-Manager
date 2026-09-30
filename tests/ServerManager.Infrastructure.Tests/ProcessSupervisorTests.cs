@@ -53,6 +53,44 @@ public sealed class ProcessSupervisorTests : IDisposable
     }
 
     [Fact]
+    public async Task MinecraftExchange_WaitsForReadyThenReturnsTheAnswerLine()
+    {
+        var server = CreateServer(GameType.Minecraft);
+        var ready = new TaskCompletionSource<Guid>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _supervisor.ServerReady += (_, id) => ready.TrySetResult(id);
+
+        await _supervisor.StartAsync(server, CreateFakeMinecraftConsole());
+        Assert.Equal(server.Id, await ready.Task.WaitAsync(TimeSpan.FromSeconds(20)));
+        Assert.Equal(MinecraftConsoleState.Ready, _supervisor.GetState(server.Id));
+
+        var answer = await _supervisor.ExchangeAsync(
+            server.Id,
+            "gamerule keepInventory",
+            line => ServerManager.Core.Minecraft.MinecraftConsoleReplies.TryParseGameRuleQuery(line, out _, out _),
+            TimeSpan.FromSeconds(10));
+        var silent = await _supervisor.ExchangeAsync(
+            server.Id,
+            "say nothing",
+            line => line.Contains("never printed", StringComparison.Ordinal),
+            TimeSpan.FromMilliseconds(400));
+        var stopped = await _supervisor.StopAsync(server.Id, false);
+
+        Assert.True(answer.Result.Success, answer.Result.Message);
+        Assert.EndsWith("Gamerule keepInventory is currently set to: false", answer.Answer);
+        Assert.Equal("ConsoleTimeout", silent.Result.ErrorCode);
+        Assert.True(stopped.Success);
+        Assert.Equal(MinecraftConsoleState.NotRunning, _supervisor.GetState(server.Id));
+    }
+
+    [Fact]
+    public async Task MinecraftExchange_RefusesAServerThatIsNotRunning()
+    {
+        var result = await _supervisor.ExchangeAsync(Guid.NewGuid(), "list", _ => true, TimeSpan.FromSeconds(1));
+
+        Assert.Equal("ServerNotRunning", result.Result.ErrorCode);
+    }
+
+    [Fact]
     public async Task SendCommandAsync_RejectsNewlineInjection()
     {
         var result = await _supervisor.SendCommandAsync(
@@ -251,6 +289,34 @@ public sealed class ProcessSupervisorTests : IDisposable
             "-NoLogo -NoProfile -NonInteractive -Command \"$line=[Console]::ReadLine(); if($line -eq 'stop'){exit 0}; exit 3\"",
             Path.GetTempPath(),
             new Dictionary<string, string>());
+    }
+
+    /// <summary>A PowerShell stand-in for a Minecraft console: prints "Done", answers gamerule queries, exits on stop.</summary>
+    private static ProcessLaunchSpec CreateFakeMinecraftConsole()
+    {
+        const string script =
+            "[Console]::Out.WriteLine('[00:00:00] [Server thread/INFO]: Done (1.0s)! For help, type \"help\"'); [Console]::Out.Flush(); " +
+            "while ($null -ne ($line = [Console]::ReadLine())) { " +
+            "if ($line -eq 'stop') { exit 0 }; " +
+            "if ($line -like 'gamerule *') { [Console]::Out.WriteLine('[00:00:01] [Server thread/INFO]: Gamerule ' + $line.Substring(9) + ' is currently set to: false'); [Console]::Out.Flush() } }";
+        var powershell = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe");
+        return new ProcessLaunchSpec(
+            powershell,
+            string.Empty,
+            Path.GetTempPath(),
+            new Dictionary<string, string>(),
+            ArgumentList:
+            [
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-EncodedCommand",
+                Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script))
+            ]);
     }
 
     private static ProcessLaunchSpec CreateIndependentHostSpec()

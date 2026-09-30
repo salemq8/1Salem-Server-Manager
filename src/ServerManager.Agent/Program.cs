@@ -155,6 +155,11 @@ builder.Services.AddSingleton<GameServerOrchestrator>();
 builder.Services.AddSingleton<ConfigurationRestorePointService>();
 builder.Services.AddSingleton<MinecraftCreationCoordinator>();
 builder.Services.AddSingleton<ServerConfigurationService>();
+builder.Services.AddSingleton<IMinecraftConsoleChannel>(
+    services => services.GetRequiredService<ProcessSupervisor>());
+builder.Services.AddSingleton<IMinecraftPropertiesWriter>(
+    services => services.GetRequiredService<ServerConfigurationService>());
+builder.Services.AddSingleton<MinecraftGameplayService>();
 builder.Services.AddSingleton<DashboardSnapshotService>();
 builder.Services.AddSingleton<PlayitInstallationLocator>();
 builder.Services.AddSingleton<IPlayitProcessFactory, SystemPlayitProcessFactory>();
@@ -238,6 +243,10 @@ if (connectAcceptance is not null)
     await app.RunAsync();
     return;
 }
+
+// Created up front so gamerule changes saved while a server was stopped are applied when it
+// next becomes ready, even if nobody has opened the Gameplay page since the Agent started.
+_ = app.Services.GetRequiredService<MinecraftGameplayService>();
 
 app.MapGet(
     "/health",
@@ -1132,6 +1141,44 @@ app.MapPost(
             request,
             cancellationToken)));
 app.MapGet(
+    "/api/v1/servers/{serverId:guid}/minecraft/gameplay",
+    async (
+        Guid serverId,
+        MinecraftGameplayService gameplay,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await gameplay.GetAsync(serverId, cancellationToken)));
+app.MapPost(
+    "/api/v1/servers/{serverId:guid}/minecraft/gamerules",
+    async (
+        Guid serverId,
+        MinecraftGameRuleChangeRequest request,
+        MinecraftGameplayService gameplay,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await gameplay.SetGameRuleAsync(serverId, request, cancellationToken)));
+app.MapPost(
+    "/api/v1/servers/{serverId:guid}/minecraft/gameplay/properties",
+    async (
+        Guid serverId,
+        MinecraftPropertiesChangeRequest request,
+        MinecraftGameplayService gameplay,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await gameplay.SetPropertiesAsync(serverId, request, cancellationToken)));
+app.MapGet(
+    "/api/v1/servers/{serverId:guid}/minecraft/players/live",
+    async (
+        Guid serverId,
+        MinecraftGameplayService gameplay,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await gameplay.GetPlayersAsync(serverId, cancellationToken)));
+app.MapPost(
+    "/api/v1/servers/{serverId:guid}/minecraft/players/actions",
+    async (
+        Guid serverId,
+        MinecraftPlayerActionRequest request,
+        MinecraftGameplayService gameplay,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await gameplay.PlayerActionAsync(serverId, request, cancellationToken)));
+app.MapGet(
     "/api/v1/servers/{serverId:guid}/minecraft/players",
     async (
         Guid serverId,
@@ -1518,6 +1565,15 @@ static string DescribeActivity(string action) => action switch
     "PalworldManagementEnabled" => "Local management enabled",
     "PalworldManagementDisabled" => "Local management disabled",
     "GameUpdated" => "Server updated",
+    "MinecraftGameRuleChanged" => "Gamerule changed",
+    "MinecraftGameplaySettingsChanged" => "Gameplay settings changed",
+    "MinecraftPlayerOpped" => "Player made operator",
+    "MinecraftPlayerDeopped" => "Operator removed",
+    "MinecraftPlayerWhitelisted" => "Player added to whitelist",
+    "MinecraftPlayerUnwhitelisted" => "Player removed from whitelist",
+    "MinecraftPlayerKicked" => "Player kicked",
+    "MinecraftPlayerBanned" => "Player banned",
+    "MinecraftPlayerPardoned" => "Player unbanned",
     _ => System.Text.RegularExpressions.Regex.Replace(
         action,
         "(?<!^)([A-Z])",

@@ -223,6 +223,51 @@ public interface IConsoleService
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Whether a Minecraft server can be asked something through its console now.</summary>
+public enum MinecraftConsoleState
+{
+    NotRunning = 0,
+
+    /// <summary>Started by the Agent but not ready ("Done" not printed yet).</summary>
+    Starting = 1,
+
+    Ready = 2,
+
+    /// <summary>Running, but re-adopted after an Agent restart: there is no console to write to.</summary>
+    NoConsole = 3
+}
+
+/// <summary>A command and the console line that answered it.</summary>
+public sealed record ConsoleExchangeResult(OperationResult Result, string? Answer, IReadOnlyList<string> Lines);
+
+/// <summary>
+/// Asks a Minecraft server something and waits for its answer. Exchanges on one server run one at
+/// a time because console answers carry no correlation id.
+/// </summary>
+public interface IMinecraftConsoleChannel
+{
+    MinecraftConsoleState GetState(Guid serverId);
+
+    Task<ConsoleExchangeResult> ExchangeAsync(
+        Guid serverId,
+        string command,
+        Func<string, bool> isAnswer,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Raised once per run when a Minecraft server the Agent started prints "Done".</summary>
+    event EventHandler<Guid>? ServerReady;
+}
+
+/// <summary>Writes chosen server.properties values the safe way (restore point, atomic write).</summary>
+public interface IMinecraftPropertiesWriter
+{
+    Task<OperationResult> WriteAsync(
+        Guid serverId,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken cancellationToken = default);
+}
+
 public interface ISecretStore
 {
     string Protect(string plaintext);

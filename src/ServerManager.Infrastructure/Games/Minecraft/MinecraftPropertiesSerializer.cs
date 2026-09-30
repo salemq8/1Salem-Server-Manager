@@ -154,6 +154,54 @@ public static class MinecraftPropertiesSerializer
                Environment.NewLine;
     }
 
+    /// <summary>
+    /// Sets only the given keys: the first occurrence of each is replaced where it stands,
+    /// missing ones are appended, and every other line (unknown keys, comments, order) is kept.
+    /// Setting "white-list" also sets "enforce-whitelist", as the settings editor always has.
+    /// </summary>
+    public static string SetValues(string existingContent, IReadOnlyDictionary<string, string> values)
+    {
+        ArgumentNullException.ThrowIfNull(existingContent);
+        ArgumentNullException.ThrowIfNull(values);
+        var wanted = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+        if (wanted.TryGetValue("white-list", out var whitelist))
+        {
+            wanted["enforce-whitelist"] = whitelist;
+        }
+
+        var output = new List<string>();
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in existingContent.Split('\n'))
+        {
+            var normalized = line.TrimEnd('\r');
+            var separator = FindSeparator(normalized);
+            var key = separator > 0 && !normalized.TrimStart().StartsWith('#') && !normalized.TrimStart().StartsWith('!')
+                ? normalized[..separator].Trim()
+                : string.Empty;
+            if (key.Length > 0 && wanted.TryGetValue(key, out var value))
+            {
+                if (written.Add(key))
+                {
+                    output.Add($"{key}={Escape(value)}");
+                }
+
+                continue;
+            }
+
+            output.Add(normalized);
+        }
+
+        foreach (var (key, value) in wanted)
+        {
+            if (written.Add(key))
+            {
+                output.Add($"{key}={Escape(value)}");
+            }
+        }
+
+        return string.Join(Environment.NewLine, output).TrimEnd() + Environment.NewLine;
+    }
+
     private static void Validate(MinecraftServerSettings settings, int port)
     {
         ArgumentNullException.ThrowIfNull(settings);

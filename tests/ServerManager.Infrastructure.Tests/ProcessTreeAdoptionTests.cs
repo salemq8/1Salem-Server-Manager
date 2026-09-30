@@ -71,6 +71,13 @@ public sealed class ProcessTreeAdoptionTests : IDisposable
             Assert.NotNull(adopted);
             Assert.Equal(rootProcessId, adopted.ProcessId);
 
+            // A re-adopted process has no pipes: live controls say so instead of throwing.
+            Assert.Equal(MinecraftConsoleState.NoConsole, supervisor.GetState(server.Id));
+            var command = await supervisor.SendCommandAsync(server.Id, "list");
+            Assert.Equal("ConsoleUnavailable", command.ErrorCode);
+            var exchange = await supervisor.ExchangeAsync(server.Id, "list", _ => true, TimeSpan.FromSeconds(1));
+            Assert.Equal("ConsoleUnavailable", exchange.Result.ErrorCode);
+
             var snapshot = await supervisor.GetSnapshotAsync(server.Id);
             Assert.NotNull(snapshot);
 

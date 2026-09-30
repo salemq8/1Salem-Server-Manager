@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using ServerManager.Contracts;
 using ServerManager.Core;
+using ServerManager.Core.Minecraft;
 
 namespace ServerManager.Infrastructure.Processes;
 
@@ -14,8 +15,13 @@ public sealed class ProcessSupervisor(
     IProcessResourceController,
     IConsoleService,
     ILogStreamService,
+    IMinecraftConsoleChannel,
     IDisposable
 {
+    private const string NoConsoleMessage =
+        "This server was started before the Agent last restarted, so its console is not connected. " +
+        "Restart the server from 1Salem to use console commands and live controls.";
+
     private readonly IProcessTreeDiscovery _processTreeDiscovery =
         processTreeDiscovery ?? new WindowsProcessTreeDiscovery();
     private static readonly TimeSpan GracefulStopTimeout = TimeSpan.FromSeconds(20);
@@ -454,8 +460,24 @@ public sealed class ProcessSupervisor(
                 "The server process console is not available.");
         }
 
-        await managed.Process.StandardInput.WriteLineAsync(command.AsMemory(), cancellationToken);
-        await managed.Process.StandardInput.FlushAsync(cancellationToken);
+        // A process re-adopted after an Agent restart was opened without pipes; writing to it
+        // would throw, so say what is going on instead.
+        if (!managed.HasConsole)
+        {
+            return OperationResult.Fail("ConsoleUnavailable", NoConsoleMessage);
+        }
+
+        await managed.InputLock.WaitAsync(cancellationToken);
+        try
+        {
+            await managed.Process.StandardInput.WriteLineAsync(command.AsMemory(), cancellationToken);
+            await managed.Process.StandardInput.FlushAsync(cancellationToken);
+        }
+        finally
+        {
+            managed.InputLock.Release();
+        }
+
         managed.Logs.Publish(
             new LogEntry(
                 DateTimeOffset.UtcNow,
@@ -463,6 +485,125 @@ public sealed class ProcessSupervisor(
                 "Console",
                 $"> {command}"));
         return OperationResult.Ok();
+    }
+
+    public event EventHandler<Guid>? ServerReady;
+
+    public MinecraftConsoleState GetState(Guid serverId)
+    {
+        if (!_processes.TryGetValue(serverId, out var managed))
+        {
+            return MinecraftConsoleState.NotRunning;
+        }
+
+        try
+        {
+            if (managed.Process.HasExited)
+            {
+                return MinecraftConsoleState.NotRunning;
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return MinecraftConsoleState.NotRunning;
+        }
+
+        if (!managed.HasConsole)
+        {
+            return MinecraftConsoleState.NoConsole;
+        }
+
+        return managed.IsReady ? MinecraftConsoleState.Ready : MinecraftConsoleState.Starting;
+    }
+
+    public async Task<ConsoleExchangeResult> ExchangeAsync(
+        Guid serverId,
+        string command,
+        Func<string, bool> isAnswer,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(isAnswer);
+        var state = GetState(serverId);
+        if (state != MinecraftConsoleState.Ready || !_processes.TryGetValue(serverId, out var managed))
+        {
+            return new ConsoleExchangeResult(
+                state switch
+                {
+                    MinecraftConsoleState.NoConsole => OperationResult.Fail("ConsoleUnavailable", NoConsoleMessage),
+                    MinecraftConsoleState.Starting => OperationResult.Fail("ServerStarting", "The server is still starting."),
+                    _ => OperationResult.Fail("ServerNotRunning", "The server is not running.")
+                },
+                null,
+                []);
+        }
+
+        // Answers carry no correlation id, so one exchange at a time per server; the listener is
+        // in place before the command is written, so a fast answer cannot be missed.
+        await managed.ExchangeLock.WaitAsync(cancellationToken);
+        try
+        {
+            var lines = new List<string>();
+            var answered = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnLine(string line)
+            {
+                lock (lines)
+                {
+                    lines.Add(line);
+                }
+
+                try
+                {
+                    if (isAnswer(line))
+                    {
+                        answered.TrySetResult(line);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    answered.TrySetException(exception);
+                }
+            }
+
+            managed.AddOutputListener(OnLine);
+            try
+            {
+                var sent = await SendCommandAsync(serverId, command, cancellationToken);
+                if (!sent.Success)
+                {
+                    return new ConsoleExchangeResult(sent, null, []);
+                }
+
+                try
+                {
+                    var answer = await answered.Task.WaitAsync(timeout, cancellationToken);
+                    return new ConsoleExchangeResult(OperationResult.Ok(), answer, Copy(lines));
+                }
+                catch (TimeoutException)
+                {
+                    return new ConsoleExchangeResult(
+                        OperationResult.Fail("ConsoleTimeout", "The server did not answer in time."),
+                        null,
+                        Copy(lines));
+                }
+            }
+            finally
+            {
+                managed.RemoveOutputListener(OnLine);
+            }
+        }
+        finally
+        {
+            managed.ExchangeLock.Release();
+        }
+
+        static IReadOnlyList<string> Copy(List<string> lines)
+        {
+            lock (lines)
+            {
+                return [.. lines];
+            }
+        }
     }
 
     public IAsyncEnumerable<LogEntry> StreamAsync(
@@ -619,10 +760,19 @@ public sealed class ProcessSupervisor(
         ManagedProcess managed,
         CancellationToken cancellationToken)
     {
-        if (managed.Server.Game == GameType.Minecraft && managed.Spec.RedirectStandardInput)
+        if (managed.Server.Game == GameType.Minecraft && managed.Spec.RedirectStandardInput && managed.HasConsole)
         {
-            await managed.Process.StandardInput.WriteLineAsync("stop".AsMemory(), cancellationToken);
-            await managed.Process.StandardInput.FlushAsync(cancellationToken);
+            await managed.InputLock.WaitAsync(cancellationToken);
+            try
+            {
+                await managed.Process.StandardInput.WriteLineAsync("stop".AsMemory(), cancellationToken);
+                await managed.Process.StandardInput.FlushAsync(cancellationToken);
+            }
+            finally
+            {
+                managed.InputLock.Release();
+            }
+
             return;
         }
 
@@ -643,6 +793,26 @@ public sealed class ProcessSupervisor(
                 managed.Server.Game.ToString(),
                 line,
                 standardError));
+        managed.PublishToListeners(line);
+
+        // Ready is tracked per run, so a "Done" line from an earlier run can never count.
+        if (managed.Server.Game == GameType.Minecraft &&
+            MinecraftConsoleReplies.IsReady(line) &&
+            managed.TryMarkReady())
+        {
+            var serverId = managed.Server.Id;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    ServerReady?.Invoke(this, serverId);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogWarning(exception, "A ready handler failed for server {ServerId}.", serverId);
+                }
+            });
+        }
     }
 
     private async Task HandleExitAsync(ManagedProcess managed)
@@ -779,8 +949,49 @@ public sealed class ProcessSupervisor(
         public TaskCompletionSource<int?> ExitCompletion { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>True only for a process this Agent started with redirected pipes.</summary>
+        public bool HasConsole { get; private set; }
+
+        /// <summary>Serializes writes to stdin (commands and "stop").</summary>
+        public SemaphoreSlim InputLock { get; } = new(1, 1);
+
+        /// <summary>Held for a whole command-and-answer exchange.</summary>
+        public SemaphoreSlim ExchangeLock { get; } = new(1, 1);
+
+        private int _ready;
+        private Action<string>[] _listeners = [];
+
+        public bool IsReady => Volatile.Read(ref _ready) == 1;
+
+        public bool TryMarkReady() => Interlocked.Exchange(ref _ready, 1) == 0;
+
+        public void AddOutputListener(Action<string> listener)
+        {
+            lock (_metricsSync)
+            {
+                _listeners = [.. _listeners, listener];
+            }
+        }
+
+        public void RemoveOutputListener(Action<string> listener)
+        {
+            lock (_metricsSync)
+            {
+                _listeners = _listeners.Where(existing => existing != listener).ToArray();
+            }
+        }
+
+        public void PublishToListeners(string line)
+        {
+            foreach (var listener in Volatile.Read(ref _listeners))
+            {
+                listener(line);
+            }
+        }
+
         public void MarkStarted()
         {
+            HasConsole = Spec.RedirectStandardInput;
             _startedAtUtc = DateTimeOffset.UtcNow;
             _lastSampleTimestamp = Stopwatch.GetTimestamp();
             _lastProcessorTimes[Process.Id] = Process.TotalProcessorTime;
