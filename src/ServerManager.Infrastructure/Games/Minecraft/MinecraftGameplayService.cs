@@ -329,7 +329,7 @@ public sealed class MinecraftGameplayService : IDisposable
             return new MinecraftChangeResult(MinecraftChangeOutcome.Failed, "ConsoleTimeout", "The server did not answer in time.");
         }
 
-        if (!current.Supported || current.ServerName is null)
+        if (!current.Supported || current.ServerName is not { } serverName)
         {
             return new MinecraftChangeResult(
                 MinecraftChangeOutcome.Failed,
@@ -339,8 +339,8 @@ public sealed class MinecraftGameplayService : IDisposable
 
         var set = await _console.ExchangeAsync(
             server.Id,
-            $"gamerule {current.ServerName} {MinecraftGameRuleCatalog.Format(value)}",
-            line => MinecraftConsoleReplies.TryParseGameRuleSet(line, out _, out _) || MinecraftConsoleReplies.IsCommandError(line),
+            $"gamerule {serverName} {MinecraftGameRuleCatalog.Format(value)}",
+            line => MinecraftConsoleReplies.AnswersGameRule(line, serverName, set: true),
             AnswerTimeout,
             cancellationToken);
         if (!set.Result.Success)
@@ -511,7 +511,7 @@ public sealed class MinecraftGameplayService : IDisposable
             var exchange = await _console.ExchangeAsync(
                 serverId,
                 $"gamerule {name}",
-                line => MinecraftConsoleReplies.TryParseGameRuleQuery(line, out _, out _) || MinecraftConsoleReplies.IsCommandError(line),
+                line => MinecraftConsoleReplies.AnswersGameRule(line, name, set: false),
                 AnswerTimeout,
                 cancellationToken);
             if (!exchange.Result.Success)

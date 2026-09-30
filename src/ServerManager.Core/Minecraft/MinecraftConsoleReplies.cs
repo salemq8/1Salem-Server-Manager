@@ -47,6 +47,29 @@ public static partial class MinecraftConsoleReplies
     public static bool TryParseGameRuleSet(string? line, out string name, out string value) =>
         TryMatch(GameRuleSetRegex(), line, out name, out value);
 
+    /// <summary>
+    /// Whether a line answers "gamerule name" (query) or "gamerule name value" (set): that rule's
+    /// value line, or an error line naming it (Minecraft follows "Incorrect argument for command"
+    /// with "gamerule name&lt;--[HERE]"). Answers carry no id, so a late line from an earlier
+    /// command, such as the second line of its error, is never taken for this one.
+    /// </summary>
+    public static bool AnswersGameRule(string? line, string name, bool set)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        var parsed = set
+            ? TryParseGameRuleSet(line, out var answered, out _)
+            : TryParseGameRuleQuery(line, out answered, out _);
+        if (parsed)
+        {
+            return string.Equals(WithoutNamespace(answered), WithoutNamespace(name), StringComparison.Ordinal);
+        }
+
+        return IsCommandError(line) && Message(line).Contains(WithoutNamespace(name), StringComparison.Ordinal);
+    }
+
+    private static string WithoutNamespace(string name) =>
+        name.StartsWith("minecraft:", StringComparison.Ordinal) ? name["minecraft:".Length..] : name;
+
     /// <summary>The server did not understand the command (for example a gamerule it does not have).</summary>
     public static bool IsCommandError(string? line)
     {

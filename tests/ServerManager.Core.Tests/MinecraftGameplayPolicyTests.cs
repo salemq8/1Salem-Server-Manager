@@ -47,6 +47,18 @@ public sealed class MinecraftGameplayPolicyTests
         Assert.Equal(registryName, MinecraftGameRuleCatalog.ResolveName(rule, [registryName, "minecraft:fire_spread_radius_around_player"]));
     }
 
+    [Theory]
+    [InlineData("[12:00:00] [Server thread/INFO]: Gamerule keepInventory is currently set to: true", "keepInventory", false, true)]
+    [InlineData("[12:00:00] [Server thread/INFO]: Gamerule minecraft:keep_inventory is currently set to: true", "keep_inventory", false, true)]
+    [InlineData("[12:00:00] [Server thread/INFO]: Gamerule doFireTick is currently set to: true", "keepInventory", false, false)]
+    [InlineData("[12:00:00] [Server thread/INFO]: gamerule doFireTick<--[HERE]", "doFireTick", false, true)]
+    [InlineData("[12:00:00] [Server thread/INFO]: gamerule doFireTick<--[HERE]", "keepInventory", false, false)]
+    [InlineData("[12:00:00] [Server thread/INFO]: Incorrect argument for command", "keepInventory", false, false)]
+    [InlineData("[12:00:00] [Server thread/INFO]: Gamerule keepInventory is now set to: true", "keepInventory", true, true)]
+    [InlineData("[12:00:00] [Server thread/INFO]: Gamerule keepInventory is currently set to: true", "keepInventory", true, false)]
+    public void GameRuleAnswers_BelongToTheRuleThatWasAsked(string line, string name, bool set, bool expected) =>
+        Assert.Equal(expected, MinecraftConsoleReplies.AnswersGameRule(line, name, set));
+
     [Fact]
     public void FireTick_IsNotMappedOntoTheNumericFireSpreadRule()
     {

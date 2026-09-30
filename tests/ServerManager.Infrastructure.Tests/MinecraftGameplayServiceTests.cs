@@ -102,6 +102,21 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Live_ALateErrorLineFromAnEarlierCommandIsNotTakenAsTheAnswer()
+    {
+        _console.State = MinecraftConsoleState.Ready;
+        _console.Rules["keepInventory"] = "true";
+        _console.StaleLine = "gamerule doFireTick<--[HERE]";
+
+        var snapshot = await _service.GetAsync(_server.Id);
+
+        var rule = Assert.Single(snapshot.GameRules, rule => rule.Key == "keepInventory");
+        Assert.True(rule.Supported);
+        Assert.True(rule.Value);
+        Assert.Equal(MinecraftValueSource.Live, rule.Source);
+    }
+
+    [Fact]
     public async Task Live_UnknownRuleIsNotSupportedAndNeverSet()
     {
         _console.State = MinecraftConsoleState.Ready;
@@ -539,6 +554,8 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
 
         public List<string> Sent { get; } = [];
 
+        public string? StaleLine { get; set; }
+
         public event EventHandler<Guid>? ServerReady;
 
         public MinecraftConsoleState GetState(Guid serverId) => State;
@@ -558,10 +575,20 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
             }
 
             Sent.Add(command);
-            var line = Prefix + Answer(command.Split(' '));
-            return Task.FromResult(isAnswer(line)
-                ? new ConsoleExchangeResult(OperationResult.Ok(), line, [line])
-                : new ConsoleExchangeResult(OperationResult.Fail("ConsoleTimeout", "No answer."), null, [line]));
+            var reply = Answer(command.Split(' '));
+
+            // Like the real console, an error comes as two lines: the message, then the command
+            // with a marker. A line left over from an earlier command can arrive first.
+            var lines = (reply == "Incorrect argument for command" ? new[] { reply, command + "<--[HERE]" } : new[] { reply })
+                .Select(text => Prefix + text)
+                .Prepend(StaleLine is null ? null : Prefix + StaleLine)
+                .OfType<string>()
+                .ToArray();
+            StaleLine = null;
+            var answer = lines.FirstOrDefault(isAnswer);
+            return Task.FromResult(answer is not null
+                ? new ConsoleExchangeResult(OperationResult.Ok(), answer, lines)
+                : new ConsoleExchangeResult(OperationResult.Fail("ConsoleTimeout", "No answer."), null, lines));
         }
 
         private string Answer(string[] words) =>
