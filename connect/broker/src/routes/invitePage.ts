@@ -29,7 +29,11 @@ const escape = (text: string) =>
 
 export async function invitePage(ctx: RequestContext): Promise<Response> {
   const download = downloadUrl(ctx.env.CONNECT_DOWNLOAD_URL);
-  const link = (label: string) => (download === null ? "" : ` <a href="${escape(download)}">${label}</a>`);
+  // The first thing a friend needs is the app, so the download is a button above the steps.
+  const button = (label: string, note: string) =>
+    download === null
+      ? ""
+      : `<p><a class="download" href="${escape(download)}">${label}</a></p>\n<p class="note">${note}</p>`;
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -44,6 +48,8 @@ section{background:#0e1c2b;border:1px solid #3b566d;border-radius:12px;padding:2
 h1,h2{margin:0 0 8px}h1{font-size:24px}h2{font-size:18px}p,ol{color:#c9d6e2}a{color:#72e2de}
 button{background:#2cb8b3;color:#031719;border:0;border-radius:8px;padding:10px 18px;font:600 15px "Segoe UI",system-ui,sans-serif;cursor:pointer}
 button:disabled{background:#405064;color:#9fb0c2;cursor:default}
+a.download{display:inline-block;background:#2cb8b3;color:#031719;border-radius:8px;padding:12px 22px;font:600 17px "Segoe UI",system-ui,sans-serif;text-decoration:none}
+.note{font-size:14px;margin-top:0}
 </style>
 </head>
 <body>
@@ -51,8 +57,9 @@ button:disabled{background:#405064;color:#9fb0c2;cursor:default}
 <section>
 <h1>You're invited to a game server</h1>
 <p>Someone who runs a 1Salem Server Manager server sent you this invitation. Joining uses the free 1Salem Connect app; only the game connection goes through it.</p>
+${button("Download 1Salem Connect", "For Windows 10 and 11. Run the downloaded setup to install it.")}
 <ol>
-<li>Install and open 1Salem Connect.${link("Download 1Salem Connect")}</li>
+<li>Install and open 1Salem Connect.</li>
 <li>Choose <strong>Add a server</strong> and paste this page's address.</li>
 <li>Wait for the server owner to approve your PC.</li>
 </ol>
@@ -62,8 +69,9 @@ button:disabled{background:#405064;color:#9fb0c2;cursor:default}
 <section lang="ar" dir="rtl">
 <h2>تمت دعوتك إلى خادم ألعاب</h2>
 <p>أرسل إليك شخص يدير خادمًا عبر 1Salem Server Manager هذه الدعوة. يتم الانضمام باستخدام تطبيق 1Salem Connect المجاني، ويمر اتصال اللعبة وحده عبره.</p>
+${button("تنزيل 1Salem Connect", "لنظامي Windows 10 و11. شغّل ملف الإعداد الذي نزّلته لتثبيته.")}
 <ol>
-<li>ثبّت 1Salem Connect وافتحه.${link("تنزيل 1Salem Connect")}</li>
+<li>ثبّت 1Salem Connect وافتحه.</li>
 <li>اختر <strong>إضافة خادم</strong> والصق عنوان هذه الصفحة. (زر النسخ أعلاه ينسخ الدعوة.)</li>
 <li>انتظر موافقة صاحب الخادم على جهازك.</li>
 </ol>

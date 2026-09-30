@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    1SalemConnect-Setup.exe: the friend-facing installer for 1Salem Connect. Published twice by
+    tools/build-release.ps1: once into the Connect folder (the installed uninstaller, sharing
+    that folder's .NET runtime), and once as a single file with the whole Connect folder embedded
+    as its payload. It references nothing from Server Manager and ships no secrets.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>1Salem.Connect.Setup</AssemblyName>
+    <RootNamespace>ServerManager.Connect.Setup</RootNamespace>
+    <Product>1Salem Connect</Product>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
+    <StartupObject>ServerManager.Connect.Setup.Program</StartupObject>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(PayloadArchive)' != ''">
+    <EmbeddedResource Include="$(PayloadArchive)" LogicalName="1Salem.Connect.Payload.zip" />
+  </ItemGroup>
+</Project>

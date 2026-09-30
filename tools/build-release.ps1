@@ -75,7 +75,8 @@ function Test-ReleaseIntegrity {
         'Portable.zip',
         'Source.zip',
         "1SalemServerManager-Update-$Version.zip",
-        "1SalemConnect-$Version.zip",
+        '1SalemConnect-Setup.exe',
+        '1SalemConnect-Portable.zip',
         'version.json',
         'build-info.json',
         'SHA256SUMS.txt',
@@ -515,8 +516,34 @@ $connectSettings = [ordered]@{
     (Join-Path $connectPublish '1Salem.Connect.settings.json'),
     $connectSettings,
     [System.Text.UTF8Encoding]::new($false))
-$connectPackageName = "1SalemConnect-$releaseVersion.zip"
-New-ZipFromDirectory $connectPublish (Join-Path $releaseRoot $connectPackageName)
+# Advanced users can still run it from a folder.
+$connectPortableName = '1SalemConnect-Portable.zip'
+New-ZipFromDirectory $connectPublish (Join-Path $releaseRoot $connectPortableName)
+
+# Friends get one file: 1SalemConnect-Setup.exe. Its payload is the same folder plus the
+# installed uninstaller, which is the Setup program built without a payload and sharing that
+# folder's .NET runtime. The single-file Setup then carries the payload inside it.
+$connectPayloadRoot = Join-Path $stagingRoot 'ConnectPayload'
+Copy-Item -LiteralPath $connectPublish -Destination $connectPayloadRoot -Recurse
+Publish-Application `
+    (Join-Path $root 'tools\ServerManager.Connect.Setup\ServerManager.Connect.Setup.csproj') `
+    $connectPayloadRoot 'ConnectUninstaller'
+foreach ($required in @('1Salem.Connect.exe', '1Salem.Connect.Transport.exe', '1Salem.Connect.settings.json', '1Salem.Connect.Setup.exe')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $connectPayloadRoot $required) -PathType Leaf)) {
+        throw "The 1Salem Connect installer payload is missing $required."
+    }
+}
+$connectPayloadZip = Join-Path $stagingRoot 'ConnectPayload.zip'
+New-ZipFromDirectory $connectPayloadRoot $connectPayloadZip
+Assert-ArchiveSafe $connectPayloadZip
+$connectSetupPublish = Join-Path $publishRoot 'ConnectSetup'
+Publish-Application `
+    (Join-Path $root 'tools\ServerManager.Connect.Setup\ServerManager.Connect.Setup.csproj') `
+    $connectSetupPublish 'ConnectSetup' -SingleFile -PayloadArchive $connectPayloadZip
+$connectSetupExe = Join-Path $connectSetupPublish '1Salem.Connect.Setup.exe'
+Assert-ProductVersion $connectSetupExe
+$connectSetupName = '1SalemConnect-Setup.exe'
+Copy-Item -LiteralPath $connectSetupExe -Destination (Join-Path $releaseRoot $connectSetupName)
 
 New-SourceArchive (Join-Path $releaseRoot 'Source.zip')
 $notesSource = Join-Path $root "docs\RELEASE_NOTES_$releaseVersion.md"
@@ -557,7 +584,7 @@ $versionDocument | ConvertTo-Json -Depth 6 |
 foreach ($archive in @(
     (Join-Path $releaseRoot 'Portable.zip'),
     (Join-Path $releaseRoot 'Source.zip'),
-    (Join-Path $releaseRoot $connectPackageName),
+    (Join-Path $releaseRoot $connectPortableName),
     $updatePackagePath
 )) {
     Assert-ArchiveSafe $archive
@@ -573,7 +600,8 @@ $checksumFiles = @(
     'Portable.zip',
     'Source.zip',
     $updatePackageName,
-    $connectPackageName,
+    $connectSetupName,
+    $connectPortableName,
     'version.json',
     'build-info.json',
     'RELEASE_NOTES.md'
@@ -590,7 +618,8 @@ $requiredFiles = @(
     'Portable.zip',
     'Source.zip',
     $updatePackageName,
-    $connectPackageName,
+    $connectSetupName,
+    $connectPortableName,
     'version.json',
     'build-info.json',
     'SHA256SUMS.txt',

@@ -77,9 +77,10 @@
         }
       ],
       "vars": {
-        "CONNECT_REQUIRE_FLOOD_LIMIT": "true"
-        // Add "CONNECT_DOWNLOAD_URL": "https://…" once the 1Salem Connect download page exists;
-        // until then the invite page shows the steps without a download link.
+        "CONNECT_REQUIRE_FLOOD_LIMIT": "true",
+        // The invite page's "Download 1Salem Connect" button: the installer of the current
+        // public release. Deploy only after that GitHub release asset exists.
+        "CONNECT_DOWNLOAD_URL": "https://github.com/salemq8/1Salem-Server-Manager/releases/download/v1.5-build-10/1SalemConnect-Setup.exe"
       },
       "observability": {
         "enabled": true,

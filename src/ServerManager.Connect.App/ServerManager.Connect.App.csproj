@@ -13,6 +13,8 @@
     <Product>1Salem Connect</Product>
     <NeutralLanguage>en</NeutralLanguage>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The exe icon is what the Start menu, desktop and Installed apps show for it. -->
+    <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <!-- The WPF SDK leaves these out of the implicit usings (System.IO.Path would clash with
