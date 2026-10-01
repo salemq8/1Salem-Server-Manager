@@ -20,6 +20,26 @@ Stable launcher, and setup host, creates the setup payload, builds `Setup.exe`, 
 `1SalemServerManager-Update-<VERSION>.zip`, writes the HTTPS update manifest, and
 writes SHA-256 hashes.
 
+It also builds 1Salem Connect (`1SalemConnect-Setup.exe`, `1SalemConnect-Portable.zip`) and,
+through `tools\New-ConnectUpdateManifest.ps1`, `1SalemConnect-update.json`: the version, build,
+release tag, and the URLs, sizes and SHA-256 of both Connect files in this release. Installed
+copies of 1Salem Connect read it from the latest GitHub release to update themselves, so no
+release needs a change in the Connect app.
+
+## Publishing
+
+After the installed update succeeded and `tools\promote-release.ps1` promoted the candidate,
+push `main` and the tag `v<VERSION>-build-<N>`, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\publish-github-release.ps1
+```
+
+It uploads exactly the files listed in `SHA256SUMS.txt` plus `SHA256SUMS.txt` itself to a draft
+release, verifies every upload against `SHA256SUMS.txt`, and only then publishes it as
+"1Salem Server Manager <VERSION> — Build <N>" and marks it latest. It never changes an existing
+release.
+
 ## Artifact verification
 
 From `artifacts\release\<VERSION>`:

@@ -34,6 +34,9 @@
         <DataTemplate DataType="{x:Type vm:DiagnosticsViewModel}">
             <views:DiagnosticsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+            <views:SettingsView />
+        </DataTemplate>
     </Window.Resources>
     <DockPanel>
         <Border DockPanel.Dock="Top"
@@ -54,7 +57,13 @@
                     <Button Content="{x:Static loc:Text.NavDiagnostics}"
                             Command="{Binding ShowDiagnosticsCommand}"
                             Style="{StaticResource QuietButtonStyle}"
+                            Margin="0,0,8,0"
                             AutomationProperties.Name="{x:Static loc:Text.NavDiagnostics}" />
+                    <Button Content="{x:Static loc:Text.NavSettings}"
+                            Command="{Binding ShowSettingsCommand}"
+                            Style="{StaticResource QuietButtonStyle}"
+                            AutomationProperties.AutomationId="NavSettings"
+                            AutomationProperties.Name="{x:Static loc:Text.NavSettings}" />
                 </StackPanel>
                 <!-- The product name is Latin text that starts with a digit; laid out right to left it
                      would reorder, so it keeps its own direction inside an Arabic window. Sized to its
@@ -64,6 +73,47 @@
                            FlowDirection="LeftToRight"
                            HorizontalAlignment="Left"
                            VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+        <!-- A notice that never blocks the page: an update is available, or how the last one ended. -->
+        <Border DockPanel.Dock="Top"
+                Margin="24,12,24,0"
+                Visibility="{Binding HasNotice, Converter={StaticResource BooleanToVisibilityConverter}}"
+                AutomationProperties.AutomationId="UpdateNotice">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource NoticeStyle}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding NoticeIsWarning}" Value="False">
+                            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            KeyboardNavigation.TabNavigation="Local">
+                    <Button Content="{Binding NoticeActionText}"
+                            Command="{Binding NoticeActionCommand}"
+                            Style="{StaticResource PrimaryActionStyle}"
+                            MinWidth="0"
+                            Margin="0,0,8,0"
+                            Visibility="{Binding HasNoticeAction, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            AutomationProperties.AutomationId="UpdateNoticeAction"
+                            AutomationProperties.Name="{Binding NoticeActionText}" />
+                    <Button Content="{x:Static loc:Text.NoticeDismiss}"
+                            Command="{Binding DismissNoticeCommand}"
+                            Style="{StaticResource QuietButtonStyle}"
+                            AutomationProperties.Name="{x:Static loc:Text.NoticeDismiss}" />
+                </StackPanel>
+                <TextBlock Text="{Binding NoticeText}"
+                           Style="{StaticResource BodyTextStyle}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,12,0"
+                           AutomationProperties.AutomationId="UpdateNoticeText"
+                           AutomationProperties.LiveSetting="Polite" />
             </DockPanel>
         </Border>
         <!-- Named explicitly: otherwise UI Automation names the region after its content, which

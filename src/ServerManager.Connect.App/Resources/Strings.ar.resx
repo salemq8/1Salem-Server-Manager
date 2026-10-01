@@ -246,4 +246,160 @@
   <data name="DiagnosticsNone" xml:space="preserve">
     <value>لا يوجد</value>
   </data>
+  <data name="NavSettings" xml:space="preserve">
+    <value>الإعدادات</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>الإعدادات</value>
+  </data>
+  <data name="SettingsBody" xml:space="preserve">
+    <value>التحديثات والمظهر في 1Salem Connect.</value>
+  </data>
+  <data name="UpdatesTitle" xml:space="preserve">
+    <value>التحديثات</value>
+  </data>
+  <data name="UpdatesVersionLabel" xml:space="preserve">
+    <value>الإصدار</value>
+  </data>
+  <data name="UpdatesBuildLabel" xml:space="preserve">
+    <value>رقم البناء</value>
+  </data>
+  <data name="UpdatesStatusLabel" xml:space="preserve">
+    <value>حالة التحديث</value>
+  </data>
+  <data name="UpdatesLastCheckedLabel" xml:space="preserve">
+    <value>آخر تحقق</value>
+  </data>
+  <data name="UpdatesChannelLabel" xml:space="preserve">
+    <value>قناة التحديث</value>
+  </data>
+  <data name="UpdatesChannelStable" xml:space="preserve">
+    <value>مستقر</value>
+  </data>
+  <data name="UpdatesNever" xml:space="preserve">
+    <value>لم يتم بعد</value>
+  </data>
+  <data name="UpdatesCheck" xml:space="preserve">
+    <value>التحقق من وجود تحديثات</value>
+  </data>
+  <data name="UpdatesUpdateNow" xml:space="preserve">
+    <value>التحديث الآن</value>
+  </data>
+  <data name="UpdatesStatusNotChecked" xml:space="preserve">
+    <value>لم يتم التحقق بعد</value>
+  </data>
+  <data name="UpdatesStatusChecking" xml:space="preserve">
+    <value>جارٍ التحقق من التحديثات…</value>
+  </data>
+  <data name="UpdatesStatusUpToDate" xml:space="preserve">
+    <value>محدّث</value>
+  </data>
+  <data name="UpdatesStatusAvailable" xml:space="preserve">
+    <value>يتوفر تحديث</value>
+  </data>
+  <data name="UpdatesStatusUnavailable" xml:space="preserve">
+    <value>تعذّر التحقق من التحديثات</value>
+  </data>
+  <data name="UpdatesStatusDownloading" xml:space="preserve">
+    <value>جارٍ تنزيل التحديث… {0}</value>
+  </data>
+  <data name="UpdatesStatusInstalling" xml:space="preserve">
+    <value>جارٍ تثبيت التحديث. سيُغلق 1Salem Connect ثم يفتح من جديد.</value>
+  </data>
+  <data name="UpdatesStatusFailed" xml:space="preserve">
+    <value>لم يكتمل التحديث</value>
+  </data>
+  <data name="UpdatesAvailableVersion" xml:space="preserve">
+    <value>الإصدار {0}</value>
+  </data>
+  <data name="UpdatesAvailableBuild" xml:space="preserve">
+    <value>رقم البناء {0}</value>
+  </data>
+  <data name="UpdatesProblemUnreachable" xml:space="preserve">
+    <value>تعذّر الوصول إلى GitHub. تحقّق من اتصالك بالإنترنت وحاول مرة أخرى.</value>
+  </data>
+  <data name="UpdatesProblemNoInformation" xml:space="preserve">
+    <value>لم تُنشر بعد معلومات التحديث لأحدث إصدار.</value>
+  </data>
+  <data name="UpdatesProblemInvalid" xml:space="preserve">
+    <value>تعذّر الوثوق بمعلومات التحديث، لذلك لم يُنزَّل شيء.</value>
+  </data>
+  <data name="UpdatesProblemDownload" xml:space="preserve">
+    <value>لم يكتمل التنزيل. لم يتغير شيء. حاول مرة أخرى.</value>
+  </data>
+  <data name="UpdatesProblemHash" xml:space="preserve">
+    <value>الملف الذي نُزِّل لا يطابق الإصدار الرسمي، لذلك حُذف ولم يُشغَّل.</value>
+  </data>
+  <data name="UpdatesProblemCancelled" xml:space="preserve">
+    <value>أُلغي التحديث. لم يتغير شيء.</value>
+  </data>
+  <data name="UpdatesProblemLaunch" xml:space="preserve">
+    <value>تعذّر تشغيل المثبّت. لم يتغير شيء. حاول مرة أخرى.</value>
+  </data>
+  <data name="UpdatesAdminNote" xml:space="preserve">
+    <value>يطلب Windows إذن المسؤول فقط لاستبدال ملفات التطبيق. تبقى دعواتك وخوادمك وإعداداتك كما هي.</value>
+  </data>
+  <data name="UpdatesDisconnectFirst" xml:space="preserve">
+    <value>افصل الاتصال قبل التحديث.</value>
+  </data>
+  <data name="UpdatesDisconnectDetail" xml:space="preserve">
+    <value>أنت متصل بخادم. التحديث يغلق 1Salem Connect، فينتهي الاتصال.</value>
+  </data>
+  <data name="UpdatesDisconnectAndUpdate" xml:space="preserve">
+    <value>افصل الاتصال وحدّث</value>
+  </data>
+  <data name="UpdatesLater" xml:space="preserve">
+    <value>لاحقًا</value>
+  </data>
+  <data name="UpdatesDisconnectFailed" xml:space="preserve">
+    <value>تعذّر إغلاق الاتصال الآن. حاول مرة أخرى بعد قليل.</value>
+  </data>
+  <data name="UpdatesPortableAvailable" xml:space="preserve">
+    <value>يتوفر إصدار محمول أحدث.</value>
+  </data>
+  <data name="UpdatesPortableDetail" xml:space="preserve">
+    <value>تعمل هذه النسخة دون تثبيت، لذلك لا تُستبدل تلقائيًا. نزّل الحزمة المحمولة الجديدة واستبدل هذا المجلد بنفسك، أو ثبّت 1Salem Connect لتحصل على التحديثات التلقائية.</value>
+  </data>
+  <data name="UpdatesPortableDownload" xml:space="preserve">
+    <value>تنزيل الحزمة المحمولة</value>
+  </data>
+  <data name="UpdatesPortableNote" xml:space="preserve">
+    <value>نسخة محمولة: لا تُثبَّت التحديثات تلقائيًا.</value>
+  </data>
+  <data name="NoticeUpdateAvailable" xml:space="preserve">
+    <value>يتوفر تحديث لـ 1Salem Connect — رقم البناء {0}</value>
+  </data>
+  <data name="NoticeUpdate" xml:space="preserve">
+    <value>تحديث</value>
+  </data>
+  <data name="NoticeDismiss" xml:space="preserve">
+    <value>إخفاء</value>
+  </data>
+  <data name="NoticeUpdated" xml:space="preserve">
+    <value>تم تحديث 1Salem Connect إلى رقم البناء {0}.</value>
+  </data>
+  <data name="NoticeUpdateFailed" xml:space="preserve">
+    <value>لم يكتمل التحديث إلى رقم البناء {0}. لم يتغير 1Salem Connect وما زال يعمل.</value>
+  </data>
+  <data name="NoticeUpdateBlocked" xml:space="preserve">
+    <value>تعذّر بدء التحديث إلى رقم البناء {0} لأن 1Salem Connect كان ما زال مفتوحًا في نافذة أخرى. أغلق كل نوافذ 1Salem Connect وحاول مرة أخرى.</value>
+  </data>
+  <data name="NoticeUpdateInProgress" xml:space="preserve">
+    <value>يجري تثبيت تحديث. سيفتح 1Salem Connect من جديد عند انتهائه.</value>
+  </data>
+  <data name="AppearanceTitle" xml:space="preserve">
+    <value>المظهر</value>
+  </data>
+  <data name="AppearanceTheme" xml:space="preserve">
+    <value>السمة</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>مثل Windows</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>داكنة</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>فاتحة</value>
+  </data>
 </root>

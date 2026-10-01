@@ -32,6 +32,13 @@
         <SolidColorBrush x:Key="SelectionBrush" Color="#087F7B" />
         <SolidColorBrush x:Key="BorderSubtleBrush" Color="#1E3448" />
         <SolidColorBrush x:Key="BorderStrongBrush" Color="#2C4459" />
+        <!-- Button states; ConnectTheme replaces every brush here for the light or dark palette. -->
+        <SolidColorBrush x:Key="AccentForegroundBrush" Color="#031719" />
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#58D1CD" />
+        <SolidColorBrush x:Key="AccentPressedBrush" Color="#168A87" />
+        <SolidColorBrush x:Key="AccentPressedForegroundBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="DisabledBorderBrush" Color="#526174" />
+        <SolidColorBrush x:Key="DisabledForegroundBrush" Color="#D1D7E0" />
 
         <Thickness x:Key="PagePadding">32,24,32,24</Thickness>
         <Thickness x:Key="CardPadding">20</Thickness>
@@ -52,7 +59,7 @@
         </Style>
 
         <Style TargetType="Button">
-            <Setter Property="Foreground" Value="#031719" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="16,9" />
@@ -73,22 +80,32 @@
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                               RecognizesAccessKey="True"
-                                              SnapsToDevicePixels="True" />
+                                              SnapsToDevicePixels="True">
+                                <!-- The application's implicit TextBlock style would otherwise give
+                                     button text the page's text colour (light on the accent in the
+                                     dark theme, dark on it in the light one); the button's own
+                                     Foreground is the readable one for its background. -->
+                                <ContentPresenter.Resources>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#58D1CD" />
-                                <Setter Property="Foreground" Value="#031719" />
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#168A87" />
-                                <Setter Property="Foreground" Value="#FFFFFF" />
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentPressedForegroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource DisabledBrush}" />
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#526174" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource DisabledBorderBrush}" />
                                 <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="1" />
-                                <Setter Property="Foreground" Value="#D1D7E0" />
+                                <Setter Property="Foreground" Value="{DynamicResource DisabledForegroundBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -111,7 +128,7 @@
         <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Background" Value="{DynamicResource PanelAltBrush}" />
-            <Setter Property="BorderBrush" Value="#3B566D" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
         <!-- An explicitly keyed style does not pick up the implicit Button style, so it is BasedOn it. -->

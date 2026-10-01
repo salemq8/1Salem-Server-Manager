@@ -44,6 +44,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{0E52F58E
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerManager.Connect.Setup", "tools\ServerManager.Connect.Setup\ServerManager.Connect.Setup.csproj", "{E53A551E-F0CE-4014-BF59-3335BE6BD711}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerManager.Connect.Setup.Tests", "tests\ServerManager.Connect.Setup.Tests\ServerManager.Connect.Setup.Tests.csproj", "{D3534E44-F74F-40EB-9786-F6B6538709E3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -126,11 +128,16 @@ Global
 		{E53A551E-F0CE-4014-BF59-3335BE6BD711}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E53A551E-F0CE-4014-BF59-3335BE6BD711}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E53A551E-F0CE-4014-BF59-3335BE6BD711}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D3534E44-F74F-40EB-9786-F6B6538709E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D3534E44-F74F-40EB-9786-F6B6538709E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D3534E44-F74F-40EB-9786-F6B6538709E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D3534E44-F74F-40EB-9786-F6B6538709E3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{188041D4-0118-451A-960C-5FA17B65ACDF} = {DB2BAF93-04DF-4DCC-B5CA-0598901BD528}
 		{3B03F938-ED5F-44AA-8C80-76EC834043B7} = {DB2BAF93-04DF-4DCC-B5CA-0598901BD528}
 		{5583DE43-43BB-40E7-B153-9D80BCFADBD6} = {DB2BAF93-04DF-4DCC-B5CA-0598901BD528}
 		{E53A551E-F0CE-4014-BF59-3335BE6BD711} = {0E52F58E-89A0-46C4-939B-F059DB5EB418}
+		{D3534E44-F74F-40EB-9786-F6B6538709E3} = {DB2BAF93-04DF-4DCC-B5CA-0598901BD528}
 	EndGlobalSection
 EndGlobal

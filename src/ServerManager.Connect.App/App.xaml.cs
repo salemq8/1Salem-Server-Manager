@@ -17,6 +17,9 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         _composition = ConnectAppComposition.Create();
+
+        // Before the window exists, so it never flashes the other theme.
+        ConnectTheme.Apply(Resources, _composition.Context.Preferences?.Load().Theme ?? ThemeChoice.System);
         _main = new MainViewModel(_composition.Context);
         var window = new MainWindow { DataContext = _main };
         MainWindow = window;

@@ -8,7 +8,10 @@ internal enum SetupMode
 {
     Install,
     Uninstall,
-    NoPayload
+    NoPayload,
+
+    /// <summary>Started by the app to update itself: runs at once, closes itself when it went through.</summary>
+    Update
 }
 
 /// <summary>
@@ -18,6 +21,8 @@ internal enum SetupMode
 internal sealed class SetupWindow : Window
 {
     private readonly SetupMode _mode;
+    private readonly UpdateRequest? _update;
+    private int _exitCode;
     private readonly TextBlock _message = new() { TextWrapping = TextWrapping.Wrap, FontSize = 14, Margin = new Thickness(0, 12, 0, 0) };
     private readonly ProgressBar _progress = new() { Height = 4, Margin = new Thickness(0, 18, 0, 0), IsIndeterminate = true, Visibility = Visibility.Hidden };
     private readonly Button _primary = new() { MinWidth = 140, Padding = new Thickness(16, 7, 16, 7), IsDefault = true };
@@ -25,9 +30,10 @@ internal sealed class SetupWindow : Window
     private bool _done;
     private bool _busy;
 
-    public SetupWindow(SetupMode mode)
+    public SetupWindow(SetupMode mode, UpdateRequest? update = null)
     {
         _mode = mode;
+        _update = update;
 
         // Closing mid-way would stop the copy half done; the window stays until it finishes.
         Closing += (_, e) => e.Cancel = _busy;
@@ -53,6 +59,9 @@ internal sealed class SetupWindow : Window
             SetupMode.Uninstall => T(
                 "Removes 1Salem Connect from this PC. Your own settings stay in your user folder.",
                 "يزيل 1Salem Connect من هذا الجهاز. تبقى إعداداتك الخاصة في مجلد المستخدم."),
+            SetupMode.Update => T(
+                $"Updating 1Salem Connect to build {update?.ExpectedBuild}. Your invitations, servers and settings stay as they are.",
+                $"جارٍ تحديث 1Salem Connect إلى رقم البناء {update?.ExpectedBuild}. تبقى دعواتك وخوادمك وإعداداتك كما هي."),
             _ => T(
                 "1Salem Connect is installed from 1SalemConnect-Setup.exe. To remove it, use Installed apps in Windows Settings.",
                 "يُثبَّت 1Salem Connect من الملف 1SalemConnect-Setup.exe. لإزالته استخدم التطبيقات المثبّتة في إعدادات Windows.")
@@ -79,11 +88,75 @@ internal sealed class SetupWindow : Window
         panel.Children.Add(_progress);
         panel.Children.Add(buttons);
         Content = panel;
+
+        if (mode == SetupMode.Update)
+        {
+            _primary.Visibility = Visibility.Collapsed;
+            _secondary.Visibility = Visibility.Collapsed;
+            Loaded += async (_, _) => await UpdateAsync();
+            Closed += (_, _) => Application.Current?.Shutdown(_exitCode);
+            if (Application.Current is { } application)
+            {
+                application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            }
+        }
+    }
+
+    private async Task UpdateAsync()
+    {
+        _busy = true;
+        _progress.Visibility = Visibility.Visible;
+        var progress = new Progress<string>(step => _message.Text = step switch
+        {
+            "Waiting for 1Salem Connect to close" => T("Waiting for 1Salem Connect to close…", "بانتظار إغلاق 1Salem Connect…"),
+            "Copying files" => T("Copying files…", "جارٍ نسخ الملفات…"),
+            "Installing" => T("Installing the update…", "جارٍ تثبيت التحديث…"),
+            _ => T("Starting the new version…", "جارٍ تشغيل الإصدار الجديد…")
+        });
+
+        UpdateRunResult result;
+        try
+        {
+            result = await Task.Run(() => Program.RunUpdate(_update!, progress));
+        }
+        catch (Exception exception)
+        {
+            Program.Log("update failed: " + exception);
+            result = new UpdateRunResult(UpdateOutcome.Failed, null, _update?.ExpectedBuild, exception.Message);
+        }
+
+        _busy = false;
+        _progress.Visibility = Visibility.Hidden;
+        _exitCode = (int)result.Outcome;
+        _message.Text = result.Outcome switch
+        {
+            UpdateOutcome.Updated => T("1Salem Connect was updated.", "تم تحديث 1Salem Connect."),
+            UpdateOutcome.RolledBack => T(
+                "The new version did not start, so the previous version was put back. Nothing else changed.",
+                "لم يبدأ الإصدار الجديد، لذلك أُعيد الإصدار السابق. لم يتغير شيء آخر."),
+            UpdateOutcome.Blocked => T(
+                "1Salem Connect is still open in another window. Close it, then try the update again from Settings.",
+                "ما زال 1Salem Connect مفتوحًا في نافذة أخرى. أغلقه ثم أعد محاولة التحديث من الإعدادات."),
+            _ => T(
+                "The update could not be installed. 1Salem Connect was not changed.",
+                "تعذّر تثبيت التحديث. لم يتغير 1Salem Connect.")
+        };
+
+        if (result.Outcome == UpdateOutcome.Updated)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            Close();
+            return;
+        }
+
+        _done = true;
+        _primary.Content = T("Close", "إغلاق");
+        _primary.Visibility = Visibility.Visible;
     }
 
     private async Task PrimaryAsync()
     {
-        if (_done || _mode == SetupMode.NoPayload)
+        if (_done || _mode is SetupMode.NoPayload or SetupMode.Update)
         {
             if (_done && _mode == SetupMode.Install)
             {

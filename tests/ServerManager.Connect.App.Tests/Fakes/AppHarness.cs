@@ -3,6 +3,8 @@ using ServerManager.Connect.App.Broker;
 using ServerManager.Connect.App.Configuration;
 using ServerManager.Connect.App.Identity;
 using ServerManager.Connect.App.Services;
+using ServerManager.Connect.App.Shell;
+using ServerManager.Connect.App.Updates;
 using ServerManager.Connect.App.ViewModels;
 using ServerManager.Connect.Core.Crypto;
 using ServerManager.Connect.Core.Enrollment;
@@ -15,7 +17,7 @@ internal sealed class AppHarness : IDisposable
 {
     public const string ServerLabel = "Salem's world";
 
-    public AppHarness(bool configured = true)
+    public AppHarness(bool configured = true, Func<AppHarness, ConnectUpdater>? updater = null, IAppShell? shell = null)
     {
         Log = new DiagnosticsLog(Clock);
         Broker.SessionExpiresAt = Clock.UtcNow.AddMinutes(10);
@@ -32,7 +34,9 @@ internal sealed class AppHarness : IDisposable
             Transport = Transport,
             Clock = Clock,
             Log = Log,
-            Clipboard = Clipboard
+            Clipboard = Clipboard,
+            Updater = updater?.Invoke(this),
+            Shell = shell
         };
         Main = new MainViewModel(Context);
     }

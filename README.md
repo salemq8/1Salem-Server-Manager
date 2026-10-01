@@ -55,7 +55,8 @@ The release build reads the current value from `VERSION` and writes:
 - Rolling Stable output: `artifacts/release/1.5/`
 - Visible product version remains `1.5`; normal releases increment `BUILD_REVISION` only.
 - Validated candidates are created under `artifacts/staging/release-candidates/` and promoted only after the installed update succeeds.
-- The rolling directory contains Setup.exe, Portable.zip, Source.zip, the update ZIP, the 1Salem Connect friend app (`1SalemConnect-Setup.exe` and `1SalemConnect-Portable.zip`), version.json, build-info.json, SHA256SUMS.txt, and RELEASE_NOTES.md.
+- The rolling directory contains Setup.exe, Portable.zip, Source.zip, the update ZIP, the 1Salem Connect friend app (`1SalemConnect-Setup.exe` and `1SalemConnect-Portable.zip`), `1SalemConnect-update.json` (what installed 1Salem Connect copies update themselves from), version.json, build-info.json, SHA256SUMS.txt, and RELEASE_NOTES.md.
+- `tools\publish-github-release.ps1` publishes the promoted release for the pushed tag `v<VERSION>-build-<N>`: every file in SHA256SUMS.txt plus SHA256SUMS.txt, verified after upload, then marked latest. Installed 1Salem Connect copies find the new build from that release on their own.
 
 `VERSION` is the only manually edited current product-version source. Use
 `tools\next-build.ps1` to calculate the next internal Build without changing VERSION.

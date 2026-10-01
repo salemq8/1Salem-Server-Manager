@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.Win32;
@@ -38,62 +37,24 @@ internal static class ConnectInstaller
 
     public static bool HasPayload => Assembly.GetExecutingAssembly().GetManifestResourceInfo(PayloadResource) is not null;
 
+    /// <summary>The payload embedded in this exe, or null in the installed uninstaller (which has none).</summary>
+    public static Stream? OpenPayload() =>
+        Assembly.GetExecutingAssembly().GetManifestResourceStream(PayloadResource);
+
     public static void Install(IProgress<string>? progress = null)
     {
-        using var payload = Assembly.GetExecutingAssembly().GetManifestResourceStream(PayloadResource) ??
+        using var payload = OpenPayload() ??
             throw new InstallerBlockedException("This copy of Setup does not contain 1Salem Connect. Download 1SalemConnect-Setup.exe again.");
         ThrowIfRunning();
 
-        var parent = Path.GetDirectoryName(InstallRoot)!;
-
-        // Leftovers of an install that was stopped half way.
-        foreach (var stale in Directory.EnumerateDirectories(parent, DisplayName + ".new-*")
-                     .Concat(Directory.EnumerateDirectories(parent, DisplayName + ".old-*")))
-        {
-            TryDelete(stale);
-        }
-
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        var staging = Path.Combine(parent, $"{DisplayName}.new-{suffix}");
-        var previous = Path.Combine(parent, $"{DisplayName}.old-{suffix}");
-
+        // Swap folders so an interrupted install never leaves half an app behind; a crash between
+        // the two renames is put right by the next run.
+        var installation = new ConnectInstallation(InstallRoot);
+        installation.RecoverInterrupted();
         progress?.Report("Copying files");
-        try
-        {
-            Extract(payload, staging);
-            foreach (var required in new[] { AppExecutable, TransportExecutable, SettingsFile, UninstallerExecutable })
-            {
-                if (!File.Exists(Path.Combine(staging, required)))
-                {
-                    throw new InvalidOperationException($"The installer payload is incomplete: {required} is missing.");
-                }
-            }
-
-            // Swap folders so an interrupted install never leaves half an app behind.
-            if (Directory.Exists(InstallRoot))
-            {
-                Directory.Move(InstallRoot, previous);
-            }
-
-            try
-            {
-                Directory.Move(staging, InstallRoot);
-            }
-            catch
-            {
-                if (!Directory.Exists(InstallRoot) && Directory.Exists(previous))
-                {
-                    Directory.Move(previous, InstallRoot);
-                }
-
-                throw;
-            }
-        }
-        finally
-        {
-            TryDelete(staging);
-            TryDelete(previous);
-        }
+        var staging = installation.Stage(payload);
+        var previous = installation.Swap(staging);
+        installation.Commit(previous);
 
         progress?.Report("Adding shortcuts");
         CreateShortcut(StartMenuShortcut, InstalledApp);
@@ -198,32 +159,8 @@ internal static class ConnectInstaller
         }
     }
 
-    /// <summary>Unpacks the payload, refusing any entry that would land outside the target folder.</summary>
-    private static void Extract(Stream payload, string target)
-    {
-        Directory.CreateDirectory(target);
-        var root = Path.GetFullPath(target) + Path.DirectorySeparatorChar;
-        using var archive = new ZipArchive(payload, ZipArchiveMode.Read);
-        foreach (var entry in archive.Entries)
-        {
-            var destination = Path.GetFullPath(Path.Combine(root, entry.FullName.Replace('/', Path.DirectorySeparatorChar)));
-            if (!destination.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"The installer payload contains an unsafe path: {entry.FullName}");
-            }
-
-            if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
-            {
-                Directory.CreateDirectory(destination);
-                continue;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            entry.ExtractToFile(destination, overwrite: false);
-        }
-    }
-
-    private static void Register()
+    /// <summary>The Installed apps entry, naming the version and build now in the install folder.</summary>
+    public static void Register()
     {
         using var key = Registry.LocalMachine.CreateSubKey(UninstallKeyPath, writable: true);
         var uninstaller = Path.Combine(InstallRoot, UninstallerExecutable);
@@ -268,19 +205,5 @@ internal static class ConnectInstaller
         shortcut.IconLocation = $"{target},0";
         shortcut.Description = DisplayName;
         shortcut.Save();
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-        }
     }
 }

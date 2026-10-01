@@ -77,6 +77,7 @@ function Test-ReleaseIntegrity {
         "1SalemServerManager-Update-$Version.zip",
         '1SalemConnect-Setup.exe',
         '1SalemConnect-Portable.zip',
+        '1SalemConnect-update.json',
         'version.json',
         'build-info.json',
         'SHA256SUMS.txt',
@@ -102,6 +103,25 @@ function Test-ReleaseIntegrity {
             (Get-Item -LiteralPath (Join-Path $Path 'version.json')).Length -gt 1MB -or
             [int64]$manifest.packageSize -ne (Get-Item -LiteralPath $packagePath).Length -or
             $manifest.sha256 -ne (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash) {
+            return $false
+        }
+        # The 1Salem Connect update information must describe exactly the files beside it.
+        $connectUpdate = Get-Content -LiteralPath (Join-Path $Path '1SalemConnect-update.json') -Raw |
+            ConvertFrom-Json
+        $connectSetupPath = Join-Path $Path '1SalemConnect-Setup.exe'
+        $connectPortablePath = Join-Path $Path '1SalemConnect-Portable.zip'
+        $releaseTag = "v$Version-build-$BuildRevision"
+        if ([int]$connectUpdate.schema -ne 1 -or
+            $connectUpdate.productVersion -ne $Version -or
+            [int]$connectUpdate.buildRevision -ne $BuildRevision -or
+            $connectUpdate.releaseTag -ne $releaseTag -or
+            $connectUpdate.installer.fileName -ne '1SalemConnect-Setup.exe' -or
+            $connectUpdate.installer.url -ne "https://github.com/salemq8/1Salem-Server-Manager/releases/download/$releaseTag/1SalemConnect-Setup.exe" -or
+            [int64]$connectUpdate.installer.size -ne (Get-Item -LiteralPath $connectSetupPath).Length -or
+            $connectUpdate.installer.sha256 -ne (Get-FileHash -LiteralPath $connectSetupPath -Algorithm SHA256).Hash -or
+            $connectUpdate.portable.fileName -ne '1SalemConnect-Portable.zip' -or
+            [int64]$connectUpdate.portable.size -ne (Get-Item -LiteralPath $connectPortablePath).Length -or
+            $connectUpdate.portable.sha256 -ne (Get-FileHash -LiteralPath $connectPortablePath -Algorithm SHA256).Hash) {
             return $false
         }
         $expected = @{}
@@ -595,6 +615,16 @@ $versionDocument.archiveValidation = 'passed'
 $versionDocument | ConvertTo-Json -Depth 6 |
     Set-Content -LiteralPath (Join-Path $releaseRoot 'version.json') -Encoding utf8
 
+# 1SalemConnect-update.json: what installed copies of 1Salem Connect read to update themselves.
+# Generated for every release (tools/New-ConnectUpdateManifest.ps1), so the app never changes per
+# release: it names this release's own GitHub assets and the SHA-256 of the files beside it.
+$connectUpdateName = '1SalemConnect-update.json'
+& (Join-Path $PSScriptRoot 'New-ConnectUpdateManifest.ps1') `
+    -ReleaseRoot $releaseRoot `
+    -Version $releaseVersion `
+    -BuildRevision $buildRevision `
+    -PublishedUtc $published | Out-Null
+
 $checksumFiles = @(
     'Setup.exe',
     'Portable.zip',
@@ -602,6 +632,7 @@ $checksumFiles = @(
     $updatePackageName,
     $connectSetupName,
     $connectPortableName,
+    $connectUpdateName,
     'version.json',
     'build-info.json',
     'RELEASE_NOTES.md'
@@ -620,6 +651,7 @@ $requiredFiles = @(
     $updatePackageName,
     $connectSetupName,
     $connectPortableName,
+    $connectUpdateName,
     'version.json',
     'build-info.json',
     'SHA256SUMS.txt',

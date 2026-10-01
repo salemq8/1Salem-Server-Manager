@@ -5,6 +5,7 @@ using ServerManager.Connect.App.Identity;
 using ServerManager.Connect.App.Localization;
 using ServerManager.Connect.App.Services;
 using ServerManager.Connect.App.Transport;
+using ServerManager.Connect.App.Updates;
 using ServerManager.Connect.Core.Identity;
 
 namespace ServerManager.Connect.App.Shell;
@@ -70,6 +71,22 @@ public sealed class ConnectAppComposition : IDisposable
             }
         }
 
+        // Updates work for every copy, configured or not; the installed/portable decision is made
+        // once, from where this copy runs. Reading the update state writes nothing.
+        var current = ConnectBuild.Current;
+        var updateHttp = new GitHubUpdateHttp(current);
+        owned.Add(updateHttp);
+        var updater = new ConnectUpdater(
+            updateHttp,
+            new UpdateStateStore(UpdateStateStore.DefaultPath()),
+            new ElevatedInstallerLauncher(),
+            new UpdateHandshake(),
+            clock,
+            log,
+            current,
+            InstallationDetector.Detect(),
+            Path.Combine(UpdateStateStore.DefaultDirectory, "downloads"));
+
         var context = new ConnectAppContext
         {
             Settings = loaded.Settings,
@@ -82,7 +99,10 @@ public sealed class ConnectAppComposition : IDisposable
             Transport = transport,
             Clock = clock,
             Log = log,
-            Clipboard = new WpfClipboard()
+            Clipboard = new WpfClipboard(),
+            Updater = updater,
+            Preferences = new ConnectPreferencesStore(ConnectPreferencesStore.DefaultPath()),
+            Shell = new WpfAppShell()
         };
         return new ConnectAppComposition(context, owned);
     }

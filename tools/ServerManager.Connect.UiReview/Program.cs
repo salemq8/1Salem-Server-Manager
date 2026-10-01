@@ -14,9 +14,9 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length != 3 || args[0] is not ("owner" or "friend" or "content" or "gameplay"))
+        if (args.Length != 3 || args[0] is not ("owner" or "friend" or "content" or "gameplay" or "updates"))
         {
-            Console.Error.WriteLine("usage: ServerManager.Connect.UiReview owner|friend|content|gameplay <output directory> <culture>");
+            Console.Error.WriteLine("usage: ServerManager.Connect.UiReview owner|friend|content|gameplay|updates <output directory> <culture>");
             return 2;
         }
 
@@ -62,7 +62,9 @@ internal static class Program
         {
             var app = new FriendReviewApp { Resources = AppResources.Load(@"src\ServerManager.Connect.App\App.xaml") };
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            scenarios = () => FriendScenarios.RunAsync(report);
+            scenarios = args[0] == "updates"
+                ? () => UpdateScenarios.RunAsync(report)
+                : () => FriendScenarios.RunAsync(report);
         }
 
         var exit = 1;

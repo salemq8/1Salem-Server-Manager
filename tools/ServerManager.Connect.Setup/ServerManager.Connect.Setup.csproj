@@ -16,6 +16,9 @@
     <ApplicationIcon>..\..\assets\branding\1SalemServerManager.ico</ApplicationIcon>
     <StartupObject>ServerManager.Connect.Setup.Program</StartupObject>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ServerManager.Connect.Setup.Tests" />
+  </ItemGroup>
   <ItemGroup Condition="'$(PayloadArchive)' != ''">
     <EmbeddedResource Include="$(PayloadArchive)" LogicalName="1Salem.Connect.Payload.zip" />
   </ItemGroup>

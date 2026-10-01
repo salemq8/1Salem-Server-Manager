@@ -104,4 +104,56 @@
   <data name="DiagnosticsErrors" xml:space="preserve"><value>Recent errors</value></data>
   <data name="DiagnosticsTransportLog" xml:space="preserve"><value>Transport log</value></data>
   <data name="DiagnosticsNone" xml:space="preserve"><value>none</value></data>
+  <data name="NavSettings" xml:space="preserve"><value>Settings</value></data>
+  <data name="SettingsTitle" xml:space="preserve"><value>Settings</value></data>
+  <data name="SettingsBody" xml:space="preserve"><value>Updates and appearance for 1Salem Connect.</value></data>
+  <data name="UpdatesTitle" xml:space="preserve"><value>Updates</value></data>
+  <data name="UpdatesVersionLabel" xml:space="preserve"><value>Version</value></data>
+  <data name="UpdatesBuildLabel" xml:space="preserve"><value>Build</value></data>
+  <data name="UpdatesStatusLabel" xml:space="preserve"><value>Update status</value></data>
+  <data name="UpdatesLastCheckedLabel" xml:space="preserve"><value>Last checked</value></data>
+  <data name="UpdatesChannelLabel" xml:space="preserve"><value>Update channel</value></data>
+  <data name="UpdatesChannelStable" xml:space="preserve"><value>Stable</value></data>
+  <data name="UpdatesNever" xml:space="preserve"><value>Never</value></data>
+  <data name="UpdatesCheck" xml:space="preserve"><value>Check for updates</value></data>
+  <data name="UpdatesUpdateNow" xml:space="preserve"><value>Update now</value></data>
+  <data name="UpdatesStatusNotChecked" xml:space="preserve"><value>Not checked yet</value></data>
+  <data name="UpdatesStatusChecking" xml:space="preserve"><value>Checking for updates…</value></data>
+  <data name="UpdatesStatusUpToDate" xml:space="preserve"><value>Up to date</value></data>
+  <data name="UpdatesStatusAvailable" xml:space="preserve"><value>Update available</value></data>
+  <data name="UpdatesStatusUnavailable" xml:space="preserve"><value>Could not check for updates</value></data>
+  <data name="UpdatesStatusDownloading" xml:space="preserve"><value>Downloading the update… {0}</value></data>
+  <data name="UpdatesStatusInstalling" xml:space="preserve"><value>Installing the update. 1Salem Connect will close and open again.</value></data>
+  <data name="UpdatesStatusFailed" xml:space="preserve"><value>The update did not finish</value></data>
+  <data name="UpdatesAvailableVersion" xml:space="preserve"><value>Version {0}</value></data>
+  <data name="UpdatesAvailableBuild" xml:space="preserve"><value>Build {0}</value></data>
+  <data name="UpdatesProblemUnreachable" xml:space="preserve"><value>GitHub could not be reached. Check your internet connection and try again.</value></data>
+  <data name="UpdatesProblemNoInformation" xml:space="preserve"><value>No update information is published for the newest release yet.</value></data>
+  <data name="UpdatesProblemInvalid" xml:space="preserve"><value>The update information could not be trusted, so nothing was downloaded.</value></data>
+  <data name="UpdatesProblemDownload" xml:space="preserve"><value>The download did not complete. Nothing was changed. Try again.</value></data>
+  <data name="UpdatesProblemHash" xml:space="preserve"><value>The downloaded file did not match the official release, so it was deleted and not run.</value></data>
+  <data name="UpdatesProblemCancelled" xml:space="preserve"><value>The update was cancelled. Nothing was changed.</value></data>
+  <data name="UpdatesProblemLaunch" xml:space="preserve"><value>The installer could not be started. Nothing was changed. Try again.</value></data>
+  <data name="UpdatesAdminNote" xml:space="preserve"><value>Windows asks for administrator permission only to replace the app's files. Your invitations, servers and settings stay as they are.</value></data>
+  <data name="UpdatesDisconnectFirst" xml:space="preserve"><value>Disconnect before updating.</value></data>
+  <data name="UpdatesDisconnectDetail" xml:space="preserve"><value>You are connected to a server. Updating closes 1Salem Connect, so the connection would end.</value></data>
+  <data name="UpdatesDisconnectAndUpdate" xml:space="preserve"><value>Disconnect and update</value></data>
+  <data name="UpdatesLater" xml:space="preserve"><value>Later</value></data>
+  <data name="UpdatesDisconnectFailed" xml:space="preserve"><value>The connection could not be closed yet. Try again in a moment.</value></data>
+  <data name="UpdatesPortableAvailable" xml:space="preserve"><value>A newer portable version is available.</value></data>
+  <data name="UpdatesPortableDetail" xml:space="preserve"><value>This copy runs without being installed, so it is not replaced automatically. Download the new portable package and replace this folder yourself, or install 1Salem Connect to get automatic updates.</value></data>
+  <data name="UpdatesPortableDownload" xml:space="preserve"><value>Download portable package</value></data>
+  <data name="UpdatesPortableNote" xml:space="preserve"><value>Portable copy: updates are not installed automatically.</value></data>
+  <data name="NoticeUpdateAvailable" xml:space="preserve"><value>1Salem Connect update available — Build {0}</value></data>
+  <data name="NoticeUpdate" xml:space="preserve"><value>Update</value></data>
+  <data name="NoticeDismiss" xml:space="preserve"><value>Dismiss</value></data>
+  <data name="NoticeUpdated" xml:space="preserve"><value>1Salem Connect was updated to Build {0}.</value></data>
+  <data name="NoticeUpdateFailed" xml:space="preserve"><value>The update to Build {0} did not finish. 1Salem Connect is unchanged and still works.</value></data>
+  <data name="NoticeUpdateBlocked" xml:space="preserve"><value>The update to Build {0} could not start because 1Salem Connect was still open in another window. Close every 1Salem Connect window and try again.</value></data>
+  <data name="NoticeUpdateInProgress" xml:space="preserve"><value>An update is being installed. 1Salem Connect will open again when it finishes.</value></data>
+  <data name="AppearanceTitle" xml:space="preserve"><value>Appearance</value></data>
+  <data name="AppearanceTheme" xml:space="preserve"><value>Theme</value></data>
+  <data name="ThemeSystem" xml:space="preserve"><value>Same as Windows</value></data>
+  <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="ThemeLight" xml:space="preserve"><value>Light</value></data>
 </root>

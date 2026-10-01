@@ -1,7 +1,9 @@
 using ServerManager.Connect.App.Broker;
 using ServerManager.Connect.App.Configuration;
 using ServerManager.Connect.App.Identity;
+using ServerManager.Connect.App.Shell;
 using ServerManager.Connect.App.Transport;
+using ServerManager.Connect.App.Updates;
 
 namespace ServerManager.Connect.App.Services;
 
@@ -34,4 +36,13 @@ public sealed class ConnectAppContext
     public required DiagnosticsLog Log { get; init; }
 
     public required IClipboardService Clipboard { get; init; }
+
+    /// <summary>Checks, downloads and hands over updates. Null where updates are not offered (tests that do not need it).</summary>
+    public ConnectUpdater? Updater { get; init; }
+
+    /// <summary>The friend's own choices (theme). Null keeps the defaults without saving them.</summary>
+    public ConnectPreferencesStore? Preferences { get; init; }
+
+    /// <summary>Closing for an update, opening release links, applying a theme. Null where there is no window.</summary>
+    public IAppShell? Shell { get; init; }
 }
