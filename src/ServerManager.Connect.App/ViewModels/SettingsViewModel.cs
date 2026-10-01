@@ -36,7 +36,12 @@ public sealed class SettingsViewModel : ObservableObject, IPageLifetime
         CheckCommand = new AsyncCommand(CheckAsync, () => _updater is { IsBusy: false });
         UpdateNowCommand = new AsyncCommand(UpdateNowAsync, () => ShowUpdateNow);
         DisconnectAndUpdateCommand = new AsyncCommand(DisconnectAndUpdateAsync, () => NeedsDisconnect && _updater is { IsBusy: false });
-        LaterCommand = new RelayCommand(() => NeedsDisconnect = false);
+        LaterCommand = new RelayCommand(() =>
+        {
+            _disconnectProblem = null;
+            NeedsDisconnect = false;
+            Refresh();
+        });
         DownloadPortableCommand = new RelayCommand(OpenPortableDownload, () => ShowPortableDownload);
         ThemeOptions =
         [
@@ -243,6 +248,13 @@ public sealed class SettingsViewModel : ObservableObject, IPageLifetime
         Refresh();
         if (installer is null)
         {
+            return;
+        }
+
+        // The download can take minutes, and the friend may have connected meanwhile.
+        if (_activeConnections().Count > 0)
+        {
+            NeedsDisconnect = true;
             return;
         }
 

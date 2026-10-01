@@ -76,9 +76,17 @@ internal sealed class FakeUpdateHttp : IUpdateHttp
         return ManifestFailure is { } failure ? Task.FromException<byte[]?>(failure) : Task.FromResult(ManifestBytes);
     }
 
-    public Task DownloadAsync(ConnectUpdateFile file, string destination, IProgress<double>? progress, CancellationToken cancellationToken)
+    /// <summary>Runs while the download is in progress (the friend keeps using the app).</summary>
+    public Func<Task>? DuringDownload { get; set; }
+
+    public async Task DownloadAsync(ConnectUpdateFile file, string destination, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         Downloads.Add(file.FileName);
+        if (DuringDownload is { } during)
+        {
+            await during();
+        }
+
         if (DownloadBytes.LongLength != file.Size)
         {
             throw new UpdateDownloadException(UpdateDownloadFailure.Incomplete, "size");
@@ -92,7 +100,6 @@ internal sealed class FakeUpdateHttp : IUpdateHttp
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         File.WriteAllBytes(destination, DownloadBytes);
         progress?.Report(1);
-        return Task.CompletedTask;
     }
 }
 

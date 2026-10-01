@@ -92,7 +92,11 @@ public sealed record PendingUpdate(
     int ToBuild,
     DateTimeOffset StartedUtc);
 
-public sealed record UpdateState(DateTimeOffset? LastCheckedUtc = null, PendingUpdate? Pending = null);
+/// <summary>
+/// <see cref="LastCheckedUtc"/> is the last check that got an answer (shown in Settings);
+/// <see cref="LastAttemptUtc"/> is the last try, answered or not, which paces automatic checks.
+/// </summary>
+public sealed record UpdateState(DateTimeOffset? LastCheckedUtc = null, PendingUpdate? Pending = null, DateTimeOffset? LastAttemptUtc = null);
 
 /// <summary>
 /// <c>%LOCALAPPDATA%\1Salem Connect\updates\update-state.json</c>: when updates were last checked

@@ -137,6 +137,9 @@ internal sealed class SetupWindow : Window
             UpdateOutcome.Blocked => T(
                 "1Salem Connect is still open in another window. Close it, then try the update again from Settings.",
                 "ما زال 1Salem Connect مفتوحًا في نافذة أخرى. أغلقه ثم أعد محاولة التحديث من الإعدادات."),
+            UpdateOutcome.NewBuildUnconfirmed => T(
+                "The new version is installed, but it did not confirm that it started. Open 1Salem Connect to check it.",
+                "تم تثبيت الإصدار الجديد، لكنه لم يؤكد أنه بدأ. افتح 1Salem Connect للتحقق منه."),
             _ => T(
                 "The update could not be installed. 1Salem Connect was not changed.",
                 "تعذّر تثبيت التحديث. لم يتغير 1Salem Connect.")
@@ -149,9 +152,16 @@ internal sealed class SetupWindow : Window
             return;
         }
 
+        // The reopened app shows the reason with Try again; staying open would keep this process
+        // (and its lock) alive, and a retry would then find Setup still running.
         _done = true;
         _primary.Content = T("Close", "إغلاق");
         _primary.Visibility = Visibility.Visible;
+        await Task.Delay(TimeSpan.FromSeconds(8));
+        if (IsVisible)
+        {
+            Close();
+        }
     }
 
     private async Task PrimaryAsync()

@@ -1,4 +1,5 @@
 using System.Windows;
+using Microsoft.Win32;
 using System.Windows.Threading;
 using ServerManager.Connect.App.Localization;
 using ServerManager.Connect.App.Shell;
@@ -20,6 +21,7 @@ public partial class App : Application
 
         // Before the window exists, so it never flashes the other theme.
         ConnectTheme.Apply(Resources, _composition.Context.Preferences?.Load().Theme ?? ThemeChoice.System);
+        SystemEvents.UserPreferenceChanged += OnWindowsPreferenceChanged;
         _main = new MainViewModel(_composition.Context);
         var window = new MainWindow { DataContext = _main };
         MainWindow = window;
@@ -29,9 +31,20 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SystemEvents.UserPreferenceChanged -= OnWindowsPreferenceChanged;
         _main?.Shutdown();
         _composition?.Dispose();
         base.OnExit(e);
+    }
+
+    /// <summary>"Same as Windows" follows Windows switching between light and dark while the app runs.</summary>
+    private void OnWindowsPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color &&
+            (_composition?.Context.Preferences?.Load().Theme ?? ThemeChoice.System) == ThemeChoice.System)
+        {
+            Dispatcher.BeginInvoke(() => ConnectTheme.Apply(Resources, ThemeChoice.System));
+        }
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

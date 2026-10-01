@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Windows;
 
 namespace ServerManager.Connect.Setup;
@@ -28,23 +30,40 @@ internal static class Program
             return (int)UpdateOutcome.Failed;
         }
 
-        // One Setup at a time: two could otherwise swap the same folder at once.
-        using var mutex = new Mutex(false, SetupMutexName);
-        bool owned;
+        // One Setup at a time: two could otherwise swap the same folder at once. Only SYSTEM and
+        // Administrators may use the lock, so another account cannot hold or poison it.
+        Mutex? mutex = null;
+        var owned = false;
         try
         {
+            mutex = CreateSetupMutex();
             owned = mutex.WaitOne(TimeSpan.FromMinutes(2));
         }
         catch (AbandonedMutexException)
         {
             owned = true;
         }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or WaitHandleCannotBeOpenedException)
+        {
+            Log("setup lock unavailable: " + exception.Message);
+        }
 
         if (!owned)
         {
             Log("blocked: another 1Salem Connect Setup is running");
+            mutex?.Dispose();
+            if (update is not null)
+            {
+                // The app has already closed for this update: leave the reason and open it again.
+                using var host = new WindowsUpdateHost(ConnectInstaller.InstallRoot);
+                new ConnectUpdate(new ConnectInstallation(ConnectInstaller.InstallRoot), host)
+                    .Refuse(update, UpdateOutcome.Blocked, "Another 1Salem Connect Setup is running. Close it, then try again.");
+            }
+
             return (int)UpdateOutcome.Blocked;
         }
+
+        using var held = mutex!;
 
         try
         {
@@ -62,8 +81,18 @@ internal static class Program
         }
         finally
         {
-            mutex.ReleaseMutex();
+            held.ReleaseMutex();
         }
+    }
+
+    private static Mutex CreateSetupMutex()
+    {
+        var security = new MutexSecurity();
+        security.AddAccessRule(new MutexAccessRule(
+            new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), MutexRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new MutexAccessRule(
+            new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), MutexRights.FullControl, AccessControlType.Allow));
+        return MutexAcl.Create(false, SetupMutexName, out _, security);
     }
 
     /// <summary>The update itself, shared by the window and quiet mode.</summary>

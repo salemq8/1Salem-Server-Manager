@@ -255,6 +255,23 @@ public sealed class UpdateTests : IDisposable
         Assert.Equal(2, _http.ManifestRequests);
     }
 
+    [Fact]
+    public async Task A_failed_automatic_check_is_not_retried_every_hour()
+    {
+        _http.ManifestFailure = new UpdateDownloadException(UpdateDownloadFailure.Unreachable, "offline");
+        using var app = Harness();
+
+        await app.Main.CheckForUpdateAutomaticallyAsync(CancellationToken.None);
+        app.Clock.UtcNow += TimeSpan.FromHours(5);
+        await app.Main.CheckForUpdateAutomaticallyAsync(CancellationToken.None);
+        Assert.Equal(1, _http.ManifestRequests);
+
+        app.Clock.UtcNow += TimeSpan.FromHours(20);
+        await app.Main.CheckForUpdateAutomaticallyAsync(CancellationToken.None);
+        Assert.Equal(2, _http.ManifestRequests);
+        Assert.Null(app.Context.Updater!.LastCheckedUtc);
+    }
+
     // ---- Installed update ---------------------------------------------------------------------
 
     [Fact]
@@ -269,7 +286,8 @@ public sealed class UpdateTests : IDisposable
         await settings.UpdateNowAsync();
 
         var launch = Assert.Single(_launcher.Launches);
-        Assert.Equal(Path.Combine(_root, "downloads", "build-12", "1SalemConnect-Setup.exe"), launch.Path);
+        Assert.Matches(@"[\\/]downloads[\\/]build-12-[0-9a-f]{8}[\\/]1SalemConnect-Setup\.exe$", launch.Path);
+        Assert.StartsWith(Path.Combine(_root, "downloads"), launch.Path, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(ReleaseFixtures.Sha256(ReleaseFixtures.Installer), launch.Sha256);
         Assert.Matches(@"^--update --wait-pid 4242 --expected-version 1\.5 --expected-build 12 --token [0-9a-f]{32}$", launch.Arguments);
         Assert.Equal(1, shell.ShutdownCalls);
@@ -358,6 +376,31 @@ public sealed class UpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task Connecting_while_the_installer_downloads_still_stops_the_update()
+    {
+        var shell = new FakeAppShell();
+        using var app = Harness(shell: shell);
+        var membership = app.AddMembership(MembershipState.Approved, "nFAKE1CNTRL");
+        await app.Context.Updater!.CheckAsync(CancellationToken.None);
+        app.Main.ShowSettings();
+        var settings = Assert.IsType<SettingsViewModel>(app.Main.CurrentPage);
+        ConnectionViewModel? connection = null;
+        _http.DuringDownload = async () =>
+        {
+            app.Main.ShowConnection(membership);
+            connection = Assert.IsType<ConnectionViewModel>(app.Main.CurrentPage);
+            await connection.ConnectAsync();
+        };
+
+        await settings.UpdateNowAsync();
+
+        Assert.Equal(ConnectionState.Connected, connection!.State);
+        Assert.True(settings.NeedsDisconnect);
+        Assert.Empty(_launcher.Launches);
+        Assert.Equal(0, shell.ShutdownCalls);
+    }
+
+    [Fact]
     public async Task A_session_that_cannot_be_closed_stops_the_update()
     {
         var shell = new FakeAppShell();
@@ -376,6 +419,10 @@ public sealed class UpdateTests : IDisposable
         Assert.Empty(_launcher.Launches);
         Assert.Equal(0, shell.ShutdownCalls);
         Assert.Equal("The connection could not be closed yet. Try again in a moment.", settings.ProblemText);
+
+        settings.LaterCommand.Execute(null);
+        Assert.Null(settings.ProblemText);
+        Assert.False(settings.NeedsDisconnect);
     }
 
     // ---- Portable ---------------------------------------------------------------------------

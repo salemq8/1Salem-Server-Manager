@@ -48,6 +48,7 @@ public sealed class ConnectSelfUpdateReleaseTests
         Assert.Contains("$assets = @($expected.Keys)", script, StringComparison.Ordinal);
         Assert.Contains("1SalemConnect-update.json does not describe $tag.", script, StringComparison.Ordinal);
         Assert.Contains("already exists and is left untouched", script, StringComparison.Ordinal);
+        Assert.Contains("releases?per_page=100", script, StringComparison.Ordinal);
         Assert.Contains("draft = $true", script, StringComparison.Ordinal);
         Assert.Contains("Hash verification failed; the release stays a draft", script, StringComparison.Ordinal);
         Assert.Contains("make_latest = 'true'", script, StringComparison.Ordinal);

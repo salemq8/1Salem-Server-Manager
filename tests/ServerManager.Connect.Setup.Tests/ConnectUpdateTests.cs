@@ -48,7 +48,7 @@ public sealed class ConnectUpdateTests : IDisposable
         {
             Directory.Delete(_root, recursive: true);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
         }
     }
@@ -140,6 +140,76 @@ public sealed class ConnectUpdateTests : IDisposable
         Assert.Equal(before, Snapshot(_installRoot));
         Assert.Empty(Leftovers());
         Assert.Empty(_host.Launches);
+    }
+
+    [Fact]
+    public void Another_users_copy_blocks_the_update_but_the_friends_own_app_still_reopens()
+    {
+        var before = Snapshot(_installRoot);
+        _host.RunningElsewhere.Add(5000);
+
+        var result = Run(Request(12), Payload("1.5", 12, "new app"));
+
+        Assert.Equal(UpdateOutcome.Blocked, result.Outcome);
+        Assert.Equal(before, Snapshot(_installRoot));
+        Assert.Equal([Path.Combine(_installRoot, "1Salem.Connect.exe")], _host.Launches);
+        Assert.Equal(["result", "launch"], _host.Order);
+    }
+
+    [Fact]
+    public void A_new_build_that_cannot_be_rolled_back_is_reported_as_installed_but_unconfirmed()
+    {
+        Directory.Delete(_installRoot, recursive: true);
+        _host.SignalOnLaunch = false;
+
+        var result = Run(Request(12), Payload("1.5", 12, "new app"));
+
+        Assert.Equal(UpdateOutcome.NewBuildUnconfirmed, result.Outcome);
+        Assert.Equal(("1.5", 12), ConnectInstallation.ReadBuild(_installRoot)!.Value);
+        Assert.Empty(Leftovers());
+    }
+
+    [Fact]
+    public void An_update_Setup_that_cannot_start_leaves_the_reason_and_reopens_the_app()
+    {
+        var before = Snapshot(_installRoot);
+
+        var result = new ConnectUpdate(new ConnectInstallation(_installRoot), _host, Fast)
+            .Refuse(Request(12), UpdateOutcome.Blocked, "Another 1Salem Connect Setup is running.");
+
+        Assert.Equal(UpdateOutcome.Blocked, result.Outcome);
+        Assert.Equal(11, result.FromBuild);
+        Assert.Equal(before, Snapshot(_installRoot));
+        Assert.Equal(["result", "launch"], _host.Order);
+    }
+
+    [Fact]
+    public void The_result_folder_is_created_protected_and_a_redirected_one_is_refused()
+    {
+        var results = Path.Combine(_root, "ProgramData", "1Salem Connect", "updates");
+
+        Assert.Equal(Path.GetFullPath(results), ResultFolder.Trusted(results));
+        var security = new DirectoryInfo(results).GetAccessControl();
+        Assert.True(security.AreAccessRulesProtected);
+
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        var redirected = Path.Combine(_root, "ProgramData2", "1Salem Connect");
+        Directory.CreateDirectory(Path.GetDirectoryName(redirected)!);
+        using (var junction = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                   Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+                   $"/d /c mklink /J \"{redirected}\" \"{elsewhere}\"")
+        { UseShellExecute = false, CreateNoWindow = true })!)
+        {
+            junction.WaitForExit();
+        }
+
+        Assert.True(Directory.Exists(redirected));
+        Assert.Null(ResultFolder.Trusted(Path.Combine(redirected, "updates")));
+        Assert.False(Directory.Exists(Path.Combine(elsewhere, "updates")));
+
+        // Removes the junction itself (not its target) before the folder is cleaned up.
+        Directory.Delete(redirected);
     }
 
     [Fact]
@@ -257,6 +327,9 @@ public sealed class ConnectUpdateTests : IDisposable
 
         public List<int> Running { get; } = [];
 
+        /// <summary>Copies another Windows user runs (fast user switching).</summary>
+        public List<int> RunningElsewhere { get; } = [];
+
         public List<string> Launches { get; } = [];
 
         public List<string> Order { get; } = [];
@@ -269,7 +342,8 @@ public sealed class ConnectUpdateTests : IDisposable
 
         public bool WaitForExit(int processId, TimeSpan timeout) => true;
 
-        public IReadOnlyList<int> ProcessesUnder(string folder) => Running;
+        public IReadOnlyList<int> ProcessesUnder(string folder, bool thisSessionOnly = false) =>
+            thisSessionOnly ? Running : [.. Running, .. RunningElsewhere];
 
         public void Kill(int processId) => Running.Remove(processId);
 

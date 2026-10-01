@@ -104,13 +104,20 @@ try {
     $null = Send 'GET' "https://api.github.com/repos/$Repository/git/ref/tags/$tag" $null
 }
 catch {
-    throw "The tag $tag is not on GitHub yet. Push it first (git push origin $tag)."
+    if ($_.Exception.Message -match '-> 404') {
+        throw "The tag $tag is not on GitHub yet. Push it first (git push origin $tag)."
+    }
+    throw
 }
 
-$existing = $null
-try { $existing = Send 'GET' "https://api.github.com/repos/$Repository/releases/tags/$tag" $null } catch { if ($_.Exception.Message -notmatch '-> 404') { throw } }
+# Drafts are invisible to /releases/tags/<tag>, so the full list is searched (it includes drafts
+# for a token that can push). A draft left by an earlier failed run is reported, never duplicated.
+$existing = @(Send 'GET' "https://api.github.com/repos/$Repository/releases?per_page=100" $null) |
+    Where-Object { $_.tag_name -eq $tag } |
+    Select-Object -First 1
 if ($existing) {
-    throw "A release for $tag already exists and is left untouched: $($existing.html_url)"
+    $kind = if ($existing.draft) { 'A draft release' } else { 'A release' }
+    throw "$kind for $tag already exists and is left untouched: $($existing.html_url)"
 }
 
 $notes = [IO.File]::ReadAllText((Join-Path $canonical 'RELEASE_NOTES.md'), [Text.Encoding]::UTF8)

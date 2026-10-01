@@ -72,7 +72,10 @@ internal enum UpdateOutcome
     Updated = 0,
     Failed = 1,
     Blocked = 2,
-    RolledBack = 3
+    RolledBack = 3,
+
+    /// <summary>The new build is installed (complete) but never said it started, and the previous one could not be put back.</summary>
+    NewBuildUnconfirmed = 4
 }
 
 internal sealed record UpdateRunResult(UpdateOutcome Outcome, int? FromBuild, int? ToBuild, string Message);
@@ -93,8 +96,12 @@ internal interface IUpdateHost
     /// <summary>Waits for one process to end. True once it has (or never existed).</summary>
     bool WaitForExit(int processId, TimeSpan timeout);
 
-    /// <summary>Process ids running from inside the folder, found by their path, never by name.</summary>
-    IReadOnlyList<int> ProcessesUnder(string folder);
+    /// <summary>
+    /// Process ids running from inside the folder, found by their path, never by name. With
+    /// <paramref name="thisSessionOnly"/>, only those in this Windows session (the friend's own,
+    /// since elevation keeps the session) count.
+    /// </summary>
+    IReadOnlyList<int> ProcessesUnder(string folder, bool thisSessionOnly = false);
 
     void Kill(int processId);
 
@@ -146,6 +153,26 @@ internal sealed class ConnectUpdate(ConnectInstallation installation, IUpdateHos
             OpenInstalledApp();
         }
 
+        return result;
+    }
+
+    /// <summary>
+    /// An update Setup could not even begin (another Setup holds the lock): the app has already
+    /// closed for it, so say why where the app will look, and open it again.
+    /// </summary>
+    public UpdateRunResult Refuse(UpdateRequest request, UpdateOutcome outcome, string message)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var result = new UpdateRunResult(outcome, ConnectInstallation.ReadBuild(installation.InstallRoot)?.Build, request.ExpectedBuild, message);
+        try
+        {
+            host.WriteResult(request.Token, result);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        OpenInstalledApp();
         return result;
     }
 
@@ -255,8 +282,8 @@ internal sealed class ConnectUpdate(ConnectInstallation installation, IUpdateHos
     {
         if (previous is null)
         {
-            return new UpdateRunResult(UpdateOutcome.Failed, from, to,
-                "The new version did not start, and there was no earlier version to go back to.");
+            return new UpdateRunResult(UpdateOutcome.NewBuildUnconfirmed, from, to,
+                "The new version is installed but did not confirm that it started, and there was no earlier version to go back to.");
         }
 
         try
@@ -274,7 +301,7 @@ internal sealed class ConnectUpdate(ConnectInstallation installation, IUpdateHos
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             // The new build stays: complete, just unconfirmed. Never half of each.
-            return new UpdateRunResult(UpdateOutcome.Failed, from, to,
+            return new UpdateRunResult(UpdateOutcome.NewBuildUnconfirmed, from, to,
                 "The new version did not confirm that it started, and the previous version could not be put back: " + exception.Message);
         }
     }
@@ -283,12 +310,13 @@ internal sealed class ConnectUpdate(ConnectInstallation installation, IUpdateHos
     private static UpdateRunResult Unchanged(UpdateOutcome outcome, int? from, int to, string message) =>
         new(outcome, from, to, message);
 
-    /// <summary>Opens whatever build is installed now, unless a copy is already running.</summary>
+    /// <summary>Opens whatever build is installed now, unless the friend already has a copy running.</summary>
     private void OpenInstalledApp()
     {
         try
         {
-            if (File.Exists(installation.InstalledApp) && host.ProcessesUnder(installation.InstallRoot).Count == 0)
+            // Another user's copy (fast user switching) does not stand in for the friend's own.
+            if (File.Exists(installation.InstalledApp) && host.ProcessesUnder(installation.InstallRoot, thisSessionOnly: true).Count == 0)
             {
                 host.LaunchAsUser(installation.InstalledApp);
             }
@@ -346,16 +374,23 @@ internal sealed class WindowsUpdateHost(string installRoot) : IUpdateHost, IDisp
         }
     }
 
-    public IReadOnlyList<int> ProcessesUnder(string folder)
+    public IReadOnlyList<int> ProcessesUnder(string folder, bool thisSessionOnly = false)
     {
         var prefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
         var self = Environment.ProcessId;
+        int session;
+        using (var current = Process.GetCurrentProcess())
+        {
+            session = current.SessionId;
+        }
+
         var found = new List<int>();
         foreach (var process in Process.GetProcesses())
         {
             try
             {
                 if (process.Id != self &&
+                    (!thisSessionOnly || process.SessionId == session) &&
                     process.MainModule?.FileName is { } path &&
                     path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 {
@@ -428,17 +463,24 @@ internal sealed class WindowsUpdateHost(string installRoot) : IUpdateHost, IDisp
 
     public void WriteResult(string token, UpdateRunResult result)
     {
-        Directory.CreateDirectory(UpdateProtocol.ResultDirectory);
-        foreach (var old in Directory.EnumerateFiles(UpdateProtocol.ResultDirectory, "result-*.json"))
+        if (!UpdateProtocol.IsToken(token) || ResultFolder.Trusted(UpdateProtocol.ResultDirectory) is not { } folder)
         {
-            if (File.GetLastWriteTimeUtc(old) < DateTime.UtcNow.AddDays(-7))
+            // Never written where another account could have made or redirected the folder; the
+            // app still tells the outcome from its own build.
+            return;
+        }
+
+        foreach (var old in Directory.EnumerateFiles(folder, "result-*.json"))
+        {
+            var info = new FileInfo(old);
+            if ((info.Attributes & FileAttributes.ReparsePoint) == 0 && info.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-7))
             {
-                File.Delete(old);
+                info.Delete();
             }
         }
 
-        var path = Path.Combine(UpdateProtocol.ResultDirectory, $"result-{token}.json");
-        File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(
+        using var stream = new FileStream(Path.Combine(folder, $"result-{token}.json"), FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        stream.Write(JsonSerializer.SerializeToUtf8Bytes(
             new
             {
                 outcome = result.Outcome.ToString(),
@@ -450,4 +492,60 @@ internal sealed class WindowsUpdateHost(string installRoot) : IUpdateHost, IDisp
     }
 
     public void Dispose() => _started?.Dispose();
+}
+
+/// <summary>
+/// %ProgramData%\1Salem Connect\updates, where Setup leaves each update's outcome for the app. Setup
+/// runs as administrator and %ProgramData% lets any user make folders, so the folder (and its
+/// parent) is created with its own ACL: SYSTEM and Administrators full control, Users read only,
+/// nothing inherited. An existing folder is used only if it is a real folder (not a link) owned
+/// by SYSTEM, Administrators or this administrator; otherwise nothing is written there.
+/// </summary>
+internal static class ResultFolder
+{
+    public static string? Trusted(string resultDirectory)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(resultDirectory));
+        var parent = Path.GetDirectoryName(full);
+        return parent is not null && EnsureProtected(parent) && EnsureProtected(full) ? full : null;
+    }
+
+    private static bool EnsureProtected(string path)
+    {
+        try
+        {
+            var info = new DirectoryInfo(path);
+            if (!info.Exists)
+            {
+                var security = new DirectorySecurity();
+                security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+                const InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+                if (WindowsIdentity.GetCurrent().User is { } self)
+                {
+                    security.AddAccessRule(new FileSystemAccessRule(self, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+                }
+
+                security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null), FileSystemRights.ReadAndExecute, inherit, PropagationFlags.None, AccessControlType.Allow));
+                info.Create(security);
+                info.Refresh();
+            }
+
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                return false;
+            }
+
+            var owner = info.GetAccessControl().GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+            return owner is not null &&
+                   (owner.IsWellKnown(WellKnownSidType.LocalSystemSid) ||
+                    owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid) ||
+                    (WindowsIdentity.GetCurrent().User is { } administrator && owner.Equals(administrator)));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
 }

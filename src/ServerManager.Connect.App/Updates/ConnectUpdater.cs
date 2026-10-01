@@ -111,8 +111,12 @@ public sealed class ConnectUpdater
 
     public bool IsBusy => Status is UpdateStatus.Checking or UpdateStatus.Downloading or UpdateStatus.Installing;
 
+    /// <summary>
+    /// Once a day, counting every attempt: an unreachable GitHub or unusable metadata is not
+    /// asked again every hour, only the next day (or when the friend checks by hand).
+    /// </summary>
     public bool IsAutomaticCheckDue =>
-        _state.LastCheckedUtc is not { } last || _clock.UtcNow - last >= CheckInterval || last > _clock.UtcNow;
+        (_state.LastAttemptUtc ?? _state.LastCheckedUtc) is not { } last || _clock.UtcNow - last >= CheckInterval || last > _clock.UtcNow;
 
     public async Task CheckAsync(CancellationToken cancellationToken)
     {
@@ -122,6 +126,7 @@ public sealed class ConnectUpdater
         }
 
         Set(UpdateStatus.Checking, UpdateProblem.None);
+        Remember(_state with { LastAttemptUtc = _clock.UtcNow });
         byte[]? bytes;
         try
         {
@@ -181,7 +186,11 @@ public sealed class ConnectUpdater
             return null;
         }
 
-        var folder = Path.Combine(_downloadDirectory, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"build-{offer.Build.BuildRevision}"));
+        // A fresh folder per attempt: an installer from an earlier attempt may still be running
+        // (Setup showing its result), and its file cannot be replaced while it runs.
+        var folder = Path.Combine(_downloadDirectory, string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"build-{offer.Build.BuildRevision}-{Guid.NewGuid().ToString("N")[..8]}"));
         var target = Path.Combine(folder, ConnectUpdateSource.InstallerFileName);
         DeleteOtherDownloads(folder);
         DownloadProgress = 0;
@@ -270,6 +279,9 @@ public sealed class ConnectUpdater
     {
         if (_state.Pending is not { } pending)
         {
+            // Installers from earlier updates (Setup may still have been running from that folder
+            // when the new build first started, so it could not be removed then).
+            DeleteOtherDownloads(keep: null);
             return new PostUpdateReport(PostUpdateOutcome.None);
         }
 
