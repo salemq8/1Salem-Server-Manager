@@ -1,6 +1,7 @@
 using ServerManager.Contracts;
 using ServerManager.Core;
 using ServerManager.Core.Content;
+using ServerManager.Infrastructure.Games.Minecraft;
 
 namespace ServerManager.Infrastructure.Content;
 
@@ -57,6 +58,15 @@ public sealed class ContentProfileService(
 
         var (platform, detectedVersion, platformVersion) =
             MinecraftPlatformDetector.Detect(server.RootPath);
+        // A migrated runtime has a hash-bound marker. Inspect the active JAR as well so a
+        // stale version_history.json cannot describe a runtime no longer installed.
+        var active = MinecraftSoftwareSafety.Inspect(server.RootPath, server.InstalledVersion);
+        if (active.Platform != ServerPlatform.Unknown)
+        {
+            platform = active.Platform;
+            detectedVersion = active.Version;
+            platformVersion = null;
+        }
 
         // The registered version is the fallback: it is what the manager installed, and the
         // fork's own version_history.json wins over it when present.

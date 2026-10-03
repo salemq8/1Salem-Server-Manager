@@ -43,6 +43,14 @@ public sealed class BackupService(
             request.ServerId,
             "Backup",
             cancellationToken: cancellationToken);
+        return await CreateWithinOperationAsync(request, cancellationToken);
+    }
+
+    // Runtime migration already owns the same operation lease across stop/backup/swap/start.
+    // Internal visibility prevents API callers from bypassing that lease.
+    internal async Task<BackupResult> CreateWithinOperationAsync(
+        BackupRequest request, CancellationToken cancellationToken)
+    {
         var server = await gameServerStore.GetAsync(request.ServerId, cancellationToken)
             ?? throw new KeyNotFoundException($"Server {request.ServerId} is not registered.");
         var provider = GetProvider(server.Game);
@@ -993,11 +1001,20 @@ public sealed class BackupService(
     {
         if (server.Game == GameType.Minecraft)
         {
+            var configuredWorld = Games.Minecraft.MinecraftSoftwareSafety.LevelName(server.RootPath);
+            var worldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                configuredWorld, configuredWorld + "_nether", configuredWorld + "_the_end"
+            };
             foreach (var directory in Directory.Exists(server.RootPath)
                          ? Directory.EnumerateDirectories(server.RootPath, "world*")
                          : [])
             {
-                yield return Path.GetFileName(directory);
+                worldNames.Add(Path.GetFileName(directory));
+            }
+            foreach (var worldName in worldNames)
+            {
+                yield return worldName;
             }
 
             foreach (var file in new[]

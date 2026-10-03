@@ -220,7 +220,7 @@ public sealed class ServerCardViewModel : INotifyPropertyChanged
         Status = ServerPresentation.MapState(card.State);
         StatusLabel = ServerPresentation.LabelFor(Status);
         StatusTone = ServerPresentation.ToneOf(Status);
-        Players = ServerPresentation.FormatPlayers(card.PlayersOnline, card.MaximumPlayers);
+        Players = MinecraftPlayersPresentation.Count(card.PlayersOnline, card.MaximumPlayers, card.PlayersStale);
         Uptime = ServerPresentation.FormatUptime(card.Uptime);
         Memory = ServerPresentation.FormatMemory(card.WorkingSetBytes);
         var backup = ServerPresentation.DescribeBackup(card.LastBackupAtUtc, capturedAtUtc);

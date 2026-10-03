@@ -1,0 +1,45 @@
+<UserControl x:Class="ServerManager.Client.Controls.ServerPlayersTab"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="32,22,32,20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock x:Name="Heading" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="CountText" Margin="0,8,0,0" Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="StatusText" Margin="0,6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+        <WrapPanel Grid.Row="1" Margin="0,0,0,16">
+            <StackPanel Margin="0,0,12,6"><TextBlock x:Name="SearchLabel"/><TextBox x:Name="SearchBox" Width="235" TextChanged="Filter_Changed"/></StackPanel>
+            <StackPanel Margin="0,0,12,6"><TextBlock x:Name="FilterLabel"/><ComboBox x:Name="FilterBox" Width="150" SelectionChanged="Filter_Changed"/></StackPanel>
+            <StackPanel Margin="0,0,12,6"><TextBlock x:Name="SortLabel"/><ComboBox x:Name="SortBox" Width="155" SelectionChanged="Filter_Changed"/></StackPanel>
+            <Button x:Name="RefreshButton" VerticalAlignment="Bottom" Margin="0,0,0,6" Click="Refresh_Click"/>
+        </WrapPanel>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="2*" MinWidth="220"/><ColumnDefinition Width="20"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
+            <Grid>
+                <ListBox x:Name="PlayerList" SelectionChanged="Player_Selected" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="8">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Status}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding Uuid}" FontSize="11" FlowDirection="LeftToRight" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel></DataTemplate></ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock x:Name="EmptyText" Margin="18" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
+            <Border Grid.Column="2" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+                    <TextBlock x:Name="PlayerName" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBox x:Name="UuidText" IsReadOnly="True" BorderThickness="0" Background="Transparent" FlowDirection="LeftToRight" Margin="0,6,0,12"/>
+                    <TextBlock x:Name="DetailsText" TextWrapping="Wrap" LineHeight="27"/>
+                    <WrapPanel Margin="0,18,0,6">
+                        <Button x:Name="CopyButton" Click="Copy_Click" Margin="0,0,8,8"/>
+                        <Button x:Name="InventoryButton" Click="Inventory_Click" Margin="0,0,8,8"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="AdminHeading" FontWeight="SemiBold" Margin="0,8,0,8"/>
+                    <WrapPanel x:Name="ActionPanel"/>
+                    <TextBlock x:Name="ActionResult" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </StackPanel></ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,4 +1,14 @@
-# 1Salem Server Manager 1.3.2
+# 1Salem Server Manager 1.5 — Build 12
+
+Current release notes: [docs/RELEASE_NOTES_1.5.md](docs/RELEASE_NOTES_1.5.md).
+
+Build 12 adds server-software management with explicitly confirmed fresh-world reset for
+Vanilla → Paper/Purpur, truthful plugin compatibility, independent provider status, a shared
+player counter, UUID Players dashboard and real moderation, read-only inventory, and the
+1Salem Connect self-updater. Settings and existing backups are preserved. Normal application
+updates do not reset worlds. Older Connect users install Build 12 manually once, then update in-app.
+
+## Historical 1.3.2 notes
 
 Version 1.3.2 repairs the product-version and installed-update workflow while
 shipping the redesigned Palworld Overview dashboard.

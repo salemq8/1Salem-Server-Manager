@@ -10,7 +10,7 @@ namespace ServerManager.Client.Controls;
 /// One plugin on the Discover list. Project names, authors, versions and file names stay in
 /// the provider's own words; only the wording around them is translated.
 /// </summary>
-public sealed class ContentItemViewModel(ContentProject project) : INotifyPropertyChanged
+public sealed class ContentItemViewModel(ContentProject project, ServerContentProfile? profile = null) : INotifyPropertyChanged
 {
     private bool _isBusy;
     private bool _isInstalled;
@@ -20,7 +20,18 @@ public sealed class ContentItemViewModel(ContentProject project) : INotifyProper
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public ContentProject Project { get; } = project;
+    public ContentProject Project { get; private set; } = project;
+
+    public ServerContentProfile? Profile { get; private set; } = profile;
+
+    public bool RequiresSoftware => PluginSoftwarePresentation.RequiresSoftware(Project, Profile);
+
+    public void Update(ContentProject project, ServerContentProfile? profile)
+    {
+        Project = project;
+        Profile = profile;
+        Raise(string.Empty);
+    }
 
     public ContentProviderId Provider => Project.Provider;
 
@@ -45,13 +56,13 @@ public sealed class ContentItemViewModel(ContentProject project) : INotifyProper
     public bool HasDownloads => Project.Downloads is not null;
 
     /// <summary>Reads "Paper · Minecraft 1.21.8" from what the provider actually returned.</summary>
-    public string CompatibilityLine => Project.CompatibilitySummary ?? string.Empty;
+    public string CompatibilityLine => RequiresSoftware ? PluginSoftwarePresentation.RequiresLabel : Project.CompatibilitySummary ?? string.Empty;
 
     public string? IconUrl => Project.IconUrl?.ToString();
 
-    public bool IsCompatible => Project.IsCompatible;
+    public bool IsCompatible => PluginSoftwarePresentation.DirectInstall(Project, Profile);
 
-    public string AutomationName => LocalizationService.Format(
+    public string AutomationName => RequiresSoftware ? $"{PluginSoftwarePresentation.ChangeLabel}: {Name}" : LocalizationService.Format(
         Project.Kind == ContentKind.Modpack ? "Content.CreateServerNamed" : "Content.InstallNamed",
         Name);
 
@@ -73,6 +84,7 @@ public sealed class ContentItemViewModel(ContentProject project) : INotifyProper
             _isBusy = value;
             Raise();
             Raise(nameof(CanInstall));
+            Raise(nameof(CanAct));
         }
     }
 
@@ -90,14 +102,17 @@ public sealed class ContentItemViewModel(ContentProject project) : INotifyProper
             ActionLabel = LocalizationService.Get(value ? "Content.AlreadyInstalled" : "Content.Install");
             Raise();
             Raise(nameof(CanInstall));
+            Raise(nameof(CanAct));
         }
     }
 
     public bool CanInstall => IsCompatible && !IsBusy && !IsInstalled;
 
+    public bool CanAct => !IsBusy && !IsInstalled && (CanInstall || PluginSoftwarePresentation.CanChooseSoftware(Project, Profile));
+
     public string ActionLabel
     {
-        get => _actionLabel;
+        get => RequiresSoftware && !IsInstalled ? PluginSoftwarePresentation.ChangeLabel : _actionLabel;
         private set
         {
             _actionLabel = value;
@@ -283,4 +298,3 @@ public sealed class InstalledItemViewModel(InstalledContent record) : INotifyPro
     private void Raise([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
-

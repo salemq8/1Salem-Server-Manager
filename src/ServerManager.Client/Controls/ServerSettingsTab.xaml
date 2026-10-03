@@ -116,6 +116,11 @@
                                     Margin="8,0,0,0"
                                     Visibility="Collapsed"
                                     Click="GroupSecondary_Click" />
+                            <Button x:Name="SoftwareButton"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="8,0,0,0"
+                                    Visibility="Collapsed"
+                                    Click="Software_Click" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

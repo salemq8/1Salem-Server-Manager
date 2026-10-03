@@ -53,6 +53,7 @@ public sealed class ContentCatalogService(
             }
             catch (ContentProviderException exception)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 logger.LogWarning(
                     exception,
                     "Content search failed for {Provider}: {Code}.",
@@ -63,6 +64,7 @@ public sealed class ContentCatalogService(
         });
 
         var outcomes = await Task.WhenAll(tasks);
+        cancellationToken.ThrowIfCancellationRequested();
         var errors = outcomes
             .Where(outcome => outcome.Error is not null)
             .Select(outcome => $"{outcome.Id}:{outcome.Error}")
@@ -101,7 +103,8 @@ public sealed class ContentCatalogService(
             request.Offset,
             request.Limit,
             outcomes.Sum(outcome => outcome.Result.TotalHits),
-            errors);
+            errors,
+            outcomes.Select(outcome => new ContentProviderStatus(outcome.Id, outcome.Error is null, outcome.Error)).ToArray());
     }
 
     public async Task<(ContentProject? Project, ContentVersion? Latest, IReadOnlyList<ContentVersion> Versions)>
@@ -113,7 +116,8 @@ public sealed class ContentCatalogService(
             CancellationToken cancellationToken = default)
     {
         var provider = Find(providerId);
-        if (provider is null || !provider.CanServe(profile, kind))
+        if (provider is null || (!provider.CanServe(profile, kind) &&
+            !(provider.Id == ContentProviderId.Modrinth && ContentTypePolicy.IsBrowsableBy(kind, profile))))
         {
             return (null, null, []);
         }

@@ -193,7 +193,7 @@
                                         <Button Content="{Binding ActionLabel}"
                                                 Style="{StaticResource PrimaryActionStyle}"
                                                 MinWidth="104"
-                                                IsEnabled="{Binding CanInstall}"
+                                                IsEnabled="{Binding CanAct}"
                                                 AutomationProperties.Name="{Binding AutomationName}"
                                                 Click="Install_Click" />
                                         <Button Content="{Binding DetailsLabel}"

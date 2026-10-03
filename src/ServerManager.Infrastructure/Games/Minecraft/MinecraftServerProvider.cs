@@ -43,6 +43,13 @@ public sealed class MinecraftServerProvider : IGameServerProvider
 
     public ProcessLaunchSpec CreateLaunchSpec(GameServerDefinition server)
     {
+        if (MinecraftSoftwareService.HasPendingMigration(server.RootPath))
+            throw new InvalidOperationException("An interrupted server software migration requires runtime/configuration recovery. Starting an unverified runtime is blocked; world data must not be restored automatically.");
+        return CreateSoftwareMigrationLaunchSpec(server);
+    }
+
+    internal ProcessLaunchSpec CreateSoftwareMigrationLaunchSpec(GameServerDefinition server)
+    {
         if (server.Game != GameType.Minecraft)
         {
             throw new ArgumentException("The server definition is not Minecraft.", nameof(server));

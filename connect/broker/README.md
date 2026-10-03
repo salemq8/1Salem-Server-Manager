@@ -126,7 +126,7 @@ Deployed on 2026-09-29 from `env.production`:
 | Secrets | `TICKET_SIGNING_KEY`, `INVITE_PEPPER` (stored; never recreate or print them) |
 | Other bindings | `FLOOD` limiter (2000 per 60 s, `namespace_id` 1001), `CONNECT_REQUIRE_FLOOD_LIMIT=true`, cleanup cron every 15 minutes |
 | Hostnames | workers.dev on, preview URLs off, no custom domain or zone routes |
-| Invite page download | `CONNECT_DOWNLOAD_URL` = the current release's `1SalemConnect-Setup.exe` on GitHub (Build 10 onward) |
+| Invite page download | `CONNECT_DOWNLOAD_URL` = `https://github.com/salemq8/1Salem-Server-Manager/releases/latest/download/1SalemConnect-Setup.exe`, the latest published release (Build 12 onward) |
 
 The Server Manager Agent (`ConnectHostOptions.ProductionBrokerOrigin`) and the friend app's
 packaged `1Salem.Connect.settings.json` (`tools/build-release.ps1`) point at this origin, and the
@@ -158,8 +158,8 @@ owns the Worker (`npx wrangler login`, done by Salem).
 - Smoke-check read-only: `GET <origin>/v1/keys` returns the current `kid`, and `GET <origin>/i`
   returns the landing page.
 - `CONNECT_DOWNLOAD_URL` in `env.production.vars` is the "Download 1Salem Connect" button on the
-  invite page. Point it at a new release's `1SalemConnect-Setup.exe` only after that GitHub
-  release asset exists, then deploy.
+  invite page. It is GitHub's latest-release address, so each newly published release (its
+  `1SalemConnect-Setup.exe`) is offered automatically; no edit or deploy is needed per release.
 
 ### Optional later migration to a custom domain
 

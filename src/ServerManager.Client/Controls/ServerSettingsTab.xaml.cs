@@ -183,6 +183,9 @@ public partial class ServerSettingsTab : UserControl
         GroupBody.Text = LocalizationService.Get($"ServerSettings.{group}Body");
         GroupPrimaryButton.Visibility = Visibility.Collapsed;
         GroupSecondaryButton.Visibility = Visibility.Collapsed;
+        SoftwareButton.Visibility = group == "Game" && _context.Source?.Game == GameType.Minecraft
+            ? Visibility.Visible : Visibility.Collapsed;
+        SoftwareButton.Content = MinecraftPlayersPresentation.Text("Server software", "برنامج الخادم");
 
         var isPalworld = _context.Source?.Game == GameType.Palworld;
 
@@ -464,6 +467,13 @@ public partial class ServerSettingsTab : UserControl
 
     private void GroupPrimary_Click(object sender, RoutedEventArgs e) =>
         RunGroupAction(GroupPrimaryButton.Tag as string);
+
+    private async void Software_Click(object sender, RoutedEventArgs e)
+    {
+        if (_context.Source is not { Game: GameType.Minecraft } server) return;
+        if (ServerSoftwareWindow.Open(Window.GetWindow(this), server.ServerId, server.Name))
+            await DashboardFeed.Shared.RefreshAsync();
+    }
 
     private void GroupSecondary_Click(object sender, RoutedEventArgs e) =>
         RunGroupAction(GroupSecondaryButton.Tag as string);

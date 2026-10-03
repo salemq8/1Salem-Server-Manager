@@ -59,7 +59,7 @@ public partial class ServerDetailPageControl : UserControl
     /// </summary>
     public void FocusSelectedTab()
     {
-        var selected = new[] { TabOverview, TabConsole, TabBackups, TabContent, TabSettings }
+        var selected = new[] { TabOverview, TabConsole, TabBackups, TabContent, TabSettings, TabPlayers }
             .FirstOrDefault(tab => tab.IsChecked == true);
         selected?.Focus();
     }
@@ -83,7 +83,7 @@ public partial class ServerDetailPageControl : UserControl
             return;
         }
 
-        foreach (var tab in new[] { TabOverview, TabConsole, TabBackups, TabContent, TabSettings })
+        foreach (var tab in new[] { TabOverview, TabConsole, TabBackups, TabContent, TabSettings, TabPlayers })
         {
             tab.IsChecked = string.Equals(tab.Tag as string, key, StringComparison.Ordinal);
         }
@@ -98,6 +98,7 @@ public partial class ServerDetailPageControl : UserControl
         BackupsTab.Visibility = Vis(key, "Backups");
         ContentTab.Visibility = Vis(key, "Content");
         SettingsTab.Visibility = Vis(key, "Settings");
+        if (PlayersTab is not null) PlayersTab.Visibility = Vis(key, "Players");
 
         // Tabs only fetch while visible: a hidden console should not keep polling logs.
         ConsoleTab.SetActive(key == "Console");
@@ -124,6 +125,9 @@ public partial class ServerDetailPageControl : UserControl
         TabBackups.Content = LocalizationService.Get("ServerTab.Backups");
         TabContent.Content = LocalizationService.Get("ServerTab.Content");
         TabSettings.Content = LocalizationService.Get("ServerTab.Settings");
+        TabPlayers.Content = MinecraftPlayersPresentation.Text("Players", "اللاعبون");
+        TabPlayers.Visibility = _context.Source?.Game == GameType.Minecraft ? Visibility.Visible : Visibility.Collapsed;
+        if (TabPlayers.Visibility == Visibility.Collapsed && TabPlayers.IsChecked == true) SelectTab("Overview");
         BackButton.ToolTip = LocalizationService.Get("Action.Back");
         AutomationProperties.SetName(BackButton, LocalizationService.Get("Action.Back"));
         AutomationProperties.SetName(
@@ -134,6 +138,8 @@ public partial class ServerDetailPageControl : UserControl
         MenuCreateBackup.Header = LocalizationService.Get("Action.CreateBackup");
         MenuCopyAddress.Header = LocalizationService.Get("Action.CopyAddress");
         MenuOpenFolder.Header = LocalizationService.Get("Action.OpenFolder");
+        MenuSoftware.Header = MinecraftPlayersPresentation.Text("Server software", "برنامج الخادم");
+        MenuSoftware.Visibility = _context.Source?.Game == GameType.Minecraft ? Visibility.Visible : Visibility.Collapsed;
         MenuDiagnostics.Header = LocalizationService.Get("Action.Diagnostics");
         MenuForceStop.Header = LocalizationService.Get("Action.ForceStop");
         MenuDeleteServer.Header = LocalizationService.Get("Action.DeleteServer");
@@ -275,6 +281,13 @@ public partial class ServerDetailPageControl : UserControl
 
     private async void MenuOpenFolder_Click(object sender, RoutedEventArgs e) =>
         await OpenServerFolderAsync();
+
+    private async void MenuSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        if (_context.Source is not { Game: GameType.Minecraft } server) return;
+        if (ServerSoftwareWindow.Open(Window.GetWindow(this), server.ServerId, server.Name))
+            await DashboardFeed.Shared.RefreshAsync();
+    }
 
     /// <summary>
     /// The install directory is only known to the agent, so it is looked up rather than

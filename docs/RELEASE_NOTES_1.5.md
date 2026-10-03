@@ -1,4 +1,35 @@
-# 1Salem Server Manager 1.5 — Build 11
+# 1Salem Server Manager 1.5 — Build 12
+
+## New in Build 12
+
+- **Server Software** in Settings → Game detects the actual runtime and offers exact-version
+  changes. Vanilla → Paper/Purpur is destructive: **"Changing server software will delete the
+  current world and create a new world."** The server stops before this confirmation. Cancel
+  preserves the world and leaves the server stopped. Confirming deletes the current world
+  folders and starts a fresh world. Settings, whitelist, ops, bans, registration and existing
+  backups remain. There is no world conversion, reverse migration or automatic world rollback.
+  Pre-start installation failure restores only runtime/configuration and leaves the server stopped.
+- **Plugins on Vanilla** stay browsable with "Requires plugin server software". Actual plugin
+  releases determine compatible Paper/Purpur choices; search/plugin context survives the change.
+- **Provider health** tracks Hangar and Modrinth independently and retains successful results.
+- **Players** adds UUID identity, real history, name/UUID search, online/offline/operator/
+  whitelist/ban filters and useful sorts. Counts are shared across pages; last verified values
+  remain visibly stale on failures. Moderation uses confirmed commands and real readback.
+- **Read-only inventory** shows main inventory, hotbar, armor and offhand. Genuine live data is
+  preferred; otherwise saved NBT is explicitly timestamped. Modern Minecraft data is supported,
+  with no editing, guessed metadata or bundled Mojang assets.
+- Re-adopted servers can report read-only Minecraft status counts without restarting. Missing
+  original console access is explained; the server is never restarted merely for moderation.
+- **1Salem Connect → Settings → Updates** adds verified in-app updates, daily checks,
+  installed/portable handling, rollback and preserved enrollment. Build 11-and-older users
+  install Build 12 manually once; later updates happen inside Connect.
+- Invitation downloads permanently use
+  `https://github.com/salemq8/1Salem-Server-Manager/releases/latest/download/1SalemConnect-Setup.exe`.
+- English, Arabic RTL, dark and light themes are supported by the new UI.
+
+The normal application update never resets a world or changes game-server software. World
+deletion requires the separate explicit Server Software confirmation above. Existing backups
+are never deleted by that operation.
 
 ## Downloads
 

@@ -105,7 +105,7 @@ public enum MinecraftPlayerAction
     Pardon = 7
 }
 
-public sealed record MinecraftPlayerActionRequest(MinecraftPlayerAction Action, string Player);
+public sealed record MinecraftPlayerActionRequest(MinecraftPlayerAction Action, string Player, bool Confirmed = false);
 
 /// <summary>
 /// Players as the server has them. <see cref="OnlineKnown"/> is false when the server is not

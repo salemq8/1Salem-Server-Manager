@@ -198,7 +198,7 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
         // A running server that is not reporting a player count is reported as unknown, never
         // folded into a total: "0 players online" would read as an empty server and invite
         // someone to stop it while people are connected.
-        return TotalPlayers() is { } players
+        var summary = TotalPlayers() is { } players
             ? LocalizationService.Format(
                 "Home.Detail.Players",
                 running,
@@ -208,6 +208,9 @@ public partial class HomePageControl : UserControl, INotifyPropertyChanged
                 "Home.Detail.PlayersUnknown",
                 running,
                 serverCount);
+        return _feed.Snapshot?.Servers.Any(server => server.State == ServerManager.Contracts.ServerState.Running && server.PlayersStale) == true
+            ? summary + " · " + MinecraftPlayersPresentation.Text("Player counts are stale", "أعداد اللاعبين غير محدثة")
+            : summary;
     }
 
     /// <summary>Total players, or null when any running server is not reporting a count.</summary>

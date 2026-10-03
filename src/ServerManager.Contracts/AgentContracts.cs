@@ -102,7 +102,9 @@ public sealed record ServerDashboardCard(
     bool LocalPortOpen = false,
     bool PlayitOnline = false,
     bool RestManagementConnected = false,
-    int ThreadCount = 0);
+    int ThreadCount = 0,
+    bool PlayersStale = false,
+    DateTimeOffset? PlayersVerifiedAtUtc = null);
 
 public sealed record DashboardSnapshot(
     AgentStatusResponse Agent,

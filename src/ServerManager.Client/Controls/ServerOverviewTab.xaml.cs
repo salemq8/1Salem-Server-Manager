@@ -28,13 +28,23 @@ public partial class ServerOverviewTab : UserControl
     private readonly HttpClient _httpClient;
     private readonly DispatcherTimer _playerTimer;
     private readonly ObservableCollection<PlayerRow> _players = [];
+    private bool _loadingPlayers;
+    private Guid _playersServer;
 
     public ServerOverviewTab()
     {
         InitializeComponent();
         _httpClient = _context.CreateClient(TimeSpan.FromSeconds(20));
         PlayerList.ItemsSource = _players;
-        _context.Changed += (_, _) => Dispatcher.Invoke(Render);
+        _context.Changed += (_, _) => Dispatcher.Invoke(() =>
+        {
+            if (_playersServer != _context.ServerId)
+            {
+                _players.Clear(); _playersServer = _context.ServerId;
+                if (IsVisible) _ = LoadPlayersAsync();
+            }
+            Render();
+        });
         LocalizationService.LanguageChanged += (_, _) => Dispatcher.Invoke(Render);
         ThemeService.ThemeChanged += (_, _) => Dispatcher.Invoke(Render);
         _playerTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -42,11 +52,11 @@ public partial class ServerOverviewTab : UserControl
             Interval = TimeSpan.FromSeconds(10)
         };
         _playerTimer.Tick += async (_, _) => await LoadPlayersAsync();
-        Loaded += async (_, _) =>
+        IsVisibleChanged += async (_, _) =>
         {
             Render();
-            _playerTimer.Start();
-            await LoadPlayersAsync();
+            if (IsVisible) { _playerTimer.Start(); await LoadPlayersAsync(); }
+            else _playerTimer.Stop();
         };
         Unloaded += (_, _) => _playerTimer.Stop();
     }
@@ -171,7 +181,12 @@ public partial class ServerOverviewTab : UserControl
 
     private async Task LoadPlayersAsync()
     {
+        if (_loadingPlayers || !IsVisible) return;
         var source = _context.Source;
+        if (_playersServer != source?.ServerId)
+        {
+            _players.Clear(); _playersServer = source?.ServerId ?? Guid.Empty;
+        }
         if (source is null || source.Game != GameType.Minecraft)
         {
             // Only Minecraft publishes a roster today; Palworld reports a count only.
@@ -188,26 +203,28 @@ public partial class ServerOverviewTab : UserControl
             return;
         }
 
+        _loadingPlayers = true;
         try
         {
-            var snapshot = await _httpClient.GetFromJsonAsync<MinecraftPlayersSnapshot>(
-                $"/api/v1/servers/{_context.ServerId}/minecraft/players");
+            var snapshot = await _httpClient.GetFromJsonAsync<MinecraftPlayerDashboardSnapshot>(
+                $"/api/v1/servers/{source.ServerId}/minecraft/players/dashboard");
+            if (source.ServerId != _context.ServerId || !IsVisible) return;
             _players.Clear();
-            foreach (var name in snapshot?.OnlinePlayers ?? [])
+            foreach (var player in snapshot?.Players.Where(p => p.IsOnline == true) ?? [])
             {
-                var role = snapshot!.Operators.Contains(name, StringComparer.OrdinalIgnoreCase)
+                var role = player.IsOperator == true
                     ? LocalizationService.Get("ServerDetail.Operator")
                     : string.Empty;
-                _players.Add(new PlayerRow(name, role));
+                _players.Add(new PlayerRow(player.Username ?? player.Uuid.ToString("D"), role));
             }
 
             RenderPlayersEmptyState(source);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            _players.Clear();
-            RenderPlayersEmptyState(source);
+            if (source.ServerId == _context.ServerId) RenderPlayersEmptyState(source);
         }
+        finally { _loadingPlayers = false; }
     }
 
     private static Brush ToneBrush(UiStatusTone tone)

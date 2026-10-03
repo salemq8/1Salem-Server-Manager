@@ -30,7 +30,7 @@ describe("invite landing page", () => {
   it("links a download page only when an https one is configured", async () => {
     expect(await (await page()).text()).not.toContain("<a ");
     expect(await (await page("", { CONNECT_DOWNLOAD_URL: "http://example.test/" })).text()).not.toContain("<a ");
-    const setup = "https://github.com/salemq8/1Salem-Server-Manager/releases/download/v1.5-build-10/1SalemConnect-Setup.exe";
+    const setup = "https://github.com/salemq8/1Salem-Server-Manager/releases/latest/download/1SalemConnect-Setup.exe";
     const linked = await (await page("", { CONNECT_DOWNLOAD_URL: setup })).text();
     expect(linked).toContain(`<a class="download" href="${setup}">Download 1Salem Connect</a>`);
     expect(linked).toContain(`<a class="download" href="${setup}">تنزيل 1Salem Connect</a>`);

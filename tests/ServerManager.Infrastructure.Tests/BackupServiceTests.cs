@@ -28,6 +28,25 @@ public sealed class BackupServiceTests : IDisposable
     private string BackupRoot => Path.Combine(_testRoot, "backups");
 
     [Fact]
+    public async Task CreateAsync_IncludesCustomLevelNameAndItsDimensions()
+    {
+        foreach (var name in new[] { "Salem", "Salem_nether", "Salem_the_end" })
+        {
+            Directory.CreateDirectory(Path.Combine(ServerRoot, name));
+            await File.WriteAllTextAsync(Path.Combine(ServerRoot, name, "level.dat"), name);
+        }
+        await File.WriteAllTextAsync(Path.Combine(ServerRoot, "server.properties"), "level-name=Salem");
+        var server = CreateServer();
+        var service = new BackupService(new InMemoryGameStore(server), new InMemoryBackupStore(),
+            new StoppedProcessSupervisor(), [new MinecraftServerProvider()], new ServerOperationCoordinator());
+        var created = await service.CreateAsync(new BackupRequest(server.Id, BackupRoot, false, true));
+        using var archive = System.IO.Compression.ZipFile.OpenRead(created.ArchivePath);
+        foreach (var name in new[] { "Salem", "Salem_nether", "Salem_the_end" })
+            Assert.Contains(archive.Entries, entry => entry.FullName.Replace('\\', '/').EndsWith(name + "/level.dat", StringComparison.Ordinal));
+        Assert.True((await service.VerifyAsync(created.BackupId)).IsValid);
+    }
+
+    [Fact]
     public async Task CreateVerifyAndRestore_RoundTripsMinecraftWorld()
     {
         var world = Path.Combine(ServerRoot, "world");

@@ -16,6 +16,8 @@ namespace ServerManager.Client;
 public partial class ContentProjectWindow : Window
 {
     private Uri? _projectUrl;
+    private ContentProjectChoice _choice = new();
+    private IReadOnlyList<PluginSoftwareChoice> _softwareChoices = [];
 
     private ContentProjectWindow()
     {
@@ -30,12 +32,17 @@ public partial class ContentProjectWindow : Window
         Window? owner,
         ContentProjectDetail detail,
         ServerContentProfile profile)
+        => ShowAction(owner, detail, profile, []).Install;
+
+    public static ContentProjectChoice ShowAction(Window? owner, ContentProjectDetail detail,
+        ServerContentProfile profile, IReadOnlyList<PluginSoftwareChoice> choices)
     {
         ArgumentNullException.ThrowIfNull(detail);
         ArgumentNullException.ThrowIfNull(profile);
-        var window = new ContentProjectWindow { Owner = owner };
+        var window = new ContentProjectWindow { Owner = owner, _softwareChoices = choices };
         window.Render(detail, profile);
-        return window.ShowDialog() == true;
+        window.ShowDialog();
+        return window._choice;
     }
 
     private void Render(ContentProjectDetail detail, ServerContentProfile profile)
@@ -100,15 +107,42 @@ public partial class ContentProjectWindow : Window
         DescriptionText.Text = ContentTextSanitizer.ToPlainText(
             project.Description ?? project.Summary);
 
-        InstallButton.Content = LocalizationService.Get("Content.Install");
-        InstallButton.IsEnabled = latest is not null && profile.SupportsPlugins;
+        var requiresSoftware = PluginSoftwarePresentation.RequiresSoftware(project, profile);
+        InstallButton.Content = requiresSoftware ? PluginSoftwarePresentation.RequiresLabel : LocalizationService.Get("Content.Install");
+        InstallButton.IsEnabled = !requiresSoftware && latest is not null;
+        InstallButton.Visibility = requiresSoftware ? Visibility.Collapsed : Visibility.Visible;
+        SoftwareNotice.Visibility = requiresSoftware ? Visibility.Visible : Visibility.Collapsed;
+        if (requiresSoftware)
+        {
+            CloseButton.Content = LocalizationService.Get("Action.Cancel");
+            VersionValue.Text = PluginSoftwarePresentation.RequiresLabel;
+            SoftwareHeading.Text = PluginSoftwarePresentation.RequiresLabel;
+            SoftwareBody.Text = _softwareChoices.Count == 0
+                ? PluginSoftwarePresentation.Text("No compatible Paper or Purpur migration is proven for this plugin release and exact Minecraft version. Nothing will be installed or changed.", "لا يوجد تغيير موثق إلى Paper أو Purpur يتوافق مع إصدار هذه الإضافة وإصدار Minecraft الحالي نفسه. لن يتم تثبيت أو تغيير أي شيء.")
+                : PluginSoftwarePresentation.Text("Choose only a verified compatible runtime. Migration safety restrictions remain mandatory. No plugin is installed until you explicitly install it after a successful change.", "اختر برنامج تشغيل متوافقًا وموثقًا فقط. تبقى قيود سلامة التغيير إلزامية. لن يتم تثبيت الإضافة إلا باختيارك الصريح بعد نجاح التغيير.");
+            SoftwareChoices.ItemsSource = _softwareChoices.Select(choice => new SoftwareChoiceView(choice,
+                PluginSoftwarePresentation.ChangeTo(choice.Software.Platform),
+                PluginSoftwarePresentation.ChoiceExplanation(choice, project.Name))).ToArray();
+        }
     }
 
     private void Install_Click(object sender, RoutedEventArgs e)
     {
+        if (!InstallButton.IsEnabled) return;
+        _choice = new ContentProjectChoice(Install: true);
         DialogResult = true;
         Close();
     }
+
+    private void ChangeSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: ServerPlatform platform } ||
+            !_softwareChoices.Any(choice => choice.Software.Platform == platform && choice.Software.Available)) return;
+        _choice = new ContentProjectChoice(ChangeSoftware: platform);
+        DialogResult = true;
+    }
+
+    private sealed record SoftwareChoiceView(PluginSoftwareChoice Choice, string Label, string Explanation);
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 

@@ -118,6 +118,7 @@
                                 <MenuItem x:Name="MenuCreateBackup" Click="MenuCreateBackup_Click" />
                                 <MenuItem x:Name="MenuCopyAddress" Click="MenuCopyAddress_Click" />
                                 <MenuItem x:Name="MenuOpenFolder" Click="MenuOpenFolder_Click" />
+                                <MenuItem x:Name="MenuSoftware" Click="MenuSoftware_Click" />
                                 <Separator />
                                 <MenuItem x:Name="MenuDiagnostics" Click="MenuDiagnostics_Click" />
                                 <MenuItem x:Name="MenuForceStop" Click="MenuForceStop_Click" />
@@ -168,6 +169,11 @@
                              GroupName="ServerDetailTabs"
                              Checked="Tab_Checked"
                              Tag="Settings" />
+                <RadioButton x:Name="TabPlayers"
+                             Style="{StaticResource TabBarButtonStyle}"
+                             GroupName="ServerDetailTabs"
+                             Checked="Tab_Checked"
+                             Tag="Players" />
             </StackPanel>
         </Border>
 
@@ -178,6 +184,7 @@
             <controls:ServerBackupsTab x:Name="BackupsTab" Visibility="Collapsed" />
             <controls:ServerContentTab x:Name="ContentTab" Visibility="Collapsed" />
             <controls:ServerSettingsTab x:Name="SettingsTab" Visibility="Collapsed" />
+            <controls:ServerPlayersTab x:Name="PlayersTab" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </UserControl>

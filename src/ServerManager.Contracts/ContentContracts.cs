@@ -199,7 +199,11 @@ public sealed record ContentSearchResult(
     int Offset,
     int Limit,
     int TotalHits,
-    IReadOnlyList<string> ProviderErrors);
+    IReadOnlyList<string> ProviderErrors,
+    IReadOnlyList<ContentProviderStatus>? ProviderStatuses = null);
+
+/// <summary>Only attempted providers appear. An empty successful response is not a failure.</summary>
+public sealed record ContentProviderStatus(ContentProviderId Provider, bool Succeeded, string? ErrorCode = null);
 
 /// <summary>What the manager recorded when it installed a file, plus how it stands now.</summary>
 public sealed record InstalledContent(

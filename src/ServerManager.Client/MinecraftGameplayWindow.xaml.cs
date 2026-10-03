@@ -767,7 +767,7 @@ public partial class MinecraftGameplayWindow : Window
         {
             var response = await _http.PostAsJsonAsync(
                 $"/api/v1/servers/{_serverId}/minecraft/players/actions",
-                new MinecraftPlayerActionRequest(action, player));
+                new MinecraftPlayerActionRequest(action, player, Confirmed: true));
             response.EnsureSuccessStatusCode();
             var result = await response.Content.ReadFromJsonAsync<MinecraftChangeResult>();
             message = result switch

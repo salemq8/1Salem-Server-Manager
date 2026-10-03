@@ -4,6 +4,7 @@ using ServerManager.Contracts;
 using ServerManager.Core;
 using ServerManager.Infrastructure.Processes;
 using ServerManager.Infrastructure.Playit;
+using ServerManager.Infrastructure.Games.Minecraft;
 
 namespace ServerManager.Agent;
 
@@ -18,7 +19,8 @@ public sealed class DashboardSnapshotService(
     IProcessSupervisor processSupervisor,
     ProcessSupervisor processLogs,
     OfficialPlayitSupervisor playitSupervisor,
-    PalworldManagementCache palworldManagement)
+    PalworldManagementCache palworldManagement,
+    MinecraftPlayerStateService? minecraftPlayers = null)
 {
     public async Task<DashboardSnapshot> GetAsync(
         CancellationToken cancellationToken = default)
@@ -73,6 +75,9 @@ public sealed class DashboardSnapshotService(
             var management = server.Game == GameType.Palworld
                 ? palworldManagement.Get(server.Id)
                 : null;
+            var players = server.Game == GameType.Minecraft && minecraftPlayers is not null
+                ? await minecraftPlayers.GetAsync(server.Id, cancellationToken: cancellationToken)
+                : null;
             var tunnel = server.Game == GameType.Palworld
                 ? playit.Palworld
                 : playit.Minecraft;
@@ -102,8 +107,8 @@ public sealed class DashboardSnapshotService(
                     : $"{network.LocalIpv4}:{server.Port}",
                 server.InstalledVersion,
                 ReadRuntimeVersion(server),
-                management?.PlayersOnline ?? ReadOnlinePlayers(server, logs),
-                management?.MaximumPlayers ?? ReadMaximumPlayers(server),
+                server.Game == GameType.Minecraft ? players?.OnlinePlayers : management?.PlayersOnline ?? ReadOnlinePlayers(server, logs),
+                server.Game == GameType.Minecraft ? players?.MaxPlayers : management?.MaximumPlayers ?? ReadMaximumPlayers(server),
                 process?.ProcessId,
                 process?.CpuPercent ?? 0,
                 process?.WorkingSetBytes ?? 0,
@@ -138,7 +143,9 @@ public sealed class DashboardSnapshotService(
                 localPortOpen,
                 playit.IsRunning && playit.IsLinked && playit.IsVerified,
                 management?.State == PalworldManagementState.Online,
-                process?.ThreadCount ?? 0));
+                process?.ThreadCount ?? 0,
+                server.Game == GameType.Minecraft && (players?.IsStale ?? true),
+                players?.LastVerifiedAtUtc));
         }
 
         var warnings = system.Warnings.ToList();

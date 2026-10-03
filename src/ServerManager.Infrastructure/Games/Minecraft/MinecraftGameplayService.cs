@@ -28,6 +28,7 @@ public sealed class MinecraftGameplayService : IDisposable
     private readonly IAuditLogStore _audit;
     private readonly IMinecraftPropertiesWriter _propertiesWriter;
     private readonly ILogger<MinecraftGameplayService> _logger;
+    private readonly MinecraftPlayerStateService? _playerState;
 
     // The name each rule has on a running server, learned from its answers. Cleared when the
     // server becomes ready again, since a restart can mean a different Minecraft version.
@@ -40,7 +41,8 @@ public sealed class MinecraftGameplayService : IDisposable
         ISettingsStore settings,
         IAuditLogStore audit,
         IMinecraftPropertiesWriter propertiesWriter,
-        ILogger<MinecraftGameplayService> logger)
+        ILogger<MinecraftGameplayService> logger,
+        MinecraftPlayerStateService? playerState = null)
     {
         _servers = servers;
         _console = console;
@@ -48,6 +50,7 @@ public sealed class MinecraftGameplayService : IDisposable
         _audit = audit;
         _propertiesWriter = propertiesWriter;
         _logger = logger;
+        _playerState = playerState;
         _console.ServerReady += OnServerReady;
     }
 
@@ -181,6 +184,15 @@ public sealed class MinecraftGameplayService : IDisposable
 
     public async Task<MinecraftPlayersState> GetPlayersAsync(Guid serverId, CancellationToken cancellationToken = default)
     {
+        if (_playerState is not null)
+        {
+            var snapshot = await _playerState.GetAsync(serverId, cancellationToken: cancellationToken);
+            return new MinecraftPlayersState(snapshot.Control, snapshot.OnlineIdentitiesKnown && !snapshot.IsStale,
+                snapshot.Players.Where(p => p.IsOnline == true && p.Username is not null).Select(p => p.Username!).ToArray(), snapshot.MaxPlayers,
+                snapshot.Players.Where(p => p.IsOperator == true && p.Username is not null).Select(p => p.Username!).ToArray(),
+                snapshot.Players.Where(p => p.IsWhitelisted == true && p.Username is not null).Select(p => p.Username!).ToArray(),
+                snapshot.Players.Where(p => p.IsBanned == true && p.Username is not null).Select(p => p.Username!).ToArray(), snapshot.CapturedAtUtc);
+        }
         var server = await GetMinecraftServerAsync(serverId, cancellationToken);
         var control = ToControl(_console.GetState(serverId));
         var properties = ReadProperties(server.RootPath);
@@ -224,6 +236,7 @@ public sealed class MinecraftGameplayService : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (_playerState is not null) return await _playerState.AdministerByNameAsync(serverId, request, cancellationToken);
         if (!Enum.IsDefined(request.Action))
         {
             return new MinecraftChangeResult(MinecraftChangeOutcome.Failed, "UnknownAction", "That player action is not offered.");

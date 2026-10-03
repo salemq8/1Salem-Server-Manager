@@ -17,6 +17,7 @@ using ServerManager.Infrastructure.Files;
 using ServerManager.Infrastructure.Playit;
 using ServerManager.Infrastructure.Updates;
 using ServerManager.Core.Content;
+using ServerManager.Core.Minecraft;
 using ServerManager.Infrastructure.Content;
 using ServerManager.Infrastructure.Connect;
 using ServerManager.Connect.Core.Pipes;
@@ -119,6 +120,10 @@ builder.Services.AddSingleton<IGameServerProvider>(
 builder.Services.AddSingleton<IFileImportService, SafeFileImportService>();
 builder.Services.AddSingleton<IRegisteredFileService, RegisteredFileService>();
 builder.Services.AddSingleton<MinecraftJarSwapService>();
+builder.Services.AddHttpClient<IMinecraftSoftwareCatalog, MinecraftSoftwareCatalog>()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddSingleton<IMinecraftSoftwareBackup, MinecraftSoftwareBackup>();
+builder.Services.AddTransient<MinecraftSoftwareService>();
 builder.Services.AddHttpClient<IMinecraftVersionCatalog, MinecraftVersionCatalog>();
 builder.Services.AddHttpClient<IJavaRuntimeInstaller, AdoptiumJavaRuntimeInstaller>();
 builder.Services.AddHttpClient<IMinecraftInstaller, MinecraftInstaller>();
@@ -159,6 +164,9 @@ builder.Services.AddSingleton<IMinecraftConsoleChannel>(
     services => services.GetRequiredService<ProcessSupervisor>());
 builder.Services.AddSingleton<IMinecraftPropertiesWriter>(
     services => services.GetRequiredService<ServerConfigurationService>());
+builder.Services.AddSingleton<IMinecraftServerStatusClient, MinecraftServerStatusClient>();
+builder.Services.AddSingleton<MinecraftPlayerStateService>();
+builder.Services.AddSingleton<MinecraftInventoryService>();
 builder.Services.AddSingleton<MinecraftGameplayService>();
 builder.Services.AddSingleton<DashboardSnapshotService>();
 builder.Services.AddSingleton<PlayitInstallationLocator>();
@@ -247,6 +255,9 @@ if (connectAcceptance is not null)
 // Created up front so gamerule changes saved while a server was stopped are applied when it
 // next becomes ready, even if nobody has opened the Gameplay page since the Agent started.
 _ = app.Services.GetRequiredService<MinecraftGameplayService>();
+app.MapMinecraftPlayerEndpoints();
+app.MapMinecraftInventoryEndpoints();
+app.MapMinecraftSoftwareEndpoints();
 
 app.MapGet(
     "/health",

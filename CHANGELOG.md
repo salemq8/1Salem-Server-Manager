@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.5 — Build 12
+
+- Server Software detects the active runtime and checks exact-version official downloads.
+  Vanilla → Paper/Purpur stops first, asks one explicit destructive confirmation, then deletes
+  the current world folders and starts a fresh world. Settings, whitelist, ops, bans,
+  registration and existing backups remain. No world conversion or automatic world rollback.
+- Plugins on Vanilla are honestly browse-only, with real compatible Paper/Purpur choices
+  and preserved plugin/search context. Hangar and Modrinth failures are tracked independently.
+- One canonical player service feeds all counters and the UUID Players dashboard, retaining
+  verified stale counts, real history, persistent filters and verified live moderation.
+- Read-only inventory shows genuine live data or clearly labeled saved NBT, with modern
+  Minecraft storage support, safe shared reads and no bundled Mojang assets.
+- Re-adopted servers report read-only status counts without restarting; missing live console
+  access remains explicit.
+- Reused 1Salem Connect self-updater with verified installed/portable updates and preserved
+  enrollment. Older users install Build 12 manually once; later updates happen in-app.
+- Invite downloads permanently follow the latest GitHub Connect installer. New UI supports
+  English, Arabic RTL, dark and light themes.
+
 ## 1.5 — Build 11
 
 - Content: the content type list offers Plugin, Modpack, Data Pack and Resource Pack for every

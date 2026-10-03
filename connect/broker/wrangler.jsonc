@@ -78,9 +78,9 @@
       ],
       "vars": {
         "CONNECT_REQUIRE_FLOOD_LIMIT": "true",
-        // The invite page's "Download 1Salem Connect" button: the installer of the current
-        // public release. Deploy only after that GitHub release asset exists.
-        "CONNECT_DOWNLOAD_URL": "https://github.com/salemq8/1Salem-Server-Manager/releases/download/v1.5-build-10/1SalemConnect-Setup.exe"
+        // The invite page's "Download 1Salem Connect" button. GitHub's latest-release address,
+        // so each new published release is offered without editing or redeploying this Worker.
+        "CONNECT_DOWNLOAD_URL": "https://github.com/salemq8/1Salem-Server-Manager/releases/latest/download/1SalemConnect-Setup.exe"
       },
       "observability": {
         "enabled": true,

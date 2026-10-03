@@ -34,6 +34,7 @@ public partial class ServerContentTab : UserControl
     private CancellationTokenSource? _inFlight;
     private bool _loaded;
     private bool _busy;
+    private bool? _compatibleBeforeBrowseOnly;
 
     // Set while code rebuilds the selectors, so their selection events do not start searches.
     private bool _updatingControls;
@@ -211,10 +212,20 @@ public partial class ServerContentTab : UserControl
 
         // Plugins on a server that cannot load them: browsable, never installable, and said so.
         var pluginsUnavailable = kind == ContentKind.Plugin && _profile is { SupportsPlugins: false };
+        if (pluginsUnavailable)
+        {
+            _compatibleBeforeBrowseOnly ??= CompatibleOnlyBox.IsChecked == true;
+            CompatibleOnlyBox.IsChecked = false;
+        }
+        else if (_compatibleBeforeBrowseOnly is { } rememberedCompatible)
+        {
+            CompatibleOnlyBox.IsChecked = rememberedCompatible;
+            _compatibleBeforeBrowseOnly = null;
+        }
+        CompatibleOnlyBox.IsEnabled = !pluginsUnavailable;
+        CompatibleOnlyBox.Content = pluginsUnavailable ? PluginSoftwarePresentation.BrowseOnlyLabel : LocalizationService.Get("Content.CompatibleOnly");
         KindNotice.Text = pluginsUnavailable
-            ? LocalizationService.Format(
-                "Content.Notice.PluginsNeedPlatform",
-                PluginPlatformPolicy.DisplayName(_profile!.Platform))
+            ? PluginSoftwarePresentation.RequiresLabel
             : string.Empty;
         KindNotice.Visibility = pluginsUnavailable ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -384,22 +395,24 @@ public partial class ServerContentTab : UserControl
             _discovered.Clear();
             foreach (var project in result?.Projects ?? [])
             {
-                var item = new ContentItemViewModel(Describe(project))
+                var item = new ContentItemViewModel(Describe(project), _profile)
                 {
                     IsInstalled = project.ProjectId is { Length: > 0 } id && installedNames.Contains(id)
                 };
                 _discovered.Add(item);
             }
 
-            var errors = result?.ProviderErrors ?? [];
+            var errors = result is null ? [] : ContentProviderPresentation.FailedProviders(result)
+                .Select(provider => provider.ToString()).ToArray();
             if (_discovered.Count == 0)
             {
-                SetNotice(null);
+                var bothUnavailable = result is not null && ContentProviderPresentation.BothUnavailable(result);
+                SetNotice(errors.Length > 0 && !bothUnavailable ? DescribeProviderFailures(errors) : null);
                 ShowState(
-                    "Content.Empty.Title",
-                    errors.Count > 0 ? "Content.Error.ProvidersMessage" : "Content.Empty.Message",
-                    retry: errors.Count > 0);
-                if (errors.Count > 0)
+                    bothUnavailable ? "Content.Error.ProvidersTitle" : "Content.Empty.Title",
+                    bothUnavailable ? "Content.Error.ProvidersMessage" : "Content.Empty.Message",
+                    retry: errors.Length > 0);
+                if (errors.Length > 0)
                 {
                     _session.Forget(generation);
                 }
@@ -407,7 +420,7 @@ public partial class ServerContentTab : UserControl
             else
             {
                 HideState();
-                SetNotice(errors.Count > 0 ? DescribeProviderFailures(errors) : null);
+                SetNotice(errors.Length > 0 ? DescribeProviderFailures(errors) : null);
                 DiscoverScroller.ScrollToTop();
             }
         }
@@ -431,7 +444,7 @@ public partial class ServerContentTab : UserControl
             }
             else
             {
-                ShowState("Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage", retry: true);
+                ShowState("Content.Error.AgentTitle", "Content.Error.AgentMessage", retry: true);
             }
         }
         finally
@@ -545,6 +558,12 @@ public partial class ServerContentTab : UserControl
             return;
         }
 
+        if (PluginSoftwarePresentation.RequiresSoftware(item.Project, _profile))
+        {
+            await ShowProjectAsync(item);
+            return;
+        }
+
         if (item.Project.Kind == ContentKind.Modpack)
         {
             await InstallModpackAsync(item);
@@ -571,7 +590,7 @@ public partial class ServerContentTab : UserControl
                 request);
             if (plan is null)
             {
-                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage");
+                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProviderRequestMessage");
                 return;
             }
 
@@ -716,32 +735,78 @@ public partial class ServerContentTab : UserControl
 
     private async void Details_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: ContentItemViewModel item } || _profile is null)
+        if (sender is Button { DataContext: ContentItemViewModel item }) await ShowProjectAsync(item);
+    }
+
+    private async Task ShowProjectAsync(ContentItemViewModel item)
+    {
+        if (_profile is null || _busy)
         {
             return;
         }
-
+        var serverId = _context.ServerId;
+        var profile = _profile;
+        item.IsBusy = true;
+        _busy = true;
         try
         {
             using var client = _context.CreateClient(TimeSpan.FromSeconds(30));
             var detail = await client.GetFromJsonAsync<ContentProjectDetail>(
-                $"/api/v1/servers/{_context.ServerId}/content/projects/{item.Provider}/" +
+                $"/api/v1/servers/{serverId}/content/projects/{item.Provider}/" +
                 $"{Uri.EscapeDataString(item.ProjectId)}?kind={item.Project.Kind}");
+            if (_context.ServerId != serverId) return;
             if (detail is null)
             {
-                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage");
+                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProviderRequestMessage");
                 return;
             }
 
-            if (ContentProjectWindow.Show(Window.GetWindow(this), detail, _profile))
+            IReadOnlyList<PluginSoftwareChoice> choices = [];
+            if (PluginSoftwarePresentation.CanChooseSoftware(detail.Project, profile))
             {
+                var software = await client.GetFromJsonAsync<MinecraftSoftwareStatus>($"/api/v1/servers/{serverId}/minecraft/software");
+                if (_context.ServerId != serverId) return;
+                if (software is not null) choices = PluginSoftwarePresentation.Choices(detail, profile, software);
+            }
+            var action = ContentProjectWindow.ShowAction(Window.GetWindow(this), detail, profile, choices);
+            if (action.ChangeSoftware is { } target && choices.Any(c => c.Software.Platform == target && c.Software.Available))
+            {
+                var owner = Window.GetWindow(this);
+                if (owner is null || !ServerSoftwareWindow.Open(owner, serverId, _context.Source?.Name ?? string.Empty, target)) return;
+                if (_context.ServerId != serverId) return;
+                // Refresh only the profile and selected project. Keep the current query, filters,
+                // provider results and scroll position; installation is a separate explicit choice.
+                _chooseDefaultKind = false;
+                _compatibleBeforeBrowseOnly = null;
+                CompatibleOnlyBox.IsChecked = false;
+                await LoadProfileAsync();
+                if (_context.ServerId != serverId || _profile is null) return;
+                var refreshed = await client.GetFromJsonAsync<ContentProjectDetail>(
+                    $"/api/v1/servers/{serverId}/content/projects/{item.Provider}/{Uri.EscapeDataString(item.ProjectId)}?kind={item.Project.Kind}");
+                if (_context.ServerId != serverId || refreshed is null) return;
+                foreach (var card in _discovered) card.Update(card.Project, _profile);
+                item.Update(Describe(refreshed.Project with { IsCompatible = refreshed.LatestCompatible is not null }), _profile);
+                var afterMigration = ContentProjectWindow.ShowAction(owner, refreshed, _profile, []);
+                if (afterMigration.Install)
+                {
+                    item.IsBusy = false;
+                    _busy = false;
+                    await InstallItemAsync(item);
+                }
+                return;
+            }
+            if (action.Install)
+            {
+                item.IsBusy = false;
+                _busy = false;
                 await InstallItemAsync(item);
             }
         }
         catch (Exception exception) when (IsTransport(exception))
         {
-            Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage");
+            Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProviderRequestMessage");
         }
+        finally { item.IsBusy = false; _busy = false; }
     }
 
     private bool ConfirmDependencies(string name, IReadOnlyList<ContentInstallPlanItem> dependencies) =>
@@ -958,7 +1023,7 @@ public partial class ServerContentTab : UserControl
             HideProgress();
             if (plan is null)
             {
-                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProvidersMessage");
+                Notify(NotificationKind.Error, "Content.Error.ProvidersTitle", "Content.Error.ProviderRequestMessage");
                 return;
             }
 
@@ -1083,7 +1148,7 @@ public partial class ServerContentTab : UserControl
             "Offline" => "Content.Error.Offline",
             "RateLimited" => "Content.Error.RateLimited",
             "ProviderApiRetired" => "Content.Error.ApiRetired",
-            "ProviderUnavailable" or "ProviderSchema" => "Content.Error.ProvidersMessage",
+            "ProviderUnavailable" or "ProviderSchema" => "Content.Error.ProviderRequestMessage",
             "HashMismatch" => "Content.Error.HashMismatch",
             "InvalidJar" => "Content.Error.InvalidJar",
             "ServerBusy" => "Content.Error.ServerBusy",
