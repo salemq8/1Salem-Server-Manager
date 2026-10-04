@@ -130,7 +130,9 @@ public sealed partial class MinecraftSoftwareService(
             await processes.StartAsync(server, provider.CreateSoftwareMigrationLaunchSpec(server), cancellationToken);
             await VerifyStartupAsync(serverId, cancellationToken);
             if (!wasRunning) await StopGracefullyAsync(serverId, cancellationToken);
-            RestoreConfiguration(configs); // Keep original properties, moderation lists and config bytes.
+            // Installation never changes the existing configuration. Keep the new runtime's
+            // normal additions; snapshots are for failed-install recovery, not successful startup.
+            // In particular, a running runtime can hold server.properties open against writes.
             await File.WriteAllTextAsync(marker, JsonSerializer.Serialize(new MinecraftSoftwareSafety.InstalledSoftware(
                 request.TargetPlatform, current.Version, artifact.Build, newHash), MinecraftSoftwareSafety.Json), cancellationToken);
             await servers.UpsertAsync(server with { LastBackupAtUtc = backup.CreatedAtUtc },

@@ -352,6 +352,88 @@ public sealed class MinecraftSoftwareTests : IDisposable
         Assert.False(fixture.Runtime.Running);
     }
 
+    [Fact]
+    public async Task StartupConfigurationLock_FreshWorldSuccessRetainsRuntimeFilesAndCompletesJournal()
+    {
+        WriteJar(Path.Combine(_root, "server.jar"), "Vanilla");
+        File.WriteAllText(Path.Combine(_root, "ops.json"), "preserved-operators");
+        Directory.CreateDirectory(Path.Combine(_root, "backups"));
+        File.WriteAllText(Path.Combine(_root, "backups", "existing.zip"), "preserved-backup");
+        var fixture = Fixture();
+        using var runtime = fixture.Runtime;
+        runtime.GenerateFreshWorld = true;
+        runtime.LockStartupConfiguration = true;
+
+        var result = await fixture.Service.MigrateAsync(fixture.Server.Id, new(ServerPlatform.Purpur, "26.3", true));
+
+        Assert.True(result.Success, result.Message);
+        Assert.True(result.StartupVerified);
+        Assert.True(runtime.Running);
+        Assert.Equal(1, runtime.Starts);
+        Assert.False(MinecraftSoftwareService.HasPendingMigration(_root));
+        Assert.Equal(ServerPlatform.Purpur, MinecraftSoftwareSafety.Inspect(_root, "26.3").Platform);
+        Assert.True(File.Exists(Path.Combine(_root, ".1salem", "software.json")));
+        Assert.Contains("max-players=12", File.ReadAllText(Path.Combine(_root, "server.properties")));
+        Assert.Contains("runtime-added-setting=true", File.ReadAllText(Path.Combine(_root, "server.properties")));
+        Assert.Equal("runtime-generated-configuration", File.ReadAllText(Path.Combine(_root, "purpur.yml")));
+        Assert.Equal("preserved-operators", File.ReadAllText(Path.Combine(_root, "ops.json")));
+        Assert.Equal("preserved-backup", File.ReadAllText(Path.Combine(_root, "backups", "existing.zip")));
+        Assert.Equal("fresh-world", File.ReadAllText(Path.Combine(_root, "MyWorld", "level.dat")));
+    }
+
+    [Fact]
+    public async Task StartupConfigurationLock_FreshWorldTimeoutReturnsFailureWithoutTouchingLiveFiles()
+    {
+        WriteJar(Path.Combine(_root, "server.jar"), "Vanilla");
+        var oldJar = File.ReadAllBytes(Path.Combine(_root, "server.jar"));
+        var fixture = Fixture();
+        using var runtime = fixture.Runtime;
+        runtime.GenerateFreshWorld = true;
+        runtime.LockStartupConfiguration = true;
+        runtime.NoConsole = true;
+
+        var result = await fixture.Service.MigrateAsync(fixture.Server.Id, new(ServerPlatform.Purpur, "26.3", true));
+
+        Assert.False(result.Success);
+        Assert.Equal("FreshWorldStartupFailed", result.Code);
+        Assert.Contains("TimeoutException", result.Message);
+        Assert.False(result.StartupVerified);
+        Assert.False(result.RuntimeRolledBack);
+        Assert.True(runtime.Running);
+        Assert.Equal(1, runtime.Starts);
+        Assert.True(MinecraftSoftwareService.HasPendingMigration(_root));
+        Assert.False(File.Exists(Path.Combine(_root, ".1salem", "software.json")));
+        Assert.NotEqual(oldJar, File.ReadAllBytes(Path.Combine(_root, "server.jar")));
+        Assert.Contains("max-players=12", File.ReadAllText(Path.Combine(_root, "server.properties")));
+        Assert.Contains("runtime-added-setting=true", File.ReadAllText(Path.Combine(_root, "server.properties")));
+        Assert.Equal("runtime-generated-configuration", File.ReadAllText(Path.Combine(_root, "purpur.yml")));
+        Assert.Equal("fresh-world", File.ReadAllText(Path.Combine(_root, "MyWorld", "level.dat")));
+        Assert.Throws<InvalidOperationException>(() => new MinecraftServerProvider().CreateLaunchSpec(fixture.Server));
+    }
+
+    [Fact]
+    public async Task StartupConfigurationLock_CompatibleRunningChangePreservesRuntimeFiles()
+    {
+        var fixture = Fixture();
+        using var runtime = fixture.Runtime;
+        runtime.Running = true;
+        runtime.LockStartupConfiguration = true;
+
+        var result = await fixture.Service.MigrateAsync(fixture.Server.Id, new(ServerPlatform.Purpur, "26.3"));
+
+        Assert.True(result.Success, result.Message);
+        Assert.True(result.StartupVerified);
+        Assert.True(runtime.Running);
+        Assert.Equal(1, runtime.Starts);
+        Assert.Equal(1, fixture.Backup.Count);
+        Assert.False(MinecraftSoftwareService.HasPendingMigration(_root));
+        Assert.Equal(ServerPlatform.Purpur, MinecraftSoftwareSafety.Inspect(_root, "26.3").Platform);
+        Assert.Contains("max-players=12", File.ReadAllText(Path.Combine(_root, "server.properties")));
+        Assert.Contains("runtime-added-setting=true", File.ReadAllText(Path.Combine(_root, "server.properties")));
+        Assert.Equal("runtime-generated-configuration", File.ReadAllText(Path.Combine(_root, "purpur.yml")));
+        Assert.Equal("world-must-not-roll-back", File.ReadAllText(Path.Combine(_root, "MyWorld", "region", "r.0.0.mca")));
+    }
+
     [Theory]
     [InlineData("backups")]
     [InlineData(".1salem")]
@@ -439,13 +521,15 @@ public sealed class MinecraftSoftwareTests : IDisposable
             return Task.FromResult(path);
         }
     }
-    private sealed class FakeRuntime(string root) : IProcessSupervisor, IMinecraftConsoleChannel
+    private sealed class FakeRuntime(string root) : IProcessSupervisor, IMinecraftConsoleChannel, IDisposable
     {
         public bool Running; public bool NoConsole; public bool FailFirstStart; public bool GenerateFreshWorld; public int Starts;
+        public bool LockStartupConfiguration;
+        private FileStream? _configurationLock;
         public event EventHandler<Guid>? ServerReady { add { } remove { } }
         public MinecraftConsoleState GetState(Guid id) => !Running ? MinecraftConsoleState.NotRunning : NoConsole ? MinecraftConsoleState.NoConsole : MinecraftConsoleState.Ready;
         public Task<ConsoleExchangeResult> ExchangeAsync(Guid id, string command, Func<string, bool> isAnswer, TimeSpan timeout, CancellationToken cancellationToken = default)
-        { Assert.Equal("stop", command); Running = false; return Task.FromResult(new ConsoleExchangeResult(OperationResult.Ok(), "Stopping server", [])); }
+        { Assert.Equal("stop", command); Dispose(); Running = false; return Task.FromResult(new ConsoleExchangeResult(OperationResult.Ok(), "Stopping server", [])); }
         public Task<ProcessSnapshot> StartAsync(GameServerDefinition server, ProcessLaunchSpec launchSpec, CancellationToken cancellationToken = default)
         {
             Starts++;
@@ -455,8 +539,17 @@ public sealed class MinecraftSoftwareTests : IDisposable
                 Directory.CreateDirectory(Path.Combine(root, "MyWorld"));
                 File.WriteAllText(Path.Combine(root, "MyWorld", "level.dat"), "fresh-world");
             }
-            File.WriteAllText(Path.Combine(root, "server.properties"), "level-name=MyWorld\nmax-players=99");
-            if (!Running) File.WriteAllText(Path.Combine(root, "MyWorld", "level.dat"), "startup-world-write-preserved");
+            if (LockStartupConfiguration)
+            {
+                File.AppendAllText(Path.Combine(root, "server.properties"), "runtime-added-setting=true\n");
+                File.WriteAllText(Path.Combine(root, "purpur.yml"), "runtime-generated-configuration");
+                _configurationLock = new FileStream(Path.Combine(root, "server.properties"), FileMode.Open, FileAccess.Read, FileShare.Read);
+            }
+            if (!Running)
+            {
+                File.WriteAllText(Path.Combine(root, "server.properties"), "level-name=MyWorld\nmax-players=99");
+                File.WriteAllText(Path.Combine(root, "MyWorld", "level.dat"), "startup-world-write-preserved");
+            }
             return Task.FromResult(Snapshot(server.Id));
         }
         private ProcessSnapshot Snapshot(Guid id) => new(id, 123, Running ? ServerState.Running : ServerState.Stopped, DateTimeOffset.UtcNow, 0, 0, Running ? null : 1);
@@ -465,6 +558,7 @@ public sealed class MinecraftSoftwareTests : IDisposable
         public Task<OperationResult> StopAsync(Guid id, bool force, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Never use force-kill-capable StopAsync during migration.");
         public Task<ProcessSnapshot> RestartAsync(GameServerDefinition server, ProcessLaunchSpec launchSpec, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public void ConfigureRestartPolicy(Guid id, RestartPolicy policy) { }
+        public void Dispose() { _configurationLock?.Dispose(); _configurationLock = null; }
     }
     private sealed class MetadataHandler(string response) : HttpMessageHandler
     {

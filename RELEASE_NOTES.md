@@ -1,8 +1,17 @@
-# 1Salem Server Manager 1.5 — Build 12
+# 1Salem Server Manager 1.5 — Build 13
 
 Current release notes: [docs/RELEASE_NOTES_1.5.md](docs/RELEASE_NOTES_1.5.md).
 
-Build 12 adds server-software management with explicitly confirmed fresh-world reset for
+Build 13 fixes Minecraft software changes failing after the replacement server starts:
+the Agent no longer rewrites `server.properties` or restores configuration while the new
+runtime is using those files. A successful start can complete its migration journal;
+an actual post-start failure keeps the recovery guard and current data intact.
+
+Three focused disposable lock tests and a real Java disposable acceptance passed.
+This application update does not reset worlds, switch server software, restore deleted
+servers or overwrite existing backups.
+
+Build 12 added server-software management with explicitly confirmed fresh-world reset for
 Vanilla → Paper/Purpur, truthful plugin compatibility, independent provider status, a shared
 player counter, UUID Players dashboard and real moderation, read-only inventory, and the
 1Salem Connect self-updater. Settings and existing backups are preserved. Normal application

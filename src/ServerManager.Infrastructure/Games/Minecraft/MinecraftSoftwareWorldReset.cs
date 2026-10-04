@@ -116,7 +116,8 @@ public sealed partial class MinecraftSoftwareService
             startAttempted = true;
             await processes.StartAsync(server, launch, cancellationToken);
             await VerifyStartupAsync(server.Id, cancellationToken);
-            RestoreConfiguration(configs);
+            // Existing configuration was left in place before startup. Do not rewrite it or
+            // remove newly generated configuration while the new runtime owns those files.
             await File.WriteAllTextAsync(SafePathPolicy.ResolveWithinRoot(server.RootPath, ".1salem/software.json"),
                 JsonSerializer.Serialize(new MinecraftSoftwareSafety.InstalledSoftware(request.TargetPlatform,
                     request.MinecraftVersion, artifact.Build, newHash), MinecraftSoftwareSafety.Json), cancellationToken);
@@ -130,8 +131,8 @@ public sealed partial class MinecraftSoftwareService
             if (startAttempted)
             {
                 // A new runtime may already have written fresh world data. Never reverse its
-                // runtime or roll back those worlds automatically after a startup failure.
-                RestoreConfiguration(configs);
+                // runtime or roll back those worlds/configuration automatically after a
+                // startup failure. It may still be alive and holding configuration locks.
                 await servers.SetStateWithErrorAsync(server.Id, ServerState.Error,
                     "Fresh-world software startup failed; manual attention required. No world or runtime rollback was attempted.", CancellationToken.None);
                 return Fail("FreshWorldStartupFailed", $"New software startup failed ({ex.GetType().Name}). No automatic world/runtime rollback or retry was performed. Existing backups remain intact.");

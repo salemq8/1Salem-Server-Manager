@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5 — Build 13
+
+- Fixed software migration trying to restore `server.properties` after Minecraft had started
+  and locked it. Successful migrations now finish without rewriting the running server's
+  configuration or leaving a false pending journal that blocks later starts.
+- Post-start migration failures no longer repeat the unsafe configuration write. The pending
+  recovery guard remains; current world data is not automatically reset or rolled back.
+- Added three focused disposable tests covering fresh-world success, post-start failure and
+  compatible software changes with locked configuration. Real Java disposable acceptance passed.
+- Normal application updates preserve server files and existing backups; this fix does not
+  restore deleted servers or automatically switch game-server software.
+
 ## 1.5 — Build 12
 
 - Server Software detects the active runtime and checks exact-version official downloads.

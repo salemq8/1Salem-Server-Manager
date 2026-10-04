@@ -1,4 +1,17 @@
-# 1Salem Server Manager 1.5 — Build 12
+# 1Salem Server Manager 1.5 — Build 13
+
+## Fixed in Build 13
+
+- Changing Minecraft server software no longer rewrites `server.properties` or restores
+  configuration after the replacement runtime starts using those files. This fixes a Build 12
+  failure where Purpur started successfully but a locked-file exception left migration pending
+  and blocked later starts.
+- A genuine post-start migration failure keeps the recovery guard and current data intact,
+  without repeating the configuration write or automatically rolling back world data.
+- Three focused disposable lock tests and a real Java disposable acceptance passed.
+
+The normal application update does not reset worlds, switch game-server software, restore
+deleted servers or overwrite existing backups.
 
 ## New in Build 12
 
