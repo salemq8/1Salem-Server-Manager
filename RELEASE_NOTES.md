@@ -1,8 +1,19 @@
-# 1Salem Server Manager 1.5 — Build 13
+# 1Salem Server Manager 1.5 — Build 14
 
 Current release notes: [docs/RELEASE_NOTES_1.5.md](docs/RELEASE_NOTES_1.5.md).
 
-Build 13 fixes Minecraft software changes failing after the replacement server starts:
+Build 14 fixes Gameplay gamerules on Minecraft 26.3 (Vanilla, Paper and Purpur). Keep
+Inventory and the other rules no longer fail with "The server did not answer in time" or show
+"Not known until the world exists": the Agent reads 26.3's `System chat: Game rule …` answers,
+applies the real `minecraft:keep_inventory` rule, reads it back and reports success only when the
+server confirms it. Saved values come from 26.3's overworld `game_rules.dat`, and an unknown rule
+is never shown or sent as Off. The same answer fix restores the live player list.
+
+A server already running when this update restarts the Agent keeps running; gamerule changes made
+before you next start it from 1Salem are saved and applied, then verified, at that start.
+This update does not restart servers, reset worlds or change gameplay values.
+
+Build 13 fixed Minecraft software changes failing after the replacement server starts:
 the Agent no longer rewrites `server.properties` or restores configuration while the new
 runtime is using those files. A successful start can complete its migration journal;
 an actual post-start failure keeps the recovery guard and current data intact.

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5 — Build 14
+
+- Fixed Gameplay gamerules on Minecraft 26.3: console answers carry a `System chat: ` marker and
+  read `Game rule <name> is currently/now/already set to <value>`, so every rule timed out.
+  Keep Inventory now applies `minecraft:keep_inventory`, reads it back and reports success only
+  when confirmed.
+- Saved rules are read from 26.3's `dimensions/minecraft/overworld/data/minecraft/game_rules.dat`
+  (then `data/minecraft/game_rules.dat`, then `level.dat`), so rules are no longer "Not known".
+- An error's echoed rule name must match as a whole word (`do_immediate_respawn` is not
+  `immediate_respawn`). A click on an unknown rule asks for On, never a silent Off.
+- The live `list` poll and other console answers parse on 26.3 again instead of holding the
+  console until their timeout.
+
 ## 1.5 — Build 13
 
 - Fixed software migration trying to restore `server.properties` after Minecraft had started

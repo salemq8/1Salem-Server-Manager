@@ -1,4 +1,25 @@
-# 1Salem Server Manager 1.5 — Build 13
+# 1Salem Server Manager 1.5 — Build 14
+
+## Fixed in Build 14
+
+- **Gameplay gamerules on Minecraft 26.3.** Minecraft 26.3 (Vanilla, Paper and Purpur) answers
+  console commands as `System chat: Game rule keep_inventory is currently set to false`. The
+  Agent expected the older `Gamerule keepInventory is currently set to: false`, so Keep Inventory
+  failed with "The server did not answer in time" and other rules timed out. Both wordings are
+  now read; Keep Inventory applies the real `minecraft:keep_inventory` rule, reads it back and
+  shows success only when the server confirms the new value (or that it already had it).
+- **Saved values.** 26.3 keeps a world's rules in
+  `world/dimensions/minecraft/overworld/data/minecraft/game_rules.dat`. They are now read from
+  there (read-only), so a stopped or re-adopted server shows its real saved rules instead of
+  "Not known until the world exists".
+- **Unknown is never Off.** A rule whose value is not known stays shown as unknown; clicking it
+  asks for On rather than silently sending Off.
+- The same answer fix lets the live player list, player actions and difficulty/whitelist
+  commands read 26.3's answers again.
+
+A server already running when this update restarts the Agent keeps running without a console;
+gamerule changes made meanwhile are saved and applied, then verified, the next time 1Salem starts
+it. The update does not restart servers, reset worlds or change gameplay values.
 
 ## Fixed in Build 13
 
