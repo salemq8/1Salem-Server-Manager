@@ -44,6 +44,24 @@ public sealed record ConnectFriendViewModel(
 /// </summary>
 public static class ConnectPresentation
 {
+    /// <summary>
+    /// "The last Connect check did not finish." with what actually went wrong: the Agent's own
+    /// reason, a timeout, or the 1Salem service not answering (for example while it restarts).
+    /// </summary>
+    public static string CheckFailed(Exception exception)
+    {
+        var detail = exception switch
+        {
+            Transport.ConnectOwnerClientException clientError when !string.IsNullOrWhiteSpace(clientError.Message) => clientError.Message,
+            TaskCanceledException or TimeoutException => LocalizationService.Get("Connect.Check.TimedOut"),
+            System.Net.Http.HttpRequestException => LocalizationService.Get("Connect.Check.ServiceUnreachable"),
+            _ => null
+        };
+        return detail is null
+            ? LocalizationService.Get("Connect.State.ErrorDetail")
+            : LocalizationService.Format("Connect.State.ErrorDetailWith", detail);
+    }
+
     public static ConnectSetupViewModel Setup(ConnectStatusResponse? status)
     {
         if (status is null)

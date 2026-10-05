@@ -10,7 +10,8 @@ namespace ServerManager.Infrastructure.Processes;
 public sealed class ProcessSupervisor(
     ILogger<ProcessSupervisor> logger,
     IAuditLogStore auditLogStore,
-    IProcessTreeDiscovery? processTreeDiscovery = null) :
+    IProcessTreeDiscovery? processTreeDiscovery = null,
+    Func<int, CancellationToken, Task<bool>>? consoleInterrupt = null) :
     IProcessSupervisor,
     IProcessResourceController,
     IConsoleService,
@@ -19,12 +20,23 @@ public sealed class ProcessSupervisor(
     IDisposable
 {
     private const string NoConsoleMessage =
-        "This server was started before the Agent last restarted, so its console is not connected. " +
-        "Restart the server from 1Salem to use console commands and live controls.";
+        "This server was started before the Agent last restarted, so 1Salem cannot send it console commands. " +
+        "Stop or Restart it from 1Salem: it saves its world and stops safely, and live controls return when 1Salem starts it again.";
+
+    private const string AdoptedStopUnavailableMessage =
+        "1Salem could not ask this server to save and stop: it was started before the Agent last restarted and its console " +
+        "could not be reached. It is still running and nothing was forced. Stop it in the game with /stop, then start it from 1Salem.";
+
+    private const string AdoptedStopTimedOutMessage =
+        "The server was asked to save and stop but is still running after 2 minutes, so it was left running and nothing was forced. " +
+        "Try again, or stop it in the game with /stop.";
 
     private readonly IProcessTreeDiscovery _processTreeDiscovery =
         processTreeDiscovery ?? new WindowsProcessTreeDiscovery();
+    private readonly Func<int, CancellationToken, Task<bool>> _consoleInterrupt = consoleInterrupt ??
+        ((processId, cancellationToken) => ConsoleInterrupt.RequestAsync(processId, Environment.ProcessPath!, [], cancellationToken));
     private static readonly TimeSpan GracefulStopTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan AdoptedStopTimeout = TimeSpan.FromMinutes(2);
     private readonly ConcurrentDictionary<Guid, ManagedProcess> _processes = new();
     private readonly ConcurrentDictionary<Guid, ProcessLogBuffer> _logs = new();
     private readonly ConcurrentDictionary<Guid, RestartPolicy> _restartPolicies = new();
@@ -224,6 +236,25 @@ public sealed class ProcessSupervisor(
             {
                 managed.Process.Kill(true);
             }
+            else if (managed.Server.Game == GameType.Minecraft && managed.Spec.RedirectStandardInput && !managed.HasConsole)
+            {
+                // Re-adopted after the Agent restarted: no console pipe to type "stop" into, so
+                // Ctrl+C in its own console runs Minecraft's shutdown hook (save, then exit). It is
+                // never killed: a server that does not exit keeps running and is reported as such.
+                if (!await _consoleInterrupt(managed.Process.Id, cancellationToken))
+                {
+                    throw new InvalidOperationException(AdoptedStopUnavailableMessage);
+                }
+
+                var completed = await Task.WhenAny(
+                    managed.ExitCompletion.Task,
+                    Task.Delay(AdoptedStopTimeout, CancellationToken.None));
+                cancellationToken.ThrowIfCancellationRequested();
+                if (completed != managed.ExitCompletion.Task && !managed.Process.HasExited)
+                {
+                    throw new InvalidOperationException(AdoptedStopTimedOutMessage);
+                }
+            }
             else
             {
                 await RequestGracefulStopAsync(managed, cancellationToken);
@@ -253,6 +284,13 @@ public sealed class ProcessSupervisor(
         catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             logger.LogError(exception, "Failed to stop server {ServerId}.", serverId);
+            if (!managed.Process.HasExited)
+            {
+                // Still running: it is not stopping, and an exit later is not one 1Salem asked for.
+                managed.ExpectedExit = false;
+                managed.SetState(ServerState.Running);
+            }
+
             await auditLogStore.WriteAsync(
                 "Agent",
                 "ProcessStopFailed",

@@ -160,6 +160,12 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Margin="0,0,8,8"
                                     Click="ConnectFriends_Click" />
+                            <Button x:Name="ConnectRetryButton"
+                                    AutomationProperties.AutomationId="ConnectRetry"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Margin="0,0,8,8"
+                                    Visibility="Collapsed"
+                                    Click="ConnectRetry_Click" />
                         </WrapPanel>
                     </StackPanel>
                 </Border>

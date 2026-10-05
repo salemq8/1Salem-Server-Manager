@@ -222,7 +222,7 @@ public sealed class DashboardSnapshotService(
                 return null;
             }
 
-            foreach (var line in File.ReadLines(propertiesPath))
+            foreach (var line in MinecraftPropertiesSerializer.ReadFile(propertiesPath).Split('\n', StringSplitOptions.TrimEntries))
             {
                 if (line.StartsWith("max-players=", StringComparison.OrdinalIgnoreCase) &&
                     int.TryParse(line["max-players=".Length..], out var maximum))

@@ -16,7 +16,7 @@ public static class MinecraftSoftwareSafety
     public static string LevelName(string root)
     {
         var file = SafePathPolicy.ResolveWithinRoot(root, "server.properties");
-        var properties = MinecraftPropertiesSerializer.Parse(File.Exists(file) ? File.ReadAllText(file) : "");
+        var properties = MinecraftPropertiesSerializer.Parse(File.Exists(file) ? MinecraftPropertiesSerializer.ReadFile(file) : "");
         var name = properties.GetValueOrDefault("level-name") ?? "world";
         // Fail closed for Java-properties escapes, absolute paths, aliases, or traversal.
         if (string.IsNullOrWhiteSpace(name) || name.Contains('\\') || name.Contains('/') ||

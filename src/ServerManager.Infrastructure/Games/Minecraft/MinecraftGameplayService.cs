@@ -657,7 +657,7 @@ public sealed class MinecraftGameplayService : IDisposable
         try
         {
             return File.Exists(path)
-                ? MinecraftPropertiesSerializer.Parse(File.ReadAllText(path))
+                ? MinecraftPropertiesSerializer.Parse(MinecraftPropertiesSerializer.ReadFile(path))
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

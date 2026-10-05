@@ -22,6 +22,12 @@ using ServerManager.Infrastructure.Content;
 using ServerManager.Infrastructure.Connect;
 using ServerManager.Connect.Core.Pipes;
 
+// Helper mode: raises Ctrl+C in a re-adopted server's own console so it saves and stops (see ConsoleInterrupt).
+if (args is [ConsoleInterrupt.HelperArgument, var interruptTarget])
+{
+    Environment.Exit(ConsoleInterrupt.RunHelper(interruptTarget));
+}
+
 var agentOptions = AgentOptions.Parse(args);
 var connectAcceptance = agentOptions.ConnectAcceptance;
 var storageOptions = new SqliteStorageOptions(agentOptions.DataRoot);

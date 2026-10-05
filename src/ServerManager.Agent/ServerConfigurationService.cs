@@ -699,7 +699,7 @@ public sealed partial class ServerConfigurationService(
     {
         var path = Path.Combine(rootPath, "server.properties");
         return File.Exists(path)
-            ? MinecraftPropertiesSerializer.Parse(File.ReadAllText(path))
+            ? MinecraftPropertiesSerializer.Parse(MinecraftPropertiesSerializer.ReadFile(path))
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 

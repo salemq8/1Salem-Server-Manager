@@ -251,7 +251,13 @@ public partial class ServerSettingsTab : UserControl
             ? LocalizationService.Format("ServerSettings.ConnectFriendsPending", _connectView.PendingCount)
             : LocalizationService.Get("ServerSettings.ConnectFriends");
         ConnectFriendsButton.IsEnabled = !_connectLoading && _connectView.CanManageFriends;
+        ConnectRetryButton.Content = LocalizationService.Get("ServerSettings.ConnectRetry");
+        ConnectRetryButton.Visibility = _connectError is null ? Visibility.Collapsed : Visibility.Visible;
+        ConnectRetryButton.IsEnabled = !_connectLoading;
     }
+
+    /// <summary>Runs this server's check again now. It only reads: it never restarts Connect or drops a friend.</summary>
+    private async void ConnectRetry_Click(object sender, RoutedEventArgs e) => await LoadConnectAsync();
 
     /// <summary>Poll only while this tab's Network group is actually on screen.</summary>
     private void UpdateConnectPolling()
@@ -283,14 +289,16 @@ public partial class ServerSettingsTab : UserControl
 
         _connectLoading = true;
         var request = _connectRequests.Capture(_context.ServerId);
-        _connectError = null;
         RenderConnectCard();
         try
         {
             var status = await _connectClient.GetServerAsync(request.ServerId);
             if (_connectRequests.IsCurrent(request) && (status is null || status.ServerId == request.ServerId))
             {
+                // A failed check stays on screen (with Retry check) until one succeeds; every
+                // automatic re-check every few seconds clears it as soon as one does.
                 _connectStatus = status;
+                _connectError = null;
             }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
@@ -298,7 +306,7 @@ public partial class ServerSettingsTab : UserControl
             if (_connectRequests.IsCurrent(request))
             {
                 _connectStatus = null;
-                _connectError = LocalizationService.Get("Connect.State.ErrorDetail");
+                _connectError = ConnectPresentation.CheckFailed(exception);
             }
         }
         finally
@@ -361,7 +369,7 @@ public partial class ServerSettingsTab : UserControl
         {
             if (_connectRequests.IsCurrent(request))
             {
-                _connectError = LocalizationService.Get("Connect.State.ErrorDetail");
+                _connectError = ConnectPresentation.CheckFailed(exception);
             }
         }
         finally

@@ -33,6 +33,17 @@ public static class MinecraftPropertiesSerializer
             ],
             StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Reads server.properties while Minecraft may have it open: Paper and Purpur 26.x keep it open
+    /// for writing while they run, so File.ReadAllText (which refuses other writers) fails. Only reads.
+    /// </summary>
+    public static string ReadFile(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
+
     private static readonly HashSet<string> Difficulties =
         new(StringComparer.OrdinalIgnoreCase) { "peaceful", "easy", "normal", "hard" };
 

@@ -31,7 +31,7 @@ public static class ServerWorldLocator
         string content;
         try
         {
-            content = File.ReadAllText(propertiesPath);
+            content = MinecraftPropertiesSerializer.ReadFile(propertiesPath);
         }
         catch (IOException)
         {
@@ -135,7 +135,7 @@ public static class ServerWorldLocator
 
         try
         {
-            var values = MinecraftPropertiesSerializer.Parse(File.ReadAllText(path));
+            var values = MinecraftPropertiesSerializer.Parse(MinecraftPropertiesSerializer.ReadFile(path));
             values.TryGetValue("resource-pack", out var url);
             values.TryGetValue("resource-pack-sha1", out var sha1);
             values.TryGetValue("require-resource-pack", out var require);

@@ -122,6 +122,78 @@ public sealed class ConnectHostWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task Eligibility_ReadsServerPropertiesWhileMinecraftHoldsItOpenForWriting()
+    {
+        // Paper/Purpur 26.x keep server.properties open for writing while they run; every server
+        // check then failed with "being used by another process" ("The last Connect check did not finish").
+        var serverRoot = Path.Combine(_root, "running");
+        Directory.CreateDirectory(serverRoot);
+        var path = Path.Combine(serverRoot, "server.properties");
+        await File.WriteAllTextAsync(path, "prevent-proxy-connections=true\nserver-ip=\n");
+        var server = Definition(Guid.NewGuid(), GameType.Minecraft, serverRoot, 25565);
+        await using var host = CreateHost(new MemoryServerStore(server), new RefusingRuntimeFactory());
+        var workflow = new ConnectOwnerWorkflow(host, TimeProvider.System);
+        using var minecraft = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+
+        var result = await workflow.GetServerAsync(server.Id, CancellationToken.None);
+
+        Assert.Equal(server.Id, result.ServerId);
+        Assert.Contains(ConnectEligibilityIssue.PreventProxyConnections, result.Issues);
+        Assert.DoesNotContain(ConnectEligibilityIssue.NonLoopbackServerIp, result.Issues);
+    }
+
+    [Fact]
+    public async Task Start_WhenTheBrokerIsNotReachableYet_RecoversOnItsOwn()
+    {
+        // Right after Windows starts, the Agent can start before the network answers. Connect must
+        // not stay in Error until someone presses Check.
+        using var keys = new ConnectTestBroker();
+        var factory = new ReadyRuntimeFactory(keys.KeySet) { RegisterFailures = 2 };
+        new ConnectOAuthCredentialStore(new ConnectOwnerPaths(_root)).Save(
+            new TailscaleOAuthCredential("client-test", "tskey-client-test-secret"));
+        await using var host = new ConnectHost(
+            new ConnectHostOptions(_root, Path.Combine(_root, "transport.exe"), new Uri("https://connect.example/"), [5251])
+            {
+                StartRetryDelays = [TimeSpan.FromMilliseconds(50)]
+            },
+            new MemoryServerStore(), TimeProvider.System, factory, NullLogger<ConnectHost>.Instance);
+
+        await host.StartAsync(CancellationToken.None);
+        Assert.Equal(ConnectSetupState.Error, host.Status.State);
+        Assert.Equal(ConnectErrorCodes.BrokerUnavailable, host.Status.ErrorCode);
+
+        for (var wait = 0; wait < 200 && host.Status.State != ConnectSetupState.Ready; wait++)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.Equal(ConnectSetupState.Ready, host.Status.State);
+        Assert.Equal(3, factory.BrokersCreated);
+        Assert.True(factory.Supervisor.Started);
+    }
+
+    [Fact]
+    public async Task Start_WithAnInvalidCredential_IsNotRetried()
+    {
+        var paths = new ConnectOwnerPaths(_root);
+        paths.EnsureDirectories();
+        await File.WriteAllTextAsync(paths.OAuthCredentialFile, "not a protected credential");
+        var factory = new RefusingRuntimeFactory();
+        await using var host = new ConnectHost(
+            new ConnectHostOptions(_root, Path.Combine(_root, "transport.exe"), new Uri("https://connect.example/"), [5251])
+            {
+                StartRetryDelays = [TimeSpan.FromMilliseconds(20)]
+            },
+            new MemoryServerStore(), TimeProvider.System, factory, NullLogger<ConnectHost>.Instance);
+
+        await host.StartAsync(CancellationToken.None);
+        await Task.Delay(200);
+
+        Assert.Equal(ConnectErrorCodes.CredentialInvalid, host.Status.ErrorCode);
+        Assert.Equal(0, factory.CreateCalls);
+    }
+
+    [Fact]
     public async Task Eligibility_DetectsAgentSharedAndUnsupportedPorts()
     {
         var rootA = Path.Combine(_root, "a");
@@ -276,7 +348,17 @@ public sealed class ConnectHostWorkflowTests : IDisposable
         public FakeBroker? Broker { get; private set; }
         public ConnectHostAuthorizationOptions? AuthorizationOptions { get; private set; }
         public ConnectHostTransportOptions? TransportOptions { get; private set; }
-        public IConnectOwnerBrokerClient CreateBroker(ConnectIdentity identity) => Broker = new FakeBroker(identity.KeyId, _keySet, readMemberships);
+
+        /// <summary>How many starts find the broker unreachable before it answers.</summary>
+        public int RegisterFailures { get; set; }
+
+        public int BrokersCreated { get; private set; }
+
+        public IConnectOwnerBrokerClient CreateBroker(ConnectIdentity identity)
+        {
+            BrokersCreated++;
+            return Broker = new FakeBroker(identity.KeyId, _keySet, readMemberships, failRegister: RegisterFailures-- > 0);
+        }
         public IConnectProvisioner CreateProvisioner(TailscaleOAuthCredential credential) => Provisioner;
         public IConnectHostAuthorizationServer CreateAuthorizationServer(ConnectHostAuthorizationOptions options, ConnectServerCatalog catalog)
         { AuthorizationOptions = options; return Authorization; }
@@ -288,12 +370,17 @@ public sealed class ConnectHostWorkflowTests : IDisposable
     private sealed class FakeBroker(
         string ownerId,
         TicketKeySet keySet,
-        Func<CancellationToken, Task<IReadOnlyList<ConnectBrokerMembership>>>? readMemberships = null) : IConnectOwnerBrokerClient
+        Func<CancellationToken, Task<IReadOnlyList<ConnectBrokerMembership>>>? readMemberships = null,
+        bool failRegister = false) : IConnectOwnerBrokerClient
     {
         public const string InviteSecret = "invite-secret-test-only";
         public IReadOnlyList<ConnectBrokerMembership> Memberships { get; set; } = [];
         public bool FailEnrollmentUpload { get; set; }
-        public Task<string> RegisterOwnerAsync(CancellationToken cancellationToken) => Task.FromResult(ownerId);
+        public Task<string> RegisterOwnerAsync(CancellationToken cancellationToken) =>
+            failRegister
+                ? Task.FromException<string>(new ConnectOwnerBrokerException(
+                    ConnectOwnerBrokerFailure.Unavailable, null, "register owner: the broker could not be reached."))
+                : Task.FromResult(ownerId);
         public Task<byte[]> GetTicketKeysAsync(CancellationToken cancellationToken) => Task.FromResult(Encoding.UTF8.GetBytes(keySet.ToJson()));
         public Task<ConnectBrokerRevocationPage> GetRevocationsAsync(long after, CancellationToken cancellationToken) =>
             Task.FromResult(new ConnectBrokerRevocationPage([], after, false));

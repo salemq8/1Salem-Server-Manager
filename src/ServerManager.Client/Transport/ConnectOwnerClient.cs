@@ -33,12 +33,30 @@ public sealed class ConnectOwnerClient : IDisposable
     public Task TurnOffAsync(CancellationToken cancellationToken = default) =>
         SendAsync<OperationResult>(HttpMethod.Delete, "/api/v1/connect/credential", null, cancellationToken);
 
-    public Task<ServerConnectResponse?> GetServerAsync(
+    /// <summary>A server's Connect state; a failed check throws with the Agent's own reason.</summary>
+    public async Task<ServerConnectResponse?> GetServerAsync(
         Guid serverId,
-        CancellationToken cancellationToken = default) =>
-        _httpClient.GetFromJsonAsync<ServerConnectResponse>(
-            $"/api/v1/servers/{serverId}/connect",
-            cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await _httpClient.GetAsync($"/api/v1/servers/{serverId}/connect", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            ApiErrorResponse? error = null;
+            try
+            {
+                error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>(cancellationToken);
+            }
+            catch (Exception exception) when (exception is System.Text.Json.JsonException or NotSupportedException)
+            {
+            }
+
+            throw new ConnectOwnerClientException(
+                error?.Code,
+                error?.WhatFailed ?? $"The local 1Salem service answered {(int)response.StatusCode}.");
+        }
+
+        return await response.Content.ReadFromJsonAsync<ServerConnectResponse>(cancellationToken);
+    }
 
     public Task EnableAsync(Guid serverId, CancellationToken cancellationToken = default) =>
         SendAsync<OperationResult>(HttpMethod.Post, $"/api/v1/servers/{serverId}/connect/enable", null, cancellationToken);

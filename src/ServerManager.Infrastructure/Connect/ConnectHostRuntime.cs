@@ -51,6 +51,13 @@ public sealed class ConnectHostOptions
     public TimeSpan ReconcileInterval { get; init; } = TimeSpan.FromSeconds(15);
     public TimeSpan ControlStartupTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>Waits before retrying a start the broker or tailnet could not answer yet; the last repeats.</summary>
+    public IReadOnlyList<TimeSpan> StartRetryDelays { get; init; } =
+    [
+        TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(40),
+        TimeSpan.FromSeconds(80), TimeSpan.FromSeconds(160), TimeSpan.FromMinutes(5)
+    ];
+
     private static string ValidatePipeName(string value) =>
         value is { Length: > 0 and <= 200 } &&
         value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')

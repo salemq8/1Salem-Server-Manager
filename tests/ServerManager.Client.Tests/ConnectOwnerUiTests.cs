@@ -50,8 +50,27 @@ public sealed class ConnectOwnerUiTests
         "Connect.Friends.Revoke",
         "Connect.Revoke.Broker",
         "Connect.Revoke.ThisPc",
-        "Connect.Revoke.Tailnet"
+        "Connect.Revoke.Tailnet",
+        "Connect.State.ErrorDetailWith",
+        "Connect.Check.TimedOut",
+        "Connect.Check.ServiceUnreachable",
+        "ServerSettings.ConnectRetry"
     ];
+
+    [Fact]
+    public void FailedServerCheck_SaysWhatWentWrong()
+    {
+        WithCulture("en-US", () =>
+        {
+            Assert.Equal(
+                "The last Connect check did not finish: The process cannot access the file.",
+                ConnectPresentation.CheckFailed(new ServerManager.Client.Transport.ConnectOwnerClientException(
+                    "FileOrPortConflict", "The process cannot access the file.")));
+            Assert.Contains("not answering", ConnectPresentation.CheckFailed(new System.Net.Http.HttpRequestException("refused")), StringComparison.Ordinal);
+            Assert.Contains("30 seconds", ConnectPresentation.CheckFailed(new TaskCanceledException()), StringComparison.Ordinal);
+            Assert.Equal("The last Connect check did not finish.", ConnectPresentation.CheckFailed(new InvalidOperationException("x")));
+        });
+    }
 
     [Theory]
     [InlineData("en-US")]

@@ -269,7 +269,7 @@ public sealed class ConnectOwnerWorkflow(ConnectHost host, TimeProvider clock)
             var path = Path.Combine(server.RootPath, "server.properties");
             if (File.Exists(path))
             {
-                var properties = MinecraftPropertiesSerializer.Parse(await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false));
+                var properties = MinecraftPropertiesSerializer.Parse(MinecraftPropertiesSerializer.ReadFile(path));
                 if (properties.TryGetValue("prevent-proxy-connections", out var prevent) &&
                     bool.TryParse(prevent, out var blocked) && blocked)
                 {

@@ -46,6 +46,9 @@ public sealed class ConnectHost : IAsyncDisposable
     private CancellationTokenSource? _runtimeStopping;
     private Task? _reconcileLoop;
     private int _started;
+    private int _startRetries;
+    private int _startRetryGeneration;
+    private readonly CancellationTokenSource _lifetime = new();
     private ConnectStatusResponse _status = EmptyStatus();
 
     public ConnectHost(
@@ -155,8 +158,10 @@ public sealed class ConnectHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _lifetime.Cancel();
         await StopAsync().ConfigureAwait(false);
         _operations.Dispose();
+        _lifetime.Dispose();
     }
 
     internal Task SaveStateAsync(CancellationToken cancellationToken) =>
@@ -275,6 +280,7 @@ public sealed class ConnectHost : IAsyncDisposable
             var runtimeToken = runtimeStopping.Token;
             _runtimeStopping = runtimeStopping;
             _reconcileLoop = Task.Run(() => ReconcileLoopAsync(runtimeToken), CancellationToken.None);
+            _startRetries = 0;
         }
         catch (ConnectPolicyNotPermittedException exception)
         {
@@ -295,9 +301,54 @@ public sealed class ConnectHost : IAsyncDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            Fail(MapError(exception), exception);
+            var code = MapError(exception);
+            Fail(code, exception);
             await DisposeRuntimeAsync().ConfigureAwait(false);
+            ScheduleStartRetry(code);
         }
+    }
+
+    /// <summary>
+    /// A start the broker or tailnet could not answer yet (Windows still bringing the network up
+    /// after a restart, a short outage, the previous transport still releasing its pipe) is retried
+    /// with backoff, so Connect recovers on its own instead of waiting for someone to press Check.
+    /// A credential, policy or Tailnet Lock problem needs the owner and is never retried.
+    /// </summary>
+    private void ScheduleStartRetry(string code)
+    {
+        var delays = _options.StartRetryDelays;
+        if (code is not (ConnectErrorCodes.BrokerUnavailable or ConnectErrorCodes.TailnetUnavailable or
+                ConnectErrorCodes.NotReady or ConnectErrorCodes.Busy) ||
+            delays.Count == 0 || _lifetime.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var delay = delays[Math.Min(_startRetries++, delays.Count - 1)];
+        var generation = Interlocked.Increment(ref _startRetryGeneration);
+        var lifetime = _lifetime.Token;
+        _logger.LogInformation("1Salem Connect host will retry starting in {Delay}.", delay);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay, lifetime).ConfigureAwait(false);
+                // Only the latest retry runs, and not once Connect was stopped or started meanwhile.
+                if (generation == Volatile.Read(ref _startRetryGeneration) &&
+                    Volatile.Read(ref _started) == 1 &&
+                    Status.State == ConnectSetupState.Error)
+                {
+                    await RestartAsync(static () => { }, lifetime).ConfigureAwait(false);
+                }
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException && lifetime.IsCancellationRequested)
+            {
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning("1Salem Connect host start retry failed: {Error}", exception.Message);
+            }
+        }, CancellationToken.None);
     }
 
     private async Task<TicketKeySet> LoadTicketKeysAsync(CancellationToken cancellationToken)
