@@ -6,21 +6,24 @@ using System.Text;
 namespace ServerManager.Infrastructure.Games.Minecraft;
 
 /// <summary>
-/// Reads the gamerules a world has saved (gzip-compressed NBT). Minecraft 26.x keeps them in
-/// data/minecraft/game_rules.dat (root -> "data", named "minecraft:keep_inventory" and so on);
-/// older versions keep them in level.dat (root -> "Data" -> "GameRules"). This is how the Gameplay
-/// page shows real values while the server is not answering. It only ever reads: files are opened
-/// shared and never written.
+/// Reads the gamerules a world has saved (gzip-compressed NBT). Minecraft 26.x keeps them in a
+/// game_rules.dat (root -> "data", named "minecraft:keep_inventory" and so on) in the overworld's
+/// data folder, dimensions/minecraft/overworld/data/minecraft (Paper and Purpur give each
+/// dimension its own copy; the console's gamerule command uses the overworld's), or in the world's
+/// data/minecraft; older versions keep them in level.dat (root -> "Data" -> "GameRules"). This is
+/// how the Gameplay page shows real values while the server is not answering. It only ever reads:
+/// files are opened shared and never written.
 /// </summary>
 public static class LevelDatGameRules
 {
     private const int MaximumDepth = 64;
 
-    /// <summary>The saved gamerules of the world folder, from whichever file its version uses; null when neither is readable.</summary>
+    /// <summary>The saved gamerules of the world folder, from whichever file its version uses; null when none is readable.</summary>
     public static IReadOnlyDictionary<string, string>? ReadWorld(string worldDirectory)
     {
-        var registry = Path.Combine(worldDirectory, "data", "minecraft", "game_rules.dat");
-        return ReadCompound(registry, "data") ?? Read(Path.Combine(worldDirectory, "level.dat"));
+        var overworld = Path.Combine(worldDirectory, "dimensions", "minecraft", "overworld", "data", "minecraft", "game_rules.dat");
+        var world = Path.Combine(worldDirectory, "data", "minecraft", "game_rules.dat");
+        return ReadCompound(overworld, "data") ?? ReadCompound(world, "data") ?? Read(Path.Combine(worldDirectory, "level.dat"));
     }
 
     /// <summary>The gamerules in a level.dat, by the name the world uses, or null when there are none to read.</summary>

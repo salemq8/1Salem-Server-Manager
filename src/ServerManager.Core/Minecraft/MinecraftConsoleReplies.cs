@@ -19,7 +19,11 @@ public enum MinecraftPlayerReply
 /// </summary>
 public static partial class MinecraftConsoleReplies
 {
-    /// <summary>The message part of a console line.</summary>
+    // Minecraft 26.x (Vanilla, Paper and Purpur) writes every answer to the console as
+    // "System chat: There are 0 of a max of 20 players online: ".
+    private const string SystemChatMarker = "System chat: ";
+
+    /// <summary>The message part of a console line, without 26.x's "System chat: " marker.</summary>
     public static string Message(string? line)
     {
         if (string.IsNullOrEmpty(line))
@@ -28,7 +32,10 @@ public static partial class MinecraftConsoleReplies
         }
 
         var index = line.IndexOf("]: ", StringComparison.Ordinal);
-        return (index >= 0 ? line[(index + 3)..] : line).Trim();
+        var message = (index >= 0 ? line[(index + 3)..] : line).Trim();
+        return message.StartsWith(SystemChatMarker, StringComparison.Ordinal)
+            ? message[SystemChatMarker.Length..].TrimStart()
+            : message;
     }
 
     /// <summary>"Done (12.3s)! For help, type "help"": the server is ready for commands.</summary>
@@ -39,11 +46,17 @@ public static partial class MinecraftConsoleReplies
                message.Contains("For help", StringComparison.Ordinal);
     }
 
-    /// <summary>"Gamerule keepInventory is currently set to: false".</summary>
+    /// <summary>
+    /// "Gamerule keepInventory is currently set to: false", or in 26.x
+    /// "Game rule keep_inventory is currently set to false".
+    /// </summary>
     public static bool TryParseGameRuleQuery(string? line, out string name, out string value) =>
         TryMatch(GameRuleQueryRegex(), line, out name, out value);
 
-    /// <summary>"Gamerule keepInventory is now set to: true".</summary>
+    /// <summary>
+    /// "Gamerule keepInventory is now set to: true", or in 26.x "Game rule keep_inventory is now
+    /// set to true" (and "is already set to true" when it already had that value).
+    /// </summary>
     public static bool TryParseGameRuleSet(string? line, out string name, out string value) =>
         TryMatch(GameRuleSetRegex(), line, out name, out value);
 
@@ -64,8 +77,29 @@ public static partial class MinecraftConsoleReplies
             return string.Equals(WithoutNamespace(answered), WithoutNamespace(name), StringComparison.Ordinal);
         }
 
-        return IsCommandError(line) && Message(line).Contains(WithoutNamespace(name), StringComparison.Ordinal);
+        return IsCommandError(line) && NamesRule(Message(line), WithoutNamespace(name));
     }
+
+    // The rule's name as a whole word: "gamerule minecraft:do_immediate_respawn<--[HERE]" names
+    // do_immediate_respawn, never 26.x's immediate_respawn.
+    private static bool NamesRule(string message, string name)
+    {
+        for (var index = message.IndexOf(name, StringComparison.Ordinal);
+             index >= 0;
+             index = message.IndexOf(name, index + 1, StringComparison.Ordinal))
+        {
+            var end = index + name.Length;
+            if ((index == 0 || !IsNameCharacter(message[index - 1])) &&
+                (end == message.Length || !IsNameCharacter(message[end])))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsNameCharacter(char character) => char.IsAsciiLetterOrDigit(character) || character == '_';
 
     private static string WithoutNamespace(string name) =>
         name.StartsWith("minecraft:", StringComparison.Ordinal) ? name["minecraft:".Length..] : name;
@@ -180,10 +214,10 @@ public static partial class MinecraftConsoleReplies
         return match.Success;
     }
 
-    [GeneratedRegex(@"^Gamerule (?<name>[A-Za-z0-9_:.]+) is currently set to: (?<value>\S+)$")]
+    [GeneratedRegex(@"^Game ?rule (?<name>[A-Za-z0-9_:.]+) is currently set to:? (?<value>\S+)$")]
     private static partial Regex GameRuleQueryRegex();
 
-    [GeneratedRegex(@"^Gamerule (?<name>[A-Za-z0-9_:.]+) is now set to: (?<value>\S+)$")]
+    [GeneratedRegex(@"^Game ?rule (?<name>[A-Za-z0-9_:.]+) is (?:now|already) set to:? (?<value>\S+)$")]
     private static partial Regex GameRuleSetRegex();
 
     [GeneratedRegex(@"^There are (?<n>\d+) (?:of a max of|out of maximum) (?<m>\d+) players online[.:]?\s*(?<names>.*)$")]

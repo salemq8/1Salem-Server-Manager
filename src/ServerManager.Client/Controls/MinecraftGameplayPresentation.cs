@@ -79,6 +79,12 @@ public static class MinecraftGameplayPresentation
     /// <summary>What the rule will be: a saved change wins over the current value.</summary>
     public static bool? EffectiveValue(MinecraftGameRuleState rule) => rule.PendingValue ?? rule.Value;
 
+    /// <summary>
+    /// What a click on a rule's switch asks for. A rule whose value is not known shows neither on
+    /// nor off (the switch would otherwise go from unknown to Off), so a click on it asks for On.
+    /// </summary>
+    public static bool RequestedValue(bool? before, bool? clicked) => before is null || clicked == true;
+
     public static int? FallDamageSelection(MinecraftGameRuleState? rule) =>
         rule is null ? null : EffectiveValue(rule) switch
         {

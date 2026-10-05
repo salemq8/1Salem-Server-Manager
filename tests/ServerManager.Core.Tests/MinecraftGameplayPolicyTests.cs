@@ -121,6 +121,47 @@ public sealed class MinecraftGameplayPolicyTests
         Assert.True(MinecraftConsoleReplies.IsReady("[12:00:00] [Server thread/INFO]: Done (4.201s)! For help, type \"help\""));
     }
 
+    // Real Minecraft 26.3 console lines (Vanilla and Purpur): "System chat: " before every
+    // answer, "Game rule" with a space and no colon, and an error's second line without a prefix.
+    [Theory]
+    [InlineData("[16:12:28] [Server thread/INFO]: System chat: Game rule keep_inventory is currently set to false", "minecraft:keep_inventory", false, true)]
+    [InlineData("[16:12:28] [Server thread/INFO]: System chat: Game rule keep_inventory is currently set to false", "keep_inventory", false, true)]
+    [InlineData("[16:12:28 INFO]: System chat: Game rule keep_inventory is currently set to false", "minecraft:keep_inventory", false, true)]
+    [InlineData("[16:12:28] [Server thread/INFO]: System chat: Game rule keep_inventory is currently set to false", "keepInventory", false, false)]
+    [InlineData("[16:12:28] [Server thread/INFO]: System chat: Game rule keep_inventory is currently set to false", "minecraft:keep_inventory", true, false)]
+    [InlineData("[16:12:36] [Server thread/INFO]: System chat: Game rule immediate_respawn is currently set to false", "minecraft:immediate_respawn", false, true)]
+    [InlineData("[16:12:40] [Server thread/INFO]: System chat: Game rule keep_inventory is now set to true", "minecraft:keep_inventory", true, true)]
+    [InlineData("[16:12:40] [Server thread/INFO]: System chat: Game rule keep_inventory is already set to true", "minecraft:keep_inventory", true, true)]
+    [InlineData("[16:12:36] [Server thread/INFO]: System chat: Incorrect argument for command", "doImmediateRespawn", false, false)]
+    [InlineData("gamerule doImmediateRespawn<--[HERE]", "doImmediateRespawn", false, true)]
+    [InlineData("gamerule minecraft:do_immediate_respawn<--[HERE]", "minecraft:do_immediate_respawn", false, true)]
+    [InlineData("gamerule minecraft:do_immediate_respawn<--[HERE]", "minecraft:immediate_respawn", false, false)]
+    [InlineData("[16:12:40] [Server thread/INFO]: [Not Secure] <Bob> System chat: Game rule keep_inventory is now set to true", "minecraft:keep_inventory", true, false)]
+    public void Minecraft26Answers_AreReadForTheRuleThatWasAsked(string line, string name, bool set, bool expected) =>
+        Assert.Equal(expected, MinecraftConsoleReplies.AnswersGameRule(line, name, set));
+
+    [Fact]
+    public void Minecraft26Answers_GiveTheRealValue()
+    {
+        Assert.True(MinecraftConsoleReplies.TryParseGameRuleQuery(
+            "[16:12:28] [Server thread/INFO]: System chat: Game rule keep_inventory is currently set to false", out var name, out var value));
+        Assert.Equal(("keep_inventory", "false"), (name, value));
+        Assert.True(MinecraftConsoleReplies.TryParseGameRuleSet(
+            "[16:12:40] [Server thread/INFO]: System chat: Game rule keep_inventory is now set to true", out name, out value));
+        Assert.Equal(("keep_inventory", "true"), (name, value));
+        Assert.True(MinecraftConsoleReplies.IsCommandError("[16:12:36] [Server thread/INFO]: System chat: Incorrect argument for command"));
+        Assert.True(MinecraftConsoleReplies.TryParseList(
+            "[16:10:12] [Server thread/INFO]: System chat: There are 0 of a max of 20 players online: ", out var online, out var max, out _));
+        Assert.Equal((0, 20), (online, max));
+        Assert.Equal(MinecraftPlayerReply.Applied, MinecraftConsoleReplies.ClassifyPlayerReply(
+            MinecraftPlayerAction.Op, "Steve", "[16:10:12] [Server thread/INFO]: System chat: Made Steve a server operator"));
+        Assert.True(MinecraftConsoleReplies.ClassifyPropertyReply(
+            "difficulty", "[16:10:12] [Server thread/INFO]: System chat: The difficulty has been set to Hard"));
+        Assert.Equal("Steve joined the game", MinecraftConsoleReplies.Message("[16:10:12] [Server thread/INFO]: System chat: Steve joined the game"));
+        Assert.False(MinecraftConsoleReplies.TryParseGameRuleQuery(
+            "[16:10:12] [Server thread/INFO]: <Bob> System chat: Game rule keep_inventory is currently set to true", out _, out _));
+    }
+
     [Theory]
     [InlineData("[12:00:00] [Server thread/INFO]: There are 2 of a max of 20 players online: Alex, Steve", 2, 20, "Alex,Steve")]
     [InlineData("[12:00:00 INFO]: There are 0 out of maximum 10 players online.", 0, 10, "")]

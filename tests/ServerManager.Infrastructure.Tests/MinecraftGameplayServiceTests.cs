@@ -396,6 +396,132 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Live_Minecraft26KeepInventoryIsAppliedAndReadBack()
+    {
+        UseMinecraft26Server();
+        WriteRegistryRules(Minecraft26WorldRules(), overworld: true);
+
+        var result = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("keepInventory", true));
+
+        Assert.Equal(MinecraftChangeOutcome.AppliedLive, result.Outcome);
+        Assert.True(result.VerifiedValue);
+        Assert.Equal("true", _console.Rules["minecraft:keep_inventory"]);
+        var set = _console.Sent.IndexOf("gamerule minecraft:keep_inventory true");
+        Assert.True(set >= 0);
+        Assert.Contains("gamerule minecraft:keep_inventory", _console.Sent.Skip(set + 1));
+        Assert.DoesNotContain("gamerule keepInventory", _console.Sent);
+        Assert.DoesNotContain(_console.Sent, command => command is "stop" or "restart");
+    }
+
+    [Fact]
+    public async Task Live_Minecraft26WithoutAReadableWorldStillFindsEveryRule()
+    {
+        UseMinecraft26Server();
+
+        var snapshot = await _service.GetAsync(_server.Id);
+        var respawn = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("doImmediateRespawn", true));
+        MinecraftGameRuleState Rule(string key) => Assert.Single(snapshot.GameRules, rule => rule.Key == key);
+
+        Assert.All(snapshot.GameRules.Where(rule => rule.Key != "doFireTick"), rule =>
+        {
+            Assert.True(rule.Supported, rule.Key);
+            Assert.Equal(MinecraftValueSource.Live, rule.Source);
+            Assert.NotNull(rule.Value);
+        });
+        Assert.False(Rule("doFireTick").Supported);
+        Assert.Equal((false, "keep_inventory"), (Rule("keepInventory").Value!.Value, Rule("keepInventory").ServerName));
+        Assert.Equal("immediate_respawn", Rule("doImmediateRespawn").ServerName);
+        Assert.Equal(MinecraftChangeOutcome.AppliedLive, respawn.Outcome);
+        Assert.True(respawn.VerifiedValue);
+        Assert.Equal("true", _console.Rules["minecraft:immediate_respawn"]);
+    }
+
+    [Fact]
+    public async Task Live_Minecraft26SettingTheValueItAlreadyHasIsConfirmed()
+    {
+        UseMinecraft26Server();
+
+        var result = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("keepInventory", false));
+
+        Assert.Equal(MinecraftChangeOutcome.AppliedLive, result.Outcome);
+        Assert.False(result.VerifiedValue);
+        Assert.Equal("false", _console.Rules["minecraft:keep_inventory"]);
+    }
+
+    [Fact]
+    public async Task Stopped_Minecraft26ReadsTheOverworldsGameRules()
+    {
+        // Vanilla, Paper and Purpur 26.3: world/dimensions/minecraft/overworld/data/minecraft/game_rules.dat.
+        WriteLevelDat(new Dictionary<string, string>(), includeGameRules: false);
+        WriteRegistryRules(Minecraft26WorldRules(), overworld: true);
+
+        var snapshot = await _service.GetAsync(_server.Id);
+        var saved = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("keepInventory", true));
+        MinecraftGameRuleState Rule(string key) => Assert.Single(snapshot.GameRules, rule => rule.Key == key);
+
+        Assert.True(snapshot.GameRulesKnown);
+        Assert.Equal((false, "minecraft:keep_inventory", MinecraftValueSource.WorldFile), (Rule("keepInventory").Value!.Value, Rule("keepInventory").ServerName, Rule("keepInventory").Source));
+        Assert.Equal((false, "minecraft:immediate_respawn"), (Rule("doImmediateRespawn").Value!.Value, Rule("doImmediateRespawn").ServerName));
+        Assert.False(Rule("doFireTick").Supported);
+        Assert.Equal(MinecraftChangeOutcome.PendingNextStart, saved.Outcome);
+    }
+
+    [Fact]
+    public async Task Live_AServerThatDoesNotAnswerLeavesTheRuleUnknownNeverOff()
+    {
+        _console.State = MinecraftConsoleState.Ready;
+        _console.Silent = true;
+
+        var snapshot = await _service.GetAsync(_server.Id);
+        var result = await _service.SetGameRuleAsync(_server.Id, new MinecraftGameRuleChangeRequest("keepInventory", true));
+
+        var rule = Assert.Single(snapshot.GameRules, rule => rule.Key == "keepInventory");
+        Assert.Null(rule.Value);
+        Assert.Equal(MinecraftValueSource.Unknown, rule.Source);
+        Assert.Equal(MinecraftChangeOutcome.Failed, result.Outcome);
+        Assert.Equal("ConsoleTimeout", result.ErrorCode);
+        Assert.Null(result.VerifiedValue);
+    }
+
+    /// <summary>A running Minecraft 26.3 server with the real rules of a new world.</summary>
+    private void UseMinecraft26Server()
+    {
+        _console.State = MinecraftConsoleState.Ready;
+        _console.Minecraft26 = true;
+        foreach (var (name, value) in Minecraft26WorldRules())
+        {
+            _console.Rules[name] = value is byte flag ? MinecraftGameRuleCatalog.Format(flag == 1) : value.ToString()!;
+        }
+    }
+
+    // As alsrabeet67's game_rules.dat has them (26.3 has no do_fire_tick switch).
+    private static Dictionary<string, object> Minecraft26WorldRules() => new()
+    {
+        ["minecraft:pvp"] = (byte)1,
+        ["minecraft:keep_inventory"] = (byte)0,
+        ["minecraft:immediate_respawn"] = (byte)0,
+        ["minecraft:natural_health_regeneration"] = (byte)1,
+        ["minecraft:show_death_messages"] = (byte)1,
+        ["minecraft:show_advancement_messages"] = (byte)1,
+        ["minecraft:advance_time"] = (byte)1,
+        ["minecraft:advance_weather"] = (byte)1,
+        ["minecraft:spawn_phantoms"] = (byte)1,
+        ["minecraft:fall_damage"] = (byte)1,
+        ["minecraft:fire_damage"] = (byte)1,
+        ["minecraft:drowning_damage"] = (byte)1,
+        ["minecraft:freeze_damage"] = (byte)1,
+        ["minecraft:spawn_mobs"] = (byte)1,
+        ["minecraft:mob_griefing"] = (byte)1,
+        ["minecraft:spawn_patrols"] = (byte)1,
+        ["minecraft:spawn_wandering_traders"] = (byte)1,
+        ["minecraft:mob_drops"] = (byte)1,
+        ["minecraft:block_drops"] = (byte)1,
+        ["minecraft:entity_drops"] = (byte)1,
+        ["minecraft:fire_spread_radius_around_player"] = 128,
+        ["minecraft:random_tick_speed"] = 3
+    };
+
+    [Fact]
     public void LevelDat_MissingOrDamagedFilesReadAsNothing()
     {
         var path = Path.Combine(_root, "world", "level.dat");
@@ -472,10 +598,15 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
         WriteGzip(path, raw);
     }
 
-    /// <summary>Minecraft 26.x: world/data/minecraft/game_rules.dat, root -> "data", registry names.</summary>
-    private void WriteRegistryRules(IReadOnlyDictionary<string, object> rules)
+    /// <summary>
+    /// Minecraft 26.x: a game_rules.dat (root -> "data", registry names) in world/data/minecraft,
+    /// or with <paramref name="overworld"/> in world/dimensions/minecraft/overworld/data/minecraft.
+    /// </summary>
+    private void WriteRegistryRules(IReadOnlyDictionary<string, object> rules, bool overworld = false)
     {
-        var path = Path.Combine(_root, "world", "data", "minecraft", "game_rules.dat");
+        var path = overworld
+            ? Path.Combine(_root, "world", "dimensions", "minecraft", "overworld", "data", "minecraft", "game_rules.dat")
+            : Path.Combine(_root, "world", "data", "minecraft", "game_rules.dat");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var raw = new MemoryStream();
         var nbt = new NbtWriter(raw);
@@ -556,6 +687,16 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
 
         public string? StaleLine { get; set; }
 
+        /// <summary>
+        /// Answers like Minecraft 26.3 (Vanilla, Paper, Purpur): rules by registry name, every answer
+        /// after "System chat: ", "Game rule x is currently set to false", and an error's second
+        /// line with no log prefix at all.
+        /// </summary>
+        public bool Minecraft26 { get; set; }
+
+        /// <summary>Running, but nothing it writes answers the command.</summary>
+        public bool Silent { get; set; }
+
         public event EventHandler<Guid>? ServerReady;
 
         public MinecraftConsoleState GetState(Guid serverId) => State;
@@ -575,12 +716,19 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
             }
 
             Sent.Add(command);
+            if (Silent)
+            {
+                return Task.FromResult(new ConsoleExchangeResult(OperationResult.Fail("ConsoleTimeout", "The server did not answer in time."), null, []));
+            }
+
             var reply = Answer(command.Split(' '));
+            var error = reply == "Incorrect argument for command";
 
             // Like the real console, an error comes as two lines: the message, then the command
             // with a marker. A line left over from an earlier command can arrive first.
-            var lines = (reply == "Incorrect argument for command" ? new[] { reply, command + "<--[HERE]" } : new[] { reply })
-                .Select(text => Prefix + text)
+            var lines = (Minecraft26
+                    ? (error ? new[] { Prefix + "System chat: " + reply, command + "<--[HERE]" } : new[] { Prefix + "System chat: " + reply })
+                    : (error ? new[] { reply, command + "<--[HERE]" } : new[] { reply }).Select(text => Prefix + text))
                 .Prepend(StaleLine is null ? null : Prefix + StaleLine)
                 .OfType<string>()
                 .ToArray();
@@ -594,8 +742,10 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
         private string Answer(string[] words) =>
             words switch
             {
-            ["gamerule", var name] when Rules.TryGetValue(name, out var value) => $"Gamerule {name} is currently set to: {value}",
-            ["gamerule", var name, var value] when Rules.ContainsKey(name) => Set(name, value),
+            ["gamerule", var name] when Minecraft26 && Rules.TryGetValue(Registry(name), out var value) => $"Game rule {Bare(name)} is currently set to {value}",
+            ["gamerule", var name, var value] when Minecraft26 && Rules.ContainsKey(Registry(name)) => Set26(name, value),
+            ["gamerule", var name] when !Minecraft26 && Rules.TryGetValue(name, out var value) => $"Gamerule {name} is currently set to: {value}",
+            ["gamerule", var name, var value] when !Minecraft26 && Rules.ContainsKey(name) => Set(name, value),
             ["gamerule", ..] => "Incorrect argument for command",
             ["list"] => $"There are {Online.Count} of a max of 20 players online: {string.Join(", ", Online)}",
             ["op", "Nobody_Here"] => "That player does not exist",
@@ -611,6 +761,18 @@ public sealed class MinecraftGameplayServiceTests : IDisposable
             Rules[name] = value;
             return $"Gamerule {name} is now set to: {value}";
         }
+
+        private string Set26(string name, string value)
+        {
+            var already = Rules[Registry(name)] == value;
+            Rules[Registry(name)] = value;
+            return $"Game rule {Bare(name)} is {(already ? "already" : "now")} set to {value}";
+        }
+
+        // 26.3 takes keep_inventory or minecraft:keep_inventory, never keepInventory.
+        private static string Bare(string name) => name.StartsWith("minecraft:", StringComparison.Ordinal) ? name["minecraft:".Length..] : name;
+
+        private static string Registry(string name) => "minecraft:" + Bare(name);
     }
 
     private sealed class FakeWriter(string root) : IMinecraftPropertiesWriter

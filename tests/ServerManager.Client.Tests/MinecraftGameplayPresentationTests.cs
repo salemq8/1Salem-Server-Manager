@@ -67,6 +67,20 @@ public sealed class MinecraftGameplayPresentationTests
     }
 
     [Fact]
+    public void UnknownRule_IsNeverShownOrSentAsOff()
+    {
+        var unknown = Rule("keepInventory", null) with { Source = MinecraftValueSource.Unknown };
+
+        // WPF moves an unknown (null) switch to Off on a click; the click asks for On instead.
+        Assert.Null(MinecraftGameplayPresentation.EffectiveValue(unknown));
+        Assert.True(MinecraftGameplayPresentation.RequestedValue(null, false));
+        Assert.True(MinecraftGameplayPresentation.RequestedValue(false, true));
+        Assert.False(MinecraftGameplayPresentation.RequestedValue(true, false));
+        WithCulture("en-US", () =>
+            Assert.Equal("Not known until the world exists", MinecraftGameplayPresentation.RuleStatus(unknown)));
+    }
+
+    [Fact]
     public void UnsupportedRules_AreNotShown()
     {
         Assert.True(MinecraftGameplayPresentation.IsShown(Rule("keepInventory", false)));

@@ -480,7 +480,12 @@ public partial class MinecraftGameplayWindow : Window
             return;
         }
 
-        await ChangeRuleAsync(key, toggle.IsChecked == true);
+        var rule = _snapshot?.GameRules.FirstOrDefault(item => item.Key == key);
+        var value = MinecraftGameplayPresentation.RequestedValue(
+            rule is null ? null : MinecraftGameplayPresentation.EffectiveValue(rule),
+            toggle.IsChecked);
+        toggle.IsChecked = value;
+        await ChangeRuleAsync(key, value);
     }
 
     private async void FallDamage_SelectionChanged(object sender, SelectionChangedEventArgs e)
