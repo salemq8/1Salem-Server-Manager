@@ -1,8 +1,20 @@
-# 1Salem Server Manager 1.5 — Build 14
+# 1Salem Server Manager 1.5 — Build 15
 
 Current release notes: [docs/RELEASE_NOTES_1.5.md](docs/RELEASE_NOTES_1.5.md).
 
-Build 14 fixes Gameplay gamerules on Minecraft 26.3 (Vanilla, Paper and Purpur). Keep
+Build 15 fixes private friend access checks on running Paper/Purpur 26.x servers ("The last
+Connect check did not finish" while Network said Ready): `server.properties` is now read without
+blocking the server that keeps it open. Connect also recovers on its own when the broker is not
+reachable yet after Windows starts, and the server's Connect card shows what failed with a Retry
+check button.
+
+Application updates never needed a Windows restart: they restart only the 1Salem service, and
+Minecraft and Playit keep running. A server running through an update loses its console pipe,
+and Stop/Restart used to refuse it, which left rebooting Windows as the only way out. Stop and
+Restart now ask such a server to save and stop with Ctrl+C in its own console; it is never forced.
+Live console controls (gamerules applied live, player actions) return once 1Salem starts it again.
+
+Build 14 fixed Gameplay gamerules on Minecraft 26.3 (Vanilla, Paper and Purpur). Keep
 Inventory and the other rules no longer fail with "The server did not answer in time" or show
 "Not known until the world exists": the Agent reads 26.3's `System chat: Game rule …` answers,
 applies the real `minecraft:keep_inventory` rule, reads it back and reports success only when the

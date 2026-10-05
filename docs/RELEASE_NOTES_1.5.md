@@ -1,4 +1,24 @@
-# 1Salem Server Manager 1.5 — Build 14
+# 1Salem Server Manager 1.5 — Build 15
+
+## Fixed in Build 15
+
+- **Private friend access check.** Paper and Purpur 26.x keep `server.properties` open for
+  writing while they run. The Agent read it in a way that refuses other writers, so every
+  server's Connect check failed ("The last Connect check did not finish") while Network showed
+  Ready. It is now read shared wherever 1Salem only reads it (Connect, Gameplay, server
+  settings, dashboard, world location).
+- **Connect recovers by itself.** When the Agent starts before the network answers (right after
+  Windows starts) and the broker cannot be reached, Connect retries on its own (10 seconds,
+  growing to every 5 minutes) instead of waiting for Check. Credential, policy and Tailnet Lock
+  problems still wait for you.
+- **Retry check.** A failed server Connect check shows what went wrong and offers Retry check.
+  It only re-reads the state: it never restarts Connect, revokes a friend or drops a connection.
+- **No Windows restart after updates.** An update restarts only the 1Salem service; Minecraft and
+  Playit keep running. A Minecraft server that kept running through an update has no console
+  pipe, and Stop/Restart refused it, so restarting Windows looked like the only fix. Stop and
+  Restart now ask it to save and stop with Ctrl+C in its own console (Minecraft's normal
+  shutdown) and wait up to 2 minutes. It is never killed: if it does not stop, it keeps running
+  and 1Salem says so. Live console controls return once 1Salem starts it again.
 
 ## Fixed in Build 14
 

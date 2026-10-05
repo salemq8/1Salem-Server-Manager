@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5 — Build 15
+
+- Fixed per-server Connect checks failing with "being used by another process" while Paper or
+  Purpur 26.x runs: `server.properties` is read with shared access wherever it is only read.
+- The Connect host retries a start that failed because the broker, tailnet or its pipe was not
+  ready (10 s backoff up to 5 min) instead of staying in Error until Check.
+- The server Connect card shows the Agent's failure reason and a read-only Retry check button.
+- Stop/Restart of a Minecraft server re-adopted after an Agent restart now sends Ctrl+C to its
+  own console through a short-lived helper (`--console-interrupt`) and waits up to 2 minutes;
+  it never kills the server. Previously it refused, which led to Windows restarts.
+
 ## 1.5 — Build 14
 
 - Fixed Gameplay gamerules on Minecraft 26.3: console answers carry a `System chat: ` marker and
